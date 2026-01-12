@@ -1,16 +1,17 @@
 /* ========================================
-   FENNINGTON MAIN SITE CSS
+   BLUE-COLLAR SERVICE LANDING PAGE CSS
+   Easy to recreate in GoHighLevel
    ======================================== */
 
-/* THEME VARIABLES */
+/* THEME VARIABLES - CHANGE for each niche */
 :root {
-  --brand: #2563eb;
-  --brand-dark: #1e40af;
-  --accent: #06b6d4;
+  --brand: #2d5016;
+  --brand-dark: #1a3009;
+  --accent: #7cb342;
   --text: #1f2937;
   --muted: #6b7280;
   --bg: #ffffff;
-  --card: #f8fafc;
+  --card: #f4f7f0;
   --radius: 8px;
   --shadow: 0 1px 3px rgba(0,0,0,0.1);
   --shadow-lg: 0 10px 25px rgba(0,0,0,0.15);
@@ -171,7 +172,7 @@ img { max-width: 100%; display: block; }
 
 /* ====== SECTION 2: HERO ====== */
 .hero {
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  background: linear-gradient(135deg, #2d5016 0%, #1a3009 100%);
   color: white;
   padding: 80px 0;
   text-align: center;

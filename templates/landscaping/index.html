@@ -4,243 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <title>Fennington | Website Solutions, AI Integrations & Automation</title>
-    <meta name="description" content="Professional website solutions, AI integrations, and business automation services. Transform your business with cutting-edge technology.">
+    <!-- CHANGE: Update for each niche -->
+    <title>Professional Landscaping Services in Denver | Fennington Landscaping</title>
+    <meta name="description" content="Expert landscaping services in Denver and surrounding areas. Licensed, insured, 12+ years experience. Free estimates. Call (720) 555-0123 today.">
     
     <link rel="stylesheet" href="styles.css">
+    
+    <!-- LocalBusiness JSON-LD Schema - CHANGE for each niche -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "LocalBusiness",
+      "name": "Fennington Landscaping",
+      "image": "https://fennington.com/logo.jpg",
+      "telephone": "(720) 555-0123",
+      "email": "info@fenningtonlandscaping.com",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "1234 Main Street",
+        "addressLocality": "Denver",
+        "addressRegion": "CO",
+        "postalCode": "80202",
+        "addressCountry": "US"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 39.7392,
+        "longitude": -104.9903
+      },
+      "openingHoursSpecification": [{
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        "opens": "08:00",
+        "closes": "17:00"
+      }],
+      "areaServed": "Denver, CO",
+      "priceRange": "$$"
+    }
+    </script>
 </head>
 <body>
 
   <!-- SECTION 1: STICKY HEADER -->
   <header class="header" id="header">
     <div class="container">
-      <a href="#hero" class="logo" id="businessName">Fennington</a>
-      
-      <nav class="nav" id="mainNav">
-        <a href="#services">Services</a>
-        <a href="#about">About</a>
-        <a href="#contact">Contact</a>
-      </nav>
-      
-      <div class="header-actions">
-        <a href="mailto:contact@fennington.com" class="phone-link">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          contact@fennington.com
-        </a>
-        <a href="#contact" class="btn btn-primary">Get Started</a>
-      </div>
-      
-      <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
-        <span></span><span></span><span></span>
-      </button>
-    </div>
-  </header>
-
-  <!-- SECTION 2: HERO -->
-  <section class="hero" id="hero">
-    <div class="container">
-      <h1>Modern Business Solutions</h1>
-      <p class="hero-subtitle">Website development, AI integrations, and automation solutions to transform your business operations</p>
-      
-      <div class="hero-cta">
-        <a href="#contact" class="btn btn-primary btn-lg">Start Your Project</a>
-        <a href="#services" class="btn btn-secondary btn-lg">Explore Services</a>
-      </div>
-      
-      <div class="trust-badges">
-        <div class="badge">
-          <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <div><strong>Trusted Solutions</strong><span>Proven Results</span></div>
-        </div>
-        <div class="badge">
-          <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          <div><strong>Custom Built</strong><span>For Your Needs</span></div>
-        </div>
-        <div class="badge">
-          <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          <div><strong>Fast Delivery</strong><span>Quality Assured</span></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 3: SERVICES -->
-  <section class="services" id="services">
-    <div class="container">
-      <h2>Our Services</h2>
-      <p class="section-subtitle">Comprehensive digital solutions for modern businesses</p>
-      
-      <div class="services-grid">
-        <div class="service-card">
-          <div class="service-icon">🌐</div>
-          <h3>Website Solutions</h3>
-          <p>Custom websites, landing pages, and e-commerce platforms built with modern technologies for optimal performance and user experience.</p>
-        </div>
-        
-        <div class="service-card">
-          <div class="service-icon">🤖</div>
-          <h3>AI Integrations</h3>
-          <p>Intelligent automation and AI-powered features to enhance your business operations, customer service, and decision-making processes.</p>
-        </div>
-        
-        <div class="service-card">
-          <div class="service-icon">⚡</div>
-          <h3>Automation Solutions</h3>
-          <p>Streamline workflows, automate repetitive tasks, and integrate your business tools for maximum efficiency and productivity.</p>
-        </div>
-        
-        <div class="service-card">
-          <div class="service-icon">📊</div>
-          <h3>Data & Analytics</h3>
-          <p>Transform your data into actionable insights with custom dashboards, reporting tools, and business intelligence solutions.</p>
-        </div>
-        
-        <div class="service-card">
-          <div class="service-icon">🔧</div>
-          <h3>API Development</h3>
-          <p>Build robust APIs and integrations to connect your systems, extend functionality, and create seamless data flows.</p>
-        </div>
-        
-        <div class="service-card">
-          <div class="service-icon">💼</div>
-          <h3>Consulting</h3>
-          <p>Strategic technology consulting to help you identify opportunities, plan implementations, and optimize your digital infrastructure.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 4: ABOUT -->
-  <section class="why-us" id="about">
-    <div class="container">
-      <div class="why-grid">
-        <div class="why-content">
-          <h2>Why Choose Fennington</h2>
-          <ul class="benefits">
-            <li>
-              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <div><strong>Modern Technology Stack</strong><p>We use cutting-edge tools and frameworks to build scalable, maintainable solutions</p></div>
-            </li>
-            <li>
-              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <div><strong>Tailored Solutions</strong><p>Every project is customized to your specific business requirements and goals</p></div>
-            </li>
-            <li>
-              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <div><strong>Transparent Communication</strong><p>Clear updates, honest timelines, and collaborative development process</p></div>
-            </li>
-            <li>
-              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <div><strong>Ongoing Support</strong><p>We're here to help maintain, update, and evolve your solutions over time</p></div>
-            </li>
-          </ul>
-        </div>
-        
-        <div class="process">
-          <h3>How We Work</h3>
-          <div class="process-steps">
-            <div class="step">
-              <div class="step-num">1</div>
-              <div><h4>Discovery</h4><p>Understand your needs, goals, and challenges</p></div>
-            </div>
-            <div class="step">
-              <div class="step-num">2</div>
-              <div><h4>Design & Plan</h4><p>Create a strategic approach and technical roadmap</p></div>
-            </div>
-            <div class="step">
-              <div class="step-num">3</div>
-              <div><h4>Build & Deploy</h4><p>Develop, test, and launch your solution</p></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 5: CONTACT -->
-  <section class="contact" id="contact">
-    <div class="container">
-      <h2>Let's Build Something Great</h2>
-      <p class="section-subtitle">Ready to transform your business with modern technology?</p>
-      
-      <div class="contact-grid">
-        <div class="contact-info">
-          <h3>Get In Touch</h3>
-          
-          <div class="contact-item">
-            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            <div><strong>Email</strong><a href="mailto:contact@fennington.com">contact@fennington.com</a></div>
-          </div>
-          
-          <div class="trust-icons">
-            <span>✓ Custom Solutions</span>
-            <span>✓ Modern Tech</span>
-            <span>✓ Reliable Support</span>
-          </div>
-        </div>
-        
-        <form class="contact-form" id="contactForm">
-          <h3>Start Your Project</h3>
-          
-          <div class="form-group">
-            <label for="name">Full Name *</label>
-            <input type="text" id="name" name="name" required placeholder="John Smith">
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label for="email">Email *</label>
-              <input type="email" id="email" name="email" required placeholder="john@example.com">
-            </div>
-            <div class="form-group">
-              <label for="phone">Phone</label>
-              <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567">
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label for="service">Service Interested In *</label>
-            <select id="service" name="service" required>
-              <option value="">Select a service...</option>
-              <option value="website">Website Solutions</option>
-              <option value="ai">AI Integrations</option>
-              <option value="automation">Automation Solutions</option>
-              <option value="data-analytics">Data & Analytics</option>
-              <option value="api">API Development</option>
-              <option value="consulting">Consulting</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label for="message">Project Details</label>
-            <textarea id="message" name="message" rows="4" placeholder="Tell us about your project..."></textarea>
-          </div>
-          
-          <button type="submit" class="btn btn-primary btn-block">Send Message</button>
-          
-          <p class="form-note">We'll respond within 24 hours</p>
-        </form>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 6: FOOTER -->
-  <footer class="footer">
-    <div class="container">
-      <nav class="footer-nav">
-        <a href="#hero">Home</a>
-        <a href="#services">Services</a>
-        <a href="#about">About</a>
-        <a href="#contact">Contact</a>
-        <a href="/templates/landscaping">Templates</a>
-      </nav>
-      <p>&copy; 2026 Fennington. All rights reserved.</p>
-      <p class="disclaimer">Professional web solutions and technology consulting services.</p>
-    </div>
-  </footer>
-
-  <script src="script.js"></script>
+      <a href="#hero" class="logo" id="businessName">Fennington Landscaping</a>
       
       <nav class="nav" id="mainNav">
         <a href="#services">Services</a>
