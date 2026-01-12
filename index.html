@@ -3,10 +3,312 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fennington Solutions • Web Design & Development</title>
-    <meta name="description" content="Professional web design and development services. Custom websites, e-commerce solutions, and digital strategy for your business.">
-    <link rel="canonical" href="https://fenningtonsolutions.com/">
-    <style>
+    
+    <!-- CHANGE: Update for each niche -->
+    <title>Professional Landscaping Services in Denver | Fennington Landscaping</title>
+    <meta name="description" content="Expert landscaping services in Denver and surrounding areas. Licensed, insured, 12+ years experience. Free estimates. Call (720) 555-0123 today.">
+    
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- LocalBusiness JSON-LD Schema - CHANGE for each niche -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "LocalBusiness",
+      "name": "Fennington Landscaping",
+      "image": "https://fennington.com/logo.jpg",
+      "telephone": "(720) 555-0123",
+      "email": "info@fenningtonlandscaping.com",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "1234 Main Street",
+        "addressLocality": "Denver",
+        "addressRegion": "CO",
+        "postalCode": "80202",
+        "addressCountry": "US"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 39.7392,
+        "longitude": -104.9903
+      },
+      "openingHoursSpecification": [{
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        "opens": "08:00",
+        "closes": "17:00"
+      }],
+      "areaServed": "Denver, CO",
+      "priceRange": "$$"
+    }
+    </script>
+</head>
+<body>
+
+  <!-- SECTION 1: STICKY HEADER -->
+  <header class="header" id="header">
+    <div class="container">
+      <a href="#hero" class="logo" id="businessName">Fennington Landscaping</a>
+      
+      <nav class="nav" id="mainNav">
+        <a href="#services">Services</a>
+        <a href="#why-us">Why Us</a>
+        <a href="#testimonials">Reviews</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      
+      <div class="header-actions">
+        <a href="tel:7205550123" class="phone-link" id="headerPhone">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.1.96.35 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.35 1.85.6 2.81.7A2 2 0 0122 16.92z"/></svg>
+          (720) 555-0123
+        </a>
+        <a href="#contact" class="btn btn-primary">Get Free Estimate</a>
+      </div>
+      
+      <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- SECTION 2: HERO -->
+  <section class="hero" id="hero">
+    <div class="container">
+      <h1 id="heroHeadline">Transform Your Outdoor Space with Expert Landscaping</h1>
+      <p class="hero-subtitle" id="heroSubtitle">Professional landscape design and installation serving Denver since 2012. Licensed, insured, and backed by 200+ five-star reviews.</p>
+      
+      <div class="hero-cta">
+        <a href="tel:7205550123" class="btn btn-primary btn-lg">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.1.96.35 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.35 1.85.6 2.81.7A2 2 0 0122 16.92z"/></svg>
+          Call Now
+        </a>
+        <a href="#contact" class="btn btn-secondary btn-lg">Get Free Quote</a>
+      </div>
+      
+      <div class="trust-badges">
+        <div class="badge">
+          <svg width="24" height="24" fill="var(--accent)" stroke="var(--accent)" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <div><strong>5.0 Stars</strong><span>200+ Reviews</span></div>
+        </div>
+        <div class="badge">
+          <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div><strong>12+ Years</strong><span>In Business</span></div>
+        </div>
+        <div class="badge">
+          <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div><strong>Licensed</strong><span>Fully Insured</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: SERVICES -->
+  <section class="services" id="services">
+    <div class="container">
+      <h2>Our Professional Services</h2>
+      <p class="section-subtitle">Complete landscaping solutions for your property</p>
+      
+      <div class="services-grid" id="servicesGrid">
+        <!-- Services will be loaded by script.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4: WHY CHOOSE US + PROCESS -->
+  <section class="why-us" id="why-us">
+    <div class="container">
+      <div class="why-grid">
+        <div class="why-content">
+          <h2>Why Choose Us</h2>
+          <ul class="benefits">
+            <li>
+              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <div><strong>12+ Years Experience</strong><p>Certified professionals with proven expertise</p></div>
+            </li>
+            <li>
+              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <div><strong>Quality Guaranteed</strong><p>Premium materials and workmanship warranty</p></div>
+            </li>
+            <li>
+              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <div><strong>Transparent Pricing</strong><p>Detailed estimates with no hidden fees</p></div>
+            </li>
+            <li>
+              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <div><strong>Local & Responsive</strong><p>Family-owned, fast service when you need it</p></div>
+            </li>
+          </ul>
+        </div>
+        
+        <div class="process">
+          <h3>Our Simple Process</h3>
+          <div class="process-steps">
+            <div class="step">
+              <div class="step-num">1</div>
+              <div><h4>Free Consultation</h4><p>Discuss your vision and get expert advice</p></div>
+            </div>
+            <div class="step">
+              <div class="step-num">2</div>
+              <div><h4>Detailed Proposal</h4><p>Clear pricing and project timeline</p></div>
+            </div>
+            <div class="step">
+              <div class="step-num">3</div>
+              <div><h4>Expert Execution</h4><p>Quality work completed on time</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: TESTIMONIALS -->
+  <section class="testimonials" id="testimonials">
+    <div class="container">
+      <h2>What Our Customers Say</h2>
+      <div class="rating-header">
+        <div class="stars">★★★★★</div>
+        <p><strong>5.0 out of 5</strong> based on 200+ reviews</p>
+      </div>
+      
+      <div class="testimonials-grid">
+        <div class="testimonial">
+          <div class="stars-sm">★★★★★</div>
+          <p>"Transformed our backyard into an outdoor oasis. Professional, on-time, and exceeded expectations. Highly recommend!"</p>
+          <div class="author"><strong>Sarah M.</strong><span>Denver, CO</span></div>
+        </div>
+        <div class="testimonial">
+          <div class="stars-sm">★★★★★</div>
+          <p>"From consultation to completion, everything was handled professionally. Stayed within budget and the quality is outstanding."</p>
+          <div class="author"><strong>James R.</strong><span>Lakewood, CO</span></div>
+        </div>
+        <div class="testimonial">
+          <div class="stars-sm">★★★★★</div>
+          <p>"Excellent communication and craftsmanship. The crew was respectful and delivered exactly what they promised."</p>
+          <div class="author"><strong>Lisa K.</strong><span>Aurora, CO</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6: SERVICE AREA -->
+  <section class="service-area" id="service-area">
+    <div class="container">
+      <h2>Serving Denver & Surrounding Areas</h2>
+      <p class="section-subtitle">Professional landscaping throughout the metro area</p>
+      <div class="cities">
+        <span>Denver</span><span>Aurora</span><span>Lakewood</span><span>Arvada</span><span>Westminster</span><span>Thornton</span><span>Centennial</span><span>Littleton</span><span>Englewood</span><span>Golden</span><span>Broomfield</span><span>Parker</span>
+      </div>
+      <p class="area-footer">Don't see your city? <a href="#contact">Contact us</a> to check if we service your area!</p>
+    </div>
+  </section>
+
+  <!-- SECTION 7: FAQ -->
+  <section class="faq" id="faq">
+    <div class="container">
+      <h2>Frequently Asked Questions</h2>
+      <p class="section-subtitle">Get answers about our services</p>
+      
+      <div class="faq-list" id="faqList">
+        <!-- FAQs will be loaded by script.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 8: CONTACT -->
+  <section class="contact" id="contact">
+    <div class="container">
+      <h2>Get Your Free Estimate Today</h2>
+      <p class="section-subtitle">Ready to transform your outdoor space? Contact us now!</p>
+      
+      <div class="contact-grid">
+        <div class="contact-info">
+          <h3>Contact Information</h3>
+          
+          <div class="contact-item">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.1.96.35 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.35 1.85.6 2.81.7A2 2 0 0122 16.92z"/></svg>
+            <div><strong>Phone</strong><a href="tel:7205550123" id="contactPhone">(720) 555-0123</a></div>
+          </div>
+          
+          <div class="contact-item">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <div><strong>Email</strong><a href="mailto:info@fenningtonlandscaping.com" id="contactEmail">info@fenningtonlandscaping.com</a></div>
+          </div>
+          
+          <div class="contact-item">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <div><strong>Address</strong><address id="contactAddress">1234 Main Street<br>Denver, CO 80202</address></div>
+          </div>
+          
+          <div class="contact-item">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <div><strong>Hours</strong><p id="contactHours">Mon-Fri: 8:00 AM - 5:00 PM<br>Sat: By Appointment<br>Sun: Closed</p></div>
+          </div>
+          
+          <div class="trust-icons">
+            <span>✓ Licensed</span>
+            <span>✓ Insured</span>
+            <span>✓ Bonded</span>
+          </div>
+        </div>
+        
+        <form class="contact-form" id="contactForm">
+          <h3>Request Free Estimate</h3>
+          
+          <div class="form-group">
+            <label for="name">Full Name *</label>
+            <input type="text" id="name" name="name" required placeholder="John Smith">
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="phone">Phone *</label>
+              <input type="tel" id="phone" name="phone" required placeholder="(720) 555-0123">
+            </div>
+            <div class="form-group">
+              <label for="email">Email *</label>
+              <input type="email" id="email" name="email" required placeholder="john@example.com">
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="service">Service Needed *</label>
+            <select id="service" name="service" required>
+              <option value="">Select a service...</option>
+              <!-- Options loaded by script.js -->
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="message">Project Details</label>
+            <textarea id="message" name="message" rows="4" placeholder="Tell us about your project..."></textarea>
+          </div>
+          
+          <button type="submit" class="btn btn-primary btn-block">Send My Request</button>
+          
+          <p class="form-note">We respect your privacy and will never share your information.</p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 9: FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <nav class="footer-nav">
+        <a href="#hero">Home</a>
+        <a href="#services">Services</a>
+        <a href="#why-us">Why Us</a>
+        <a href="#testimonials">Reviews</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <p>&copy; 2026 <span id="footerBusiness">Fennington Landscaping</span>. All rights reserved.</p>
+      <p class="disclaimer">Licensed, insured, and bonded. All work performed by qualified professionals.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
         * {
             margin: 0;
             padding: 0;
