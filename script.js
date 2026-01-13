@@ -118,14 +118,10 @@ function setupFormHandling() {
       const data = await response.json();
       
       if (data.success) {
-        alert('Thank you! Your message has been sent. We\'ll be in touch soon.');
         form.reset();
-      } else {
-        alert('Sorry, there was an error sending your message. Please try again or email us directly at contact@fennington.com');
       }
     } catch (error) {
       console.error('Form submission error:', error);
-      alert('Sorry, there was an error. Please try again or email us directly at contact@fennington.com');
     } finally {
       // Re-enable button
       submitButton.disabled = false;
