@@ -72,7 +72,7 @@ function setupFormHandling() {
   const form = document.getElementById('contactForm');
   if (!form) return;
   
-  form.addEventListener('submit', function(e) {
+  form.addEventListener('submit', async function(e) {
     e.preventDefault();
     
     // Basic validation
@@ -93,23 +93,43 @@ function setupFormHandling() {
     }
     
     const formData = new FormData(form);
-    const phone = document.getElementById('phone').value.trim();
-    const message = document.getElementById('message').value.trim();
+    const submitButton = form.querySelector('button[type="submit"]');
+    const originalText = submitButton.textContent;
     
-    // Mailto fallback
-    const subject = encodeURIComponent(`${CONFIG.businessName} - New Project Inquiry`);
-    const body = encodeURIComponent(
-      `Name: ${name}\n` +
-      `Email: ${email}\n` +
-      `Phone: ${phone}\n` +
-      `Service: ${service}\n` +
-      `Message: ${message}`
-    );
+    // Disable button and show loading state
+    submitButton.disabled = true;
+    submitButton.textContent = 'Sending...';
     
-    window.location.href = `mailto:${CONFIG.email}?subject=${subject}&body=${body}`;
-    
-    // Show success message
-    alert('Thank you! Your message has been sent. We\'ll be in touch soon.');
-    form.reset();
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.get('name'),
+          email: formData.get('email'),
+          phone: formData.get('phone'),
+          service: formData.get('service'),
+          message: formData.get('message')
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        alert('Thank you! Your message has been sent. We\'ll be in touch soon.');
+        form.reset();
+      } else {
+        alert('Sorry, there was an error sending your message. Please try again or email us directly at contact@fennington.com');
+      }
+    } catch (error) {
+      console.error('Form submission error:', error);
+      alert('Sorry, there was an error. Please try again or email us directly at contact@fennington.com');
+    } finally {
+      // Re-enable button
+      submitButton.disabled = false;
+      submitButton.textContent = originalText;
+    }
   });
 }
