@@ -172,8 +172,7 @@ img { max-width: 100%; display: block; }
 
 /* ====== SECTION 2: HERO ====== */
 .hero {
-  background: linear-gradient(135deg, rgba(45, 80, 22, 0.85) 0%, rgba(26, 48, 9, 0.9) 100%), 
-              url('../assets/images/lawn%20background.png') center/cover no-repeat;
+  background: url('../assets/images/lawn%20background.png') center/cover no-repeat;
   color: white;
   padding: 80px 0;
   text-align: center;
