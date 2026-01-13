@@ -72,7 +72,7 @@ function setupFormHandling() {
   const form = document.getElementById('contactForm');
   if (!form) return;
   
-  form.addEventListener('submit', async function(e) {
+  form.addEventListener('submit', function(e) {
     e.preventDefault();
     
     // Basic validation
@@ -92,40 +92,18 @@ function setupFormHandling() {
       return;
     }
     
-    const formData = new FormData(form);
-    const submitButton = form.querySelector('button[type="submit"]');
-    const originalText = submitButton.textContent;
+    // Get form data
+    const phone = document.getElementById('phone').value.trim();
+    const message = document.getElementById('message').value.trim();
     
-    // Disable button and show loading state
-    submitButton.disabled = true;
-    submitButton.textContent = 'Sending...';
+    // Build email body
+    const subject = `New Contact Form Submission - ${service}`;
+    const body = `Name: ${name}\nEmail: ${email}\nPhone: ${phone}\nService: ${service}\n\nMessage:\n${message}`;
     
-    try {
-      const response = await fetch('/api/contact', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.get('name'),
-          email: formData.get('email'),
-          phone: formData.get('phone'),
-          service: formData.get('service'),
-          message: formData.get('message')
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        form.reset();
-      }
-    } catch (error) {
-      console.error('Form submission error:', error);
-    } finally {
-      // Re-enable button
-      submitButton.disabled = false;
-      submitButton.textContent = originalText;
-    }
+    // Open mailto link
+    window.location.href = `mailto:contact@fennington.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    
+    // Reset form
+    form.reset();
   });
 }
