@@ -88,8 +88,8 @@ const tutorials = [
 // FAQ DATA
 const faqs = [
   {
-    question: "Is Livestock Tracker really free?",
-    answer: "Yes! Livestock Tracker is 100% free with no subscriptions, no in-app purchases, and no hidden fees. We built it for farmers, not profit."
+    question: "How much does Livestock Tracker cost?",
+    answer: "Livestock Tracker is free to download and use with core features like animal tracking, egg logging, and basic health records. Premium features like advanced analytics, cloud backup, and bulk operations are available through an optional subscription."
   },
   {
     question: "Does it work offline?",
