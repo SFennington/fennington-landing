@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>Livestock Tracker - Manage Your Farm with Ease | Fennington Apps</title>
+    <meta name="description" content="Free livestock tracking app for farmers. Track chickens, ducks, rabbits, breeding, eggs, health records, and expenses. Download for iOS and Android.">
+    
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- App Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Livestock Tracker",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "iOS, Android",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "ratingCount": "150"
+      }
+    }
+    </script>
+</head>
+<body>
+
+  <!-- STICKY HEADER -->
+  <header class="header" id="header">
+    <div class="container">
+      <a href="#hero" class="logo">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="6" fill="var(--brand)"/>
+          <path d="M16 8C13 8 10 10 10 13C10 16 13 19 16 22C19 19 22 16 22 13C22 10 19 8 16 8Z" fill="white"/>
+          <circle cx="16" cy="13" r="2" fill="var(--accent)"/>
+        </svg>
+        Livestock Tracker
+      </a>
+      
+      <nav class="nav" id="mainNav">
+        <a href="#features">Features</a>
+        <a href="#tutorials">Tutorials</a>
+        <a href="#faq">FAQ</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      
+      <div class="header-actions">
+        <a href="#download" class="btn btn-primary">Download Free</a>
+      </div>
+      
+      <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- HERO SECTION -->
+  <section class="hero" id="hero">
+    <div class="container">
+      <div class="hero-content">
+        <h1>Manage Your Livestock with Confidence</h1>
+        <p class="hero-subtitle">Free mobile app for tracking chickens, ducks, rabbits, breeding, health records, eggs, and farm finances—all offline and in your pocket.</p>
+        
+        <div class="hero-cta">
+          <a href="#download" class="btn btn-primary btn-lg">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+            Download Free
+          </a>
+          <a href="#tutorials" class="btn btn-secondary btn-lg">Watch Demo</a>
+        </div>
+        
+        <div class="trust-badges">
+          <div class="badge">
+            <svg width="24" height="24" fill="var(--accent)" stroke="var(--accent)" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            <div><strong>4.8 Stars</strong><span>150+ Reviews</span></div>
+          </div>
+          <div class="badge">
+            <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <div><strong>100% Free</strong><span>No Subscriptions</span></div>
+          </div>
+          <div class="badge">
+            <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0110 0v4"/>
+            </svg>
+            <div><strong>Your Data</strong><span>Private & Secure</span></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="hero-image">
+        <div class="phone-mockup">
+          <div class="phone-screen"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES SECTION -->
+  <section class="section" id="features">
+    <div class="container">
+      <h2 class="section-title">Everything You Need to Run Your Farm</h2>
+      <p class="section-subtitle">Powerful tools designed for small-scale farmers and homesteaders</p>
+      
+      <div class="features-grid" id="featuresGrid">
+        <!-- Features populated by script.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- APP SCREENSHOTS SECTION -->
+  <section class="section bg-alt">
+    <div class="container">
+      <h2 class="section-title">Simple, Intuitive Interface</h2>
+      <p class="section-subtitle">Designed for farmers, not tech experts</p>
+      
+      <div class="screenshots-carousel">
+        <div class="screenshot-card">
+          <div class="screenshot-placeholder">Dashboard</div>
+          <p>Track all your animals at a glance</p>
+        </div>
+        <div class="screenshot-card">
+          <div class="screenshot-placeholder">Egg Logging</div>
+          <p>Quick egg production entry</p>
+        </div>
+        <div class="screenshot-card">
+          <div class="screenshot-placeholder">Health Records</div>
+          <p>Complete health history</p>
+        </div>
+        <div class="screenshot-card">
+          <div class="screenshot-placeholder">Analytics</div>
+          <p>Insights & trends</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TUTORIALS SECTION -->
+  <section class="section" id="tutorials">
+    <div class="container">
+      <h2 class="section-title">Video Tutorials</h2>
+      <p class="section-subtitle">Learn how to get the most out of Livestock Tracker</p>
+      
+      <div class="tutorials-grid" id="tutorialsGrid">
+        <!-- Tutorials populated by script.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD SECTION -->
+  <section class="section bg-brand" id="download">
+    <div class="container">
+      <div class="download-content">
+        <h2>Ready to Get Started?</h2>
+        <p>Download Livestock Tracker free on iOS and Android</p>
+        
+        <div class="store-buttons">
+          <a href="#" class="store-button" id="appStoreBtn">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 17 2.94 12.45 4.7 9.39C5.57 7.87 7.13 6.91 8.82 6.88C10.1 6.86 11.32 7.75 12.11 7.75C12.89 7.75 14.37 6.68 15.92 6.84C16.57 6.87 18.39 7.1 19.56 8.82C19.47 8.88 17.39 10.1 17.41 12.63C17.44 15.65 20.06 16.66 20.09 16.67C20.06 16.74 19.67 18.11 18.71 19.5M13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z"/>
+            </svg>
+            <div>
+              <small>Download on the</small>
+              <strong>App Store</strong>
+            </div>
+          </a>
+          
+          <a href="#" class="store-button" id="playStoreBtn">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.6 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/>
+            </svg>
+            <div>
+              <small>Get it on</small>
+              <strong>Google Play</strong>
+            </div>
+          </a>
+        </div>
+        
+        <p class="download-note">Available for iOS 13+ and Android 8+</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ SECTION -->
+  <section class="section" id="faq">
+    <div class="container">
+      <h2 class="section-title">Frequently Asked Questions</h2>
+      
+      <div class="faq-list" id="faqList">
+        <!-- FAQs populated by script.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- PRIVACY SECTION -->
+  <section class="section bg-alt" id="privacy">
+    <div class="container">
+      <div class="privacy-content">
+        <h2>Privacy Policy</h2>
+        
+        <div class="privacy-section">
+          <h3>Your Data Stays on Your Device</h3>
+          <p>Livestock Tracker is designed with privacy first. All your farm data is stored locally on your device. We do not collect, transmit, or store any of your livestock records, financial data, or personal information on our servers.</p>
+        </div>
+        
+        <div class="privacy-section">
+          <h3>No Account Required</h3>
+          <p>You don't need to create an account or provide any personal information to use Livestock Tracker. Download the app and start using it immediately—no email, no password, no tracking.</p>
+        </div>
+        
+        <div class="privacy-section">
+          <h3>Offline-First</h3>
+          <p>The app works completely offline. Your data never leaves your device unless you explicitly choose to export it for backup purposes.</p>
+        </div>
+        
+        <div class="privacy-section">
+          <h3>Optional Backups</h3>
+          <p>You control your backups. If you choose to backup your data, it's stored in a location you specify (like your personal cloud storage). We never have access to these backups.</p>
+        </div>
+        
+        <div class="privacy-section">
+          <h3>Analytics</h3>
+          <p>We collect minimal, anonymized usage analytics to improve the app (e.g., which features are most used, crash reports). This data contains no personal information and cannot be traced back to you or your farm.</p>
+        </div>
+        
+        <div class="privacy-section">
+          <h3>Contact</h3>
+          <p>If you have questions about privacy, contact us at <a href="mailto:privacy@fennington.com">privacy@fennington.com</a></p>
+        </div>
+        
+        <p class="privacy-updated">Last updated: February 4, 2026</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT SECTION -->
+  <section class="section" id="contact">
+    <div class="container">
+      <h2 class="section-title">Get in Touch</h2>
+      <p class="section-subtitle">Questions, feedback, or need help? We're here for you.</p>
+      
+      <div class="contact-grid">
+        <div class="contact-card">
+          <svg width="32" height="32" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
+          <h3>Email Support</h3>
+          <p>General inquiries and support</p>
+          <a href="mailto:support@fennington.com">support@fennington.com</a>
+        </div>
+        
+        <div class="contact-card">
+          <svg width="32" height="32" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+          </svg>
+          <h3>Bug Reports</h3>
+          <p>Found a bug? Let us know</p>
+          <a href="mailto:bugs@fennington.com">bugs@fennington.com</a>
+        </div>
+        
+        <div class="contact-card">
+          <svg width="32" height="32" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.1.96.35 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.35 1.85.6 2.81.7A2 2 0 0122 16.92z"/>
+          </svg>
+          <h3>Feature Requests</h3>
+          <p>Have an idea? We'd love to hear it</p>
+          <a href="mailto:feedback@fennington.com">feedback@fennington.com</a>
+        </div>
+      </div>
+      
+      <div class="contact-form-container">
+        <form class="contact-form" id="contactForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="name">Name</label>
+              <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+              <label for="email">Email</label>
+              <input type="email" id="email" name="email" required>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="subject">Subject</label>
+            <input type="text" id="subject" name="subject" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="message">Message</label>
+            <textarea id="message" name="message" rows="5" required></textarea>
+          </div>
+          
+          <button type="submit" class="btn btn-primary btn-block">Send Message</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <div class="logo-text">Livestock Tracker</div>
+          <p>Free farm management software for small-scale farmers and homesteaders.</p>
+        </div>
+        
+        <div class="footer-links">
+          <div class="footer-column">
+            <h4>Product</h4>
+            <a href="#features">Features</a>
+            <a href="#tutorials">Tutorials</a>
+            <a href="#download">Download</a>
+          </div>
+          
+          <div class="footer-column">
+            <h4>Support</h4>
+            <a href="#faq">FAQ</a>
+            <a href="#contact">Contact</a>
+            <a href="mailto:support@fennington.com">Email Support</a>
+          </div>
+          
+          <div class="footer-column">
+            <h4>Legal</h4>
+            <a href="#privacy">Privacy Policy</a>
+            <a href="#privacy">Terms of Service</a>
+          </div>
+        </div>
+      </div>
+      
+      <div class="footer-bottom">
+        <p>&copy; 2026 Fennington Apps. All rights reserved.</p>
+        <p>Made with ❤️ for farmers</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
