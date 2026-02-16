@@ -16,8 +16,15 @@ const features = [
   },
   {
     icon: "🧬",
-    title: "Breeding Management",
-    description: "Track breeding pairs, incubation periods, hatch dates, and offspring success rates."
+    title: "Breeding Records",
+    description: "Track breeding pairs, planned matches, and parent history.",
+    comingSoon: true
+  },
+  {
+    icon: "🐣",
+    title: "Incubation Tracking",
+    description: "Log incubation timelines, hatch windows, and outcomes.",
+    comingSoon: true
   },
   {
     icon: "💊",
@@ -137,7 +144,10 @@ function populateFeatures() {
   featuresGrid.innerHTML = features.map(feature => `
     <div class="feature-card">
       <span class="feature-icon">${feature.icon}</span>
-      <h3>${feature.title}</h3>
+      <h3>
+        ${feature.title}
+        ${feature.comingSoon ? '<span class="coming-soon-badge">Coming Soon</span>' : ''}
+      </h3>
       <p>${feature.description}</p>
     </div>
   `).join('');
