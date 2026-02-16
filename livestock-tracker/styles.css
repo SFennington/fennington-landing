@@ -195,6 +195,44 @@ img { max-width: 100%; display: block; }
   transition: all 0.3s;
 }
 
+/* ====== INTRO BANNER ====== */
+.intro-banner {
+  padding: 2rem 0 1rem;
+  background: var(--bg);
+}
+
+.intro-banner-card {
+  background: linear-gradient(135deg, #2d5016 0%, #3e6a22 100%);
+  color: white;
+  border-radius: 14px;
+  padding: 2rem 2rem;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.intro-banner-kicker {
+  display: inline-block;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: #d3eab8;
+  margin-bottom: 0.75rem;
+}
+
+.intro-banner-card h1 {
+  color: white;
+  font-size: 2.2rem;
+  margin-bottom: 0.85rem;
+}
+
+.intro-banner-message {
+  max-width: 900px;
+  font-size: 1.08rem;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.95);
+}
+
 /* ====== HERO SECTION ====== */
 .hero {
   background: linear-gradient(135deg, #f4f7f0 0%, #e8f5e9 100%);
@@ -346,6 +384,45 @@ img { max-width: 100%; display: block; }
 .feature-card p {
   color: var(--muted);
   line-height: 1.6;
+}
+
+/* ====== ABOUT FOUNDER SECTION ====== */
+.about-founder {
+  background: var(--bg);
+}
+
+.about-founder-content {
+  max-width: 820px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  border: 1px solid #e5e7eb;
+  padding: 2rem;
+}
+
+.about-founder-kicker {
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.about-founder-content h2 {
+  color: var(--brand-dark);
+  margin-bottom: 1rem;
+}
+
+.about-founder-content p {
+  color: var(--muted);
+  line-height: 1.75;
+  margin-bottom: 1rem;
+}
+
+.about-founder-content p:last-child {
+  margin-bottom: 0;
 }
 
 /* ====== SCREENSHOTS CAROUSEL ====== */
@@ -774,6 +851,26 @@ img { max-width: 100%; display: block; }
   
   .hero .container {
     grid-template-columns: 1fr;
+  }
+
+  .intro-banner {
+    padding-top: 1.5rem;
+  }
+
+  .intro-banner-card {
+    padding: 1.5rem;
+  }
+
+  .intro-banner-card h1 {
+    font-size: 1.75rem;
+  }
+
+  .intro-banner-message {
+    font-size: 1rem;
+  }
+
+  .about-founder-content {
+    padding: 1.5rem;
   }
   
   .hero-image {
