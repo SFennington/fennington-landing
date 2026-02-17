@@ -305,10 +305,8 @@ function initStoreButtons() {
   }
   
   if (playStoreBtn) {
-    playStoreBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      alert('Play Store link coming soon! We\'re currently in review.');
-    });
+    // Live on Google Play: allow normal link navigation.
+    playStoreBtn.removeAttribute('aria-disabled');
   }
 }
 
