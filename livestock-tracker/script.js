@@ -291,17 +291,14 @@ function initContactForm() {
   }
 }
 
-// STORE BUTTON PLACEHOLDERS
-// Replace these with actual App Store and Play Store URLs when available
+// STORE BUTTONS
 function initStoreButtons() {
   const appStoreBtn = document.getElementById('appStoreBtn');
   const playStoreBtn = document.getElementById('playStoreBtn');
   
   if (appStoreBtn) {
-    appStoreBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      alert('App Store link coming soon! We\'re currently in review.');
-    });
+    // Live on App Store: allow normal link navigation.
+    appStoreBtn.removeAttribute('aria-disabled');
   }
   
   if (playStoreBtn) {
