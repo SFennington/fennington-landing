@@ -15,21 +15,25 @@ const features = [
     description: "Quick and easy egg collection tracking with daily totals, voice input, and historical trends."
   },
   {
+    icon: "🥛",
+    title: "Milk Production Logging",
+    description: "Track daily milk yields with fast entries, per-animal records, and historical production trends."
+  },
+  {
     icon: "🧬",
     title: "Breeding Records",
-    description: "Track breeding pairs, planned matches, and parent history.",
-    comingSoon: true
+    description: "Track breeding pairs, planned matches, and parent history."
   },
   {
     icon: "🐣",
     title: "Incubation Tracking",
-    description: "Log incubation timelines, hatch windows, and outcomes.",
-    comingSoon: true
+    description: "Log incubation timelines, hatch windows, and outcomes."
   },
   {
     icon: "💊",
     title: "Health Records",
-    description: "Log vaccinations, treatments, weight changes, and medical history for every animal."
+    description: "Log vaccinations, treatments, weight changes, and medical history for every animal.",
+    comingSoon: true
   },
   {
     icon: "💰",
@@ -50,6 +54,12 @@ const features = [
     icon: "🔒",
     title: "Privacy Focused",
     description: "No account needed. No data collection. No tracking. 100% private and secure."
+  },
+  {
+    icon: "☁️",
+    title: "Sign in With Google/Apple",
+    description: "Sign in with Google or Apple to sync your data across devices and keep secure cloud backups.",
+    comingSoon: true
   },
   {
     icon: "💾",
