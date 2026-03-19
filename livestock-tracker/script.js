@@ -53,7 +53,7 @@ const features = [
   {
     icon: "🔒",
     title: "Privacy Focused",
-    description: "No account needed. No data collection. No tracking. 100% private and secure."
+    description: "No account needed. Your farm data stays on your device. Minimal anonymous analytics only for app stability."
   },
   {
     icon: "☁️",
@@ -126,7 +126,7 @@ const faqs = [
   },
   {
     question: "Is my data private?",
-    answer: "Your data is completely private. Everything is stored locally on your device. We don't collect, transmit, or have access to any of your farm records or personal information."
+    answer: "Your farm records stay on your device. We collect only limited technical analytics to improve app stability and performance, and optional account features may use limited personal information as described in our Privacy Policy."
   },
   {
     question: "What platforms are supported?",
