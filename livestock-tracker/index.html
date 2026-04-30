@@ -41,6 +41,7 @@
       
       <nav class="nav" id="mainNav">
         <a href="#features">Features</a>
+        <a href="#subscriptions">Subscriptions</a>
         <a href="#faq">FAQ</a>
         <a href="https://www.facebook.com/share/g/1Z1nRFZdzm/" target="_blank" rel="noopener noreferrer">Community</a>
         <a href="privacy-policy.html">Privacy</a>
@@ -83,6 +84,7 @@
             </svg>
             Download Now
           </a>
+          <a href="#subscriptions" class="btn btn-secondary btn-lg">Compare Plans</a>
           <a href="privacy-policy.html" class="btn btn-secondary btn-lg">Privacy Policy</a>
           <a href="terms-of-service.html" class="btn btn-secondary btn-lg">Terms of Service</a>
         </div>
@@ -167,6 +169,102 @@
           <img class="screenshot-image" src="../assets/images/Analytics.jpg" alt="Livestock Tracker analytics screen">
           <p>Insights & trends</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SUBSCRIPTIONS SECTION -->
+  <section class="section subscriptions-section" id="subscriptions">
+    <div class="container">
+      <h2 class="section-title">Subscription Plans</h2>
+      <p class="section-subtitle">Choose your plan, then complete checkout securely on Stripe.</p>
+
+      <div class="subscription-grid">
+        <article class="subscription-card">
+          <p class="subscription-kicker">Starter</p>
+          <h3>Free</h3>
+          <p class="subscription-price">$0</p>
+          <ul>
+            <li>Track up to 25 animals</li>
+            <li>2 animal types and 2 groups per type</li>
+            <li>Basic analytics</li>
+            <li>Local-only data (no cloud sync)</li>
+          </ul>
+          <span class="subscription-note">Included in the app</span>
+        </article>
+
+        <article class="subscription-card">
+          <p class="subscription-kicker">Local Power User</p>
+          <h3>Seed</h3>
+          <p class="subscription-price">$30 one-time or $1/mo</p>
+          <ul>
+            <li>Unlimited animals, types, and groups</li>
+            <li>Full analytics</li>
+            <li>Single-user workspace</li>
+            <li>No cloud sync or collaboration</li>
+          </ul>
+          <div class="subscription-actions">
+            <a class="btn btn-primary" href="https://buy.stripe.com/replace-seed-one-time" target="_blank" rel="noopener noreferrer">Seed One-Time</a>
+            <a class="btn btn-secondary" href="https://buy.stripe.com/replace-seed-monthly" target="_blank" rel="noopener noreferrer">Seed Monthly</a>
+          </div>
+        </article>
+
+        <article class="subscription-card subscription-card-featured">
+          <p class="subscription-kicker">Cloud Sync</p>
+          <h3>Harvest</h3>
+          <p class="subscription-price">$2/mo or $20/yr</p>
+          <ul>
+            <li>Everything in Seed</li>
+            <li>Cloud backup and sync enabled</li>
+            <li>Single-user workspace</li>
+            <li>No collaboration invites</li>
+          </ul>
+          <div class="subscription-actions">
+            <a class="btn btn-primary" href="https://buy.stripe.com/replace-harvest-monthly" target="_blank" rel="noopener noreferrer">Harvest Monthly</a>
+            <a class="btn btn-secondary" href="https://buy.stripe.com/replace-harvest-yearly" target="_blank" rel="noopener noreferrer">Harvest Yearly</a>
+          </div>
+        </article>
+
+        <article class="subscription-card">
+          <p class="subscription-kicker">Team Collaboration</p>
+          <h3>Abundance</h3>
+          <p class="subscription-price">$6/mo or $60/yr</p>
+          <ul>
+            <li>Everything in Harvest</li>
+            <li>Up to 6 total workspace members</li>
+            <li>Collaboration invites and roles</li>
+            <li>Best for family farms and teams</li>
+          </ul>
+          <div class="subscription-actions">
+            <a class="btn btn-primary" href="https://buy.stripe.com/replace-abundance-monthly" target="_blank" rel="noopener noreferrer">Abundance Monthly</a>
+            <a class="btn btn-secondary" href="https://buy.stripe.com/replace-abundance-yearly" target="_blank" rel="noopener noreferrer">Abundance Yearly</a>
+          </div>
+        </article>
+      </div>
+
+      <div class="plan-comparison">
+        <h3>Compare Plans</h3>
+        <div class="plan-comparison-table-wrap">
+          <table class="plan-comparison-table">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>Free</th>
+                <th>Seed</th>
+                <th>Harvest</th>
+                <th>Abundance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Animals / Types / Groups</td><td>Limited</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td></tr>
+              <tr><td>Cloud Backup + Sync</td><td>No</td><td>No</td><td>Yes</td><td>Yes</td></tr>
+              <tr><td>Workspace Members</td><td>1</td><td>1</td><td>1</td><td>6</td></tr>
+              <tr><td>Collaboration Invites</td><td>No</td><td>No</td><td>No</td><td>Yes</td></tr>
+              <tr><td>Analytics</td><td>Basic</td><td>Full</td><td>Full</td><td>Full</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="subscription-meta">Testing Stripe plans in sandbox mode is supported. Use Stripe test cards and switch plans from the same customer to validate entitlement updates.</p>
       </div>
     </div>
   </section>

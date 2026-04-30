@@ -784,6 +784,134 @@ img { max-width: 100%; display: block; }
   resize: vertical;
 }
 
+/* ====== SUBSCRIPTIONS ====== */
+.subscriptions-section {
+  background: linear-gradient(180deg, #f8fbf3 0%, #ffffff 100%);
+}
+
+.subscription-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.subscription-card {
+  background: white;
+  border: 1px solid #dce8cf;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.subscription-card-featured {
+  border: 2px solid var(--accent);
+  box-shadow: var(--shadow-lg);
+}
+
+.subscription-kicker {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.subscription-price {
+  color: var(--brand-dark);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.subscription-card ul {
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+
+.subscription-card li {
+  position: relative;
+  padding-left: 1rem;
+}
+
+.subscription-card li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.62rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.subscription-note {
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.subscription-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.subscription-actions .btn {
+  justify-content: center;
+  width: 100%;
+  padding: 0.7rem 1rem;
+}
+
+.plan-comparison {
+  background: #f3f8ec;
+  border: 1px solid #dce8cf;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.plan-comparison h3 {
+  margin-bottom: 1rem;
+  color: var(--brand-dark);
+}
+
+.plan-comparison-table-wrap {
+  overflow-x: auto;
+}
+
+.plan-comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+  background: white;
+}
+
+.plan-comparison-table th,
+.plan-comparison-table td {
+  border: 1px solid #dce8cf;
+  padding: 0.75rem;
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+.plan-comparison-table th {
+  background: #ebf5de;
+  color: var(--brand-dark);
+}
+
+.subscription-meta {
+  margin-top: 1rem;
+  color: #435241;
+  font-size: 0.94rem;
+}
+
 /* ====== FOOTER ====== */
 .footer {
   background: var(--text);
@@ -933,6 +1061,14 @@ img { max-width: 100%; display: block; }
 
   .screenshot-image {
     max-width: 220px;
+  }
+
+  .subscription-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-comparison-table {
+    min-width: 560px;
   }
 }
 
