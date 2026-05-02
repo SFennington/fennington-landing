@@ -6,6 +6,12 @@
     
     <title>Livestock Tracker - Manage Your Farm with Ease | Fennington Apps</title>
     <meta name="description" content="Livestock tracking app for farmers. Track chickens, ducks, rabbits, breeding, eggs, health records, and expenses. Free to start. Download for iOS and Android.">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/images/livestock-tracker-favicon.png">
+    <link rel="apple-touch-icon" href="../assets/images/livestock-tracker-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="styles.css">
     
@@ -31,11 +37,9 @@
   <header class="header" id="header">
     <div class="container">
       <a href="#hero" class="logo">
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-          <rect width="32" height="32" rx="6" fill="var(--brand)"/>
-          <path d="M16 8C13 8 10 10 10 13C10 16 13 19 16 22C19 19 22 16 22 13C22 10 19 8 16 8Z" fill="white"/>
-          <circle cx="16" cy="13" r="2" fill="var(--accent)"/>
-        </svg>
+        <span class="logo-icon" aria-hidden="true">
+          <img src="../assets/images/livestock-tracker-icon.png" alt="" class="logo-icon-image">
+        </span>
         Livestock Tracker
       </a>
       
@@ -434,7 +438,7 @@
     <div class="container">
       <div class="footer-content">
         <div class="footer-brand">
-          <div class="logo-text">Livestock Tracker</div>
+          <div class="logo-text"><span class="logo-icon" aria-hidden="true"><img src="../assets/images/livestock-tracker-icon.png" alt="" class="logo-icon-image"></span>Livestock Tracker</div>
           <p>Farm management software for small-scale farmers and homesteaders. Free to start with premium features available.</p>
         </div>
         
