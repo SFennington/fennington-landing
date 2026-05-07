@@ -156,6 +156,13 @@ img { max-width: 100%; display: block; }
   color: var(--brand);
 }
 
+.logo-app-icon {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .nav {
   display: flex;
   gap: 2rem;
@@ -202,7 +209,12 @@ img { max-width: 100%; display: block; }
 }
 
 .intro-banner-card {
-  background: linear-gradient(135deg, #1b75cc 0%, #1aa7d6 100%);
+  background:
+    linear-gradient(125deg, rgba(8, 30, 64, 0.68) 0%, rgba(12, 74, 139, 0.56) 40%, rgba(34, 207, 232, 0.34) 100%),
+    url('../assets/images/livestock background.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   color: white;
   border-radius: 14px;
   padding: 2rem 2rem;
