@@ -4,14 +4,14 @@
 
 /* THEME VARIABLES */
 :root {
-  --brand: #2d5016;
-  --brand-dark: #1a3009;
-  --accent: #7cb342;
+  --brand: #1e7fda;
+  --brand-dark: #145bb1;
+  --accent: #22cfe8;
   --text: #1f2937;
   --muted: #6b7280;
   --bg: #ffffff;
-  --card: #f4f7f0;
-  --bg-alt: #f9fafb;
+  --card: #f0f8ff;
+  --bg-alt: #e7f4ff;
   --radius: 8px;
   --shadow: 0 1px 3px rgba(0,0,0,0.1);
   --shadow-lg: 0 10px 25px rgba(0,0,0,0.15);
@@ -202,7 +202,7 @@ img { max-width: 100%; display: block; }
 }
 
 .intro-banner-card {
-  background: linear-gradient(135deg, #2d5016 0%, #3e6a22 100%);
+  background: linear-gradient(135deg, #1b75cc 0%, #1aa7d6 100%);
   color: white;
   border-radius: 14px;
   padding: 2rem 2rem;
@@ -216,7 +216,7 @@ img { max-width: 100%; display: block; }
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 700;
-  color: #d3eab8;
+  color: #c7f4ff;
   margin-bottom: 0.75rem;
 }
 
@@ -235,7 +235,12 @@ img { max-width: 100%; display: block; }
 
 /* ====== HERO SECTION ====== */
 .hero {
-  background: linear-gradient(135deg, #f4f7f0 0%, #e8f5e9 100%);
+  background:
+    linear-gradient(110deg, rgba(7, 26, 60, 0.72) 0%, rgba(12, 60, 117, 0.58) 38%, rgba(31, 127, 218, 0.36) 100%),
+    url('../assets/images/livestock background.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   padding: 5rem 0;
 }
 
@@ -249,14 +254,25 @@ img { max-width: 100%; display: block; }
 .hero-content h1 {
   font-size: 3rem;
   margin-bottom: 1rem;
-  color: var(--brand-dark);
+  color: #ffffff;
 }
 
 .hero-subtitle {
   font-size: 1.25rem;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.92);
   margin-bottom: 2rem;
   line-height: 1.7;
+}
+
+.hero .btn-secondary {
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--brand-dark);
+  border-color: rgba(255, 255, 255, 0.94);
+}
+
+.hero .btn-secondary:hover {
+  background: #ffffff;
+  color: var(--brand);
 }
 
 .hero-cta {
@@ -292,6 +308,14 @@ img { max-width: 100%; display: block; }
 .badge span {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.hero .badge strong {
+  color: #ffffff;
+}
+
+.hero .badge span {
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .hero-image {

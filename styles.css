@@ -327,6 +327,20 @@ img { max-width: 100%; display: block; }
   flex-shrink: 0;
 }
 
+.product-icon-image-wrap {
+  width: 72px;
+  height: 72px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.product-icon-image {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+
 .product-info {
   flex: 1;
 }
