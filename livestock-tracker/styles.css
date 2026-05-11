@@ -209,12 +209,7 @@ img { max-width: 100%; display: block; }
 }
 
 .intro-banner-card {
-  background:
-    linear-gradient(125deg, rgba(8, 30, 64, 0.68) 0%, rgba(12, 74, 139, 0.56) 40%, rgba(34, 207, 232, 0.34) 100%),
-    url('../assets/images/livestock background.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  background: linear-gradient(110deg, #0f366a 0%, #1e7fda 52%, #22cfe8 100%);
   color: white;
   border-radius: 14px;
   padding: 2rem 2rem;
