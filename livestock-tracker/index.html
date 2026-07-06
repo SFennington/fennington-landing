@@ -171,7 +171,11 @@
   <section class="section subscriptions-section" id="subscriptions">
     <div class="container">
       <h2 class="section-title">Subscription Plans</h2>
-      <p class="section-subtitle">Choose your plan, then complete checkout securely on Stripe.</p>
+      <p class="section-subtitle">Start any monthly or yearly subscription with a 30-day free trial. Choose your plan, sign in to the app, then complete secure checkout on Stripe.</p>
+      <div class="trial-callout" role="note">
+        <strong>30 days free on subscriptions</strong>
+        <span>Card required. Your selected plan starts automatically after the trial unless you cancel before it ends. One trial per user.</span>
+      </div>
 
       <div class="subscription-grid">
         <article class="subscription-card">
@@ -191,6 +195,7 @@
           <p class="subscription-kicker">Local Power User</p>
           <h3>Seed</h3>
           <p class="subscription-price">$30 one-time or $1/mo</p>
+          <p class="subscription-trial-note">30-day free trial on monthly subscription</p>
           <ul>
             <li>Unlimited animals, types, and groups</li>
             <li>Full analytics</li>
@@ -198,8 +203,8 @@
             <li>No cloud sync or collaboration</li>
           </ul>
           <div class="subscription-actions">
-            <a class="btn btn-primary" href="https://buy.stripe.com/eVq00i0Ih83Q5gHeRX7Vm00" target="_blank" rel="noopener noreferrer">Seed One-Time</a>
-            <a class="btn btn-secondary" href="https://buy.stripe.com/6oU5kC3Ut5VI5gHbFL7Vm01" target="_blank" rel="noopener noreferrer">Seed Monthly</a>
+            <a class="btn btn-primary" href="https://livestock-tracker-1fc5b.web.app/settings?focusSection=account&amp;checkoutPlan=seed&amp;planType=one_time" target="_blank" rel="noopener noreferrer">Seed One-Time</a>
+            <a class="btn btn-secondary" href="https://livestock-tracker-1fc5b.web.app/settings?focusSection=account&amp;checkoutPlan=seed&amp;planType=subscription&amp;billingInterval=monthly" target="_blank" rel="noopener noreferrer">Start Seed Trial</a>
           </div>
         </article>
 
@@ -207,6 +212,7 @@
           <p class="subscription-kicker">Cloud Sync</p>
           <h3>Harvest</h3>
           <p class="subscription-price">$2/mo or $20/yr</p>
+          <p class="subscription-trial-note">30-day free trial included</p>
           <ul>
             <li>Everything in Seed</li>
             <li>Cloud backup and sync enabled</li>
@@ -214,8 +220,8 @@
             <li>No collaboration invites</li>
           </ul>
           <div class="subscription-actions">
-            <a class="btn btn-primary" href="https://buy.stripe.com/cNi3cuaiResedNdbFL7Vm02" target="_blank" rel="noopener noreferrer">Harvest Monthly</a>
-            <a class="btn btn-secondary" href="https://buy.stripe.com/9B64gy3Utfwi8sT9xD7Vm03" target="_blank" rel="noopener noreferrer">Harvest Yearly</a>
+            <a class="btn btn-primary" href="https://livestock-tracker-1fc5b.web.app/settings?focusSection=account&amp;checkoutPlan=harvest&amp;planType=subscription&amp;billingInterval=monthly" target="_blank" rel="noopener noreferrer">Start Monthly Trial</a>
+            <a class="btn btn-secondary" href="https://livestock-tracker-1fc5b.web.app/settings?focusSection=account&amp;checkoutPlan=harvest&amp;planType=subscription&amp;billingInterval=yearly" target="_blank" rel="noopener noreferrer">Start Yearly Trial</a>
           </div>
         </article>
 
@@ -223,6 +229,7 @@
           <p class="subscription-kicker">Team Collaboration</p>
           <h3>Abundance</h3>
           <p class="subscription-price">$5/mo or $50/yr</p>
+          <p class="subscription-trial-note">30-day free trial included</p>
           <ul>
             <li>Everything in Harvest</li>
             <li>Up to 6 total workspace members</li>
@@ -230,8 +237,8 @@
             <li>Best for family farms and teams</li>
           </ul>
           <div class="subscription-actions">
-            <a class="btn btn-primary" href="https://buy.stripe.com/4gMcN4fDbfwifVldNT7Vm04" target="_blank" rel="noopener noreferrer">Abundance Monthly</a>
-            <a class="btn btn-secondary" href="https://buy.stripe.com/3cI28q9eN1Fs38z6lr7Vm05" target="_blank" rel="noopener noreferrer">Abundance Yearly</a>
+            <a class="btn btn-primary" href="https://livestock-tracker-1fc5b.web.app/settings?focusSection=account&amp;checkoutPlan=abundance&amp;planType=subscription&amp;billingInterval=monthly" target="_blank" rel="noopener noreferrer">Start Monthly Trial</a>
+            <a class="btn btn-secondary" href="https://livestock-tracker-1fc5b.web.app/settings?focusSection=account&amp;checkoutPlan=abundance&amp;planType=subscription&amp;billingInterval=yearly" target="_blank" rel="noopener noreferrer">Start Yearly Trial</a>
           </div>
         </article>
       </div>
@@ -258,7 +265,7 @@
             </tbody>
           </table>
         </div>
-        <p class="subscription-meta">Testing Stripe plans in sandbox mode is supported. Use Stripe test cards and switch plans from the same customer to validate entitlement updates.</p>
+        <p class="subscription-meta">Subscription trials are started through your Livestock Tracker account so each user receives one 30-day trial. Existing subscribers can change plans from the app billing flow.</p>
       </div>
     </div>
   </section>
