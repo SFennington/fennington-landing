@@ -1,0 +1,70 @@
+@import url('../livestock-tracker/styles.css');
+
+:root {
+  --brand: #f97316;
+  --brand-dark: #7c2d12;
+  --accent: #facc15;
+  --text: #111827;
+  --muted: #5b6472;
+  --card: #fff7ed;
+  --bg-alt: #fff3e6;
+}
+
+.intro-banner-card {
+  background: linear-gradient(110deg, #111827 0%, #7c2d12 48%, #f97316 100%);
+}
+
+.intro-banner-kicker {
+  color: #fde68a;
+}
+
+.hero {
+  background:
+    linear-gradient(110deg, rgba(17, 24, 39, 0.82) 0%, rgba(124, 45, 18, 0.62) 45%, rgba(249, 115, 22, 0.28) 100%),
+    url('../assets/images/firelife-app-hero.png');
+  background-size: cover;
+  background-position: center;
+}
+
+.phone-screen {
+  background: linear-gradient(180deg, #111827 0%, #f97316 100%);
+}
+
+.feature-card h3,
+.privacy-section h3,
+.contact-card h3 {
+  color: var(--brand-dark);
+}
+
+.bg-brand {
+  background: linear-gradient(135deg, #111827 0%, #7c2d12 50%, #f97316 100%);
+}
+
+.screenshot-image {
+  border-color: var(--brand);
+}
+
+.devotional-path {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.path-step {
+  background: white;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+}
+
+.path-step strong {
+  color: var(--brand-dark);
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.path-step p {
+  color: var(--muted);
+}
