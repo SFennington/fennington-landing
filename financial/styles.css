@@ -1,0 +1,523 @@
+:root {
+  --financial-line: #e5e7eb;
+  --financial-soft: #eef6ff;
+  --financial-good: #047857;
+  --financial-warn: #b45309;
+  --financial-danger: #b91c1c;
+}
+
+.financial-logo {
+  height: 40px;
+}
+
+.financial-header .btn {
+  padding: 0.55rem 0.9rem;
+}
+
+.auth-status {
+  color: var(--muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.financial-hero {
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 72%, #0f172a 100%);
+  color: #fff;
+  padding: 82px 0;
+}
+
+.financial-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: 3rem;
+  align-items: center;
+}
+
+.financial-hero h1 {
+  font-size: clamp(2.4rem, 5vw, 4.25rem);
+  letter-spacing: -0.04em;
+  max-width: 850px;
+}
+
+.financial-hero .hero-subtitle {
+  margin-left: 0;
+  text-align: left;
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.6rem;
+  text-transform: uppercase;
+}
+
+.financial-cta {
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+}
+
+.privacy-notice {
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  display: inline-flex;
+  font-weight: 700;
+  padding: 0.75rem 1rem;
+}
+
+.hero-panel {
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 22px;
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  padding: 1.4rem;
+}
+
+.preview-card {
+  background: var(--financial-soft);
+  border: 1px solid #bfdbfe;
+  border-radius: 16px;
+  padding: 1.2rem;
+}
+
+.preview-card span,
+.preview-card small {
+  color: var(--muted);
+  display: block;
+}
+
+.preview-card strong {
+  display: block;
+  font-size: 2.3rem;
+  line-height: 1.1;
+  margin: 0.35rem 0;
+}
+
+.preview-bars {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.2rem 0;
+}
+
+.preview-bars span {
+  background: linear-gradient(90deg, var(--brand), var(--accent));
+  border-radius: 999px;
+  display: block;
+  height: 12px;
+}
+
+.preview-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.preview-list div {
+  align-items: center;
+  border: 1px solid var(--financial-line);
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  padding: 0.8rem;
+}
+
+.preview-list span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.financial-section,
+.financial-app-section {
+  padding: 72px 0;
+}
+
+.financial-section.alt,
+.financial-app-section {
+  background: var(--card);
+}
+
+.feature-grid,
+.steps-grid,
+.summary-grid,
+.report-grid,
+.income-grid,
+.recurring-grid,
+.category-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.feature-card,
+.steps-grid article,
+.summary-card,
+.panel,
+.privacy-card,
+.chart-card,
+.recurring-card,
+.category-card {
+  background: #fff;
+  border: 1px solid var(--financial-line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 1.1rem;
+}
+
+.feature-card strong,
+.summary-card strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.feature-card p,
+.summary-card span,
+.muted {
+  color: var(--muted);
+}
+
+.steps-grid span {
+  align-items: center;
+  background: var(--brand);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 800;
+  height: 34px;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+  width: 34px;
+}
+
+.privacy-grid {
+  align-items: center;
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.app-alert,
+.auth-gate,
+.financial-app {
+  background: #fff;
+  border: 1px solid var(--financial-line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  padding: 1.5rem;
+}
+
+.app-alert {
+  box-shadow: var(--shadow);
+  margin-bottom: 1rem;
+}
+
+.warning {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.auth-gate {
+  text-align: center;
+}
+
+.gate-actions,
+.app-actions,
+.form-actions,
+.bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.gate-actions {
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.app-topbar {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.app-tabs {
+  border-bottom: 1px solid var(--financial-line);
+  display: flex;
+  gap: 0.4rem;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.app-tabs button,
+.mini-btn,
+.chip,
+.tag {
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.app-tabs button {
+  background: #fff;
+  border: 1px solid var(--financial-line);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.65rem 0.9rem;
+  white-space: nowrap;
+}
+
+.app-tabs button.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+.summary-card strong {
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  letter-spacing: -0.03em;
+  margin-top: 0.3rem;
+}
+
+.summary-card.good strong,
+.positive {
+  color: var(--financial-good);
+}
+
+.summary-card.warn strong,
+.warn-text {
+  color: var(--financial-warn);
+}
+
+.summary-card.danger strong,
+.negative {
+  color: var(--financial-danger);
+}
+
+.toolbar,
+.filters,
+.mapping-grid,
+.settings-grid {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.filters,
+.mapping-grid,
+.settings-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.toolbar {
+  margin-bottom: 1rem;
+}
+
+.field label {
+  color: var(--muted);
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 800;
+  margin-bottom: 0.3rem;
+}
+
+.field input,
+.field select,
+.field textarea {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font: inherit;
+  padding: 0.65rem 0.75rem;
+  width: 100%;
+}
+
+.field textarea {
+  min-height: 72px;
+}
+
+.table-wrap {
+  border: 1px solid var(--financial-line);
+  border-radius: 14px;
+  overflow: auto;
+}
+
+table {
+  border-collapse: collapse;
+  min-width: 980px;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--financial-line);
+  padding: 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: #f9fafb;
+  color: #374151;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+td input,
+td select {
+  min-width: 125px;
+}
+
+.amount-cell {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mini-btn {
+  background: #fff;
+  border: 1px solid var(--financial-line);
+  color: var(--brand);
+  cursor: pointer;
+  padding: 0.4rem 0.65rem;
+}
+
+.danger-btn,
+.mini-btn.danger {
+  background: #fff;
+  border: 1px solid #fecaca;
+  color: var(--financial-danger);
+}
+
+.btn.danger-btn:hover,
+.mini-btn.danger:hover {
+  background: #fee2e2;
+}
+
+.bar-row {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
+}
+
+.bar-label {
+  display: flex;
+  font-weight: 700;
+  justify-content: space-between;
+}
+
+.bar-track {
+  background: #e5e7eb;
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  background: linear-gradient(90deg, var(--brand), var(--accent));
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+}
+
+.chip,
+.tag {
+  background: #eff6ff;
+  color: var(--brand-dark);
+  display: inline-flex;
+  font-size: 0.78rem;
+  padding: 0.24rem 0.55rem;
+}
+
+.tag.warn {
+  background: #fffbeb;
+  color: var(--financial-warn);
+}
+
+.tag.danger {
+  background: #fef2f2;
+  color: var(--financial-danger);
+}
+
+.tag.good {
+  background: #ecfdf5;
+  color: var(--financial-good);
+}
+
+.empty-state {
+  background: #fff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  color: var(--muted);
+  padding: 2rem;
+  text-align: center;
+}
+
+.status-line {
+  color: var(--muted);
+  margin: 0.7rem 0;
+}
+
+.review-card {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: auto minmax(0, 1fr) 220px;
+}
+
+.review-card input[type="checkbox"] {
+  margin-top: 0.35rem;
+}
+
+.review-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.split-panel {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) 330px;
+}
+
+@media (max-width: 860px) {
+  .financial-hero-grid,
+  .privacy-grid,
+  .split-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .financial-hero .hero-subtitle {
+    text-align: center;
+  }
+
+  .financial-hero-copy,
+  .financial-cta {
+    text-align: center;
+    justify-content: center;
+  }
+
+  .privacy-notice {
+    border-radius: 14px;
+  }
+
+  .app-topbar,
+  .review-card {
+    display: block;
+  }
+
+  .app-actions,
+  .review-actions {
+    margin-top: 1rem;
+  }
+
+  .financial-auth-actions .auth-status {
+    display: none;
+  }
+}

@@ -35,6 +35,58 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /users/{userId} {
+      allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+
+      match /financialProfiles/{profileId} {
+        allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+
+        match /accounts/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /imports/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /mappings/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /transactions/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /categories/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /merchantMappings/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /rules/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /recurring/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /settings/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /overtimeScenarios/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+
+        match /monthlySummaries/{recordId} {
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+      }
+    }
+
     match /stripeEvents/{eventId} {
       allow read, write: if isAdmin();
     }

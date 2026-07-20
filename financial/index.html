@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fennington Financial | Personal Finance CSV Analysis</title>
+  <meta name="description" content="Upload bank and credit-card CSV files, categorize transactions, review spending, track income, and identify recurring expenses with Fennington Financial.">
+  <link rel="icon" type="image/png" href="../assets/images/FennSol Logo.png">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="header" id="header">
+    <div class="container financial-header">
+      <a href="/" class="logo" aria-label="Fennington home">
+        <img src="../assets/images/FennSol Logo large.png" alt="Fennington Solutions" class="financial-logo">
+      </a>
+      <nav class="nav" id="mainNav">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How It Works</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#app">Dashboard</a>
+      </nav>
+      <div class="header-actions financial-auth-actions">
+        <span id="authStatus" class="auth-status">Not signed in</span>
+        <button id="signInButton" class="btn btn-secondary" type="button">Sign In</button>
+        <button id="signOutButton" class="btn btn-secondary" type="button" hidden>Sign Out</button>
+      </div>
+      <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="financial-hero" id="top">
+      <div class="container financial-hero-grid">
+        <div class="financial-hero-copy">
+          <p class="eyebrow">Fennington Financial</p>
+          <h1>Understand Where Your Money Actually Goes</h1>
+          <p class="hero-subtitle">Upload your bank and credit-card transactions, automatically organize your spending, identify recurring expenses, and compare your monthly expenses against your actual and potential income.</p>
+          <div class="hero-cta financial-cta">
+            <button id="analyzeButton" class="btn btn-primary btn-lg" type="button">Analyze My Finances</button>
+            <button id="demoButton" class="btn btn-secondary btn-lg" type="button">View Demo</button>
+          </div>
+          <div class="privacy-notice">No bank login required. Upload your own CSV files and remain in control of your financial data.</div>
+        </div>
+        <div class="hero-panel" aria-label="Financial dashboard preview">
+          <div class="preview-card total"><span>This Month</span><strong>$4,260</strong><small>Spending tracked across 8 categories</small></div>
+          <div class="preview-bars"><span style="width: 88%"></span><span style="width: 64%"></span><span style="width: 51%"></span><span style="width: 39%"></span></div>
+          <div class="preview-list"><div><strong>Mortgage</strong><span>Recurring</span></div><div><strong>Payroll</strong><span>Income</span></div><div><strong>Fuel</strong><span>Needs Review</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="financial-section" id="features">
+      <div class="container">
+        <h2>Built for CSV-first financial clarity</h2>
+        <p class="section-subtitle">A practical first draft for organizing transactions without connecting directly to banks.</p>
+        <div class="feature-grid" id="featureGrid"></div>
+      </div>
+    </section>
+
+    <section class="financial-section alt" id="how-it-works">
+      <div class="container">
+        <h2>How It Works</h2>
+        <div class="steps-grid">
+          <article><span>1</span><h3>Upload transaction CSV files</h3><p>Add bank and credit-card exports from one or more accounts.</p></article>
+          <article><span>2</span><h3>Review and correct categories</h3><p>Confirm low-confidence matches, possible transfers, duplicates, and recurring expenses.</p></article>
+          <article><span>3</span><h3>View reports and financial trends</h3><p>Compare income, expenses, recurring bills, and spending changes over time.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="financial-section" id="privacy">
+      <div class="container privacy-grid">
+        <div>
+          <p class="eyebrow">Privacy-focused first version</p>
+          <h2>No bank passwords or live bank connections</h2>
+          <p>Fennington Financial works from CSV files you choose to upload. The first version does not request banking credentials, initiate transfers, pay bills, or connect directly to financial institutions.</p>
+          <p>Financial records are scoped to the authenticated user in Firestore. Demo mode uses fictional data only and is clearly labeled.</p>
+        </div>
+        <div class="privacy-card">
+          <strong>First-draft boundary</strong>
+          <p>This build avoids claims about encryption certifications, regulatory compliance, credit monitoring, investments, automated decisions, or adviser recommendations.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="app" class="financial-app-section">
+      <div class="container">
+        <section id="setupWarning" class="app-alert warning" hidden>
+          <strong>Firebase web config required for account storage.</strong>
+          <span>Update <code>financial/config.js</code> with this Firebase project's web app config. Demo mode works without configuration.</span>
+        </section>
+        <section id="authGate" class="auth-gate">
+          <p class="eyebrow">Account required for saved financial data</p>
+          <h2>Create or sign into a Fennington account</h2>
+          <p>Use the existing Firebase-backed Fennington account system to save financial profiles, accounts, mappings, rules, transactions, and reports.</p>
+          <div class="gate-actions">
+            <button id="gateSignInButton" class="btn btn-primary" type="button">Sign In With Google</button>
+            <button id="gateDemoButton" class="btn btn-secondary" type="button">Open Fictional Demo</button>
+          </div>
+        </section>
+
+        <section id="financialApp" class="financial-app" hidden>
+          <div class="app-topbar">
+            <div>
+              <p class="eyebrow" id="modeLabel">Demo mode</p>
+              <h2>Fennington Financial Dashboard</h2>
+              <p id="profileSummary">Fictional sample profile loaded.</p>
+            </div>
+            <div class="app-actions">
+              <button id="createProfileButton" class="btn btn-secondary" type="button">Create Financial Profile</button>
+              <button id="deleteProfileButton" class="btn danger-btn" type="button">Delete Profile Data</button>
+            </div>
+          </div>
+
+          <nav class="app-tabs" aria-label="Financial app sections">
+            <button data-tab="dashboard" class="active" type="button">Dashboard</button>
+            <button data-tab="import" type="button">CSV Import</button>
+            <button data-tab="transactions" type="button">Transactions</button>
+            <button data-tab="review" type="button">Review Queue</button>
+            <button data-tab="reports" type="button">Reports</button>
+            <button data-tab="income" type="button">Income</button>
+            <button data-tab="recurring" type="button">Recurring</button>
+            <button data-tab="categories" type="button">Categories</button>
+          </nav>
+
+          <section id="dashboardTab" class="tab-panel active"></section>
+          <section id="importTab" class="tab-panel"></section>
+          <section id="transactionsTab" class="tab-panel"></section>
+          <section id="reviewTab" class="tab-panel"></section>
+          <section id="reportsTab" class="tab-panel"></section>
+          <section id="incomeTab" class="tab-panel"></section>
+          <section id="recurringTab" class="tab-panel"></section>
+          <section id="categoriesTab" class="tab-panel"></section>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2026 Fennington Solutions. Fennington Financial is a first-draft CSV-based financial analysis tool.</p>
+    </div>
+  </footer>
+
+  <template id="rowActionsTemplate">
+    <button class="mini-btn" data-row-action="save" type="button">Save</button>
+  </template>
+
+  <script src="config.js"></script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>

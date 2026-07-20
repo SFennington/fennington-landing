@@ -19,6 +19,32 @@ const BUSINESS_PHONE = process.env.BUSINESS_PHONE || "413-255-1777";
 const DEFAULT_LEAD_CAP = 25;
 const DEFAULT_EMAIL_CAP = 10;
 const WEBSITE_TIMEOUT_MS = 6500;
+const FINANCIAL_AI_MODEL = process.env.FINANCIAL_AI_MODEL || "gpt-4o-mini";
+
+const FINANCIAL_CATEGORIES = [
+  "Housing", "Utilities", "Groceries", "Restaurants", "Transportation", "Fuel", "Vehicle expenses", "Insurance", "Medical", "Shopping", "Entertainment", "Subscriptions", "Childcare", "Education", "Debt payments", "Taxes", "Transfers", "Income", "Uncategorized"
+];
+
+const FINANCIAL_KEYWORDS = [
+  { match: /rent|mortgage|apartment/i, category: "Housing", confidence: 90 },
+  { match: /electric|power|water|gas company|internet|phone|utility|comcast|xfinity|verizon/i, category: "Utilities", confidence: 86 },
+  { match: /grocery|market|kroger|aldi|costco|walmart|target|trader joe|whole foods/i, category: "Groceries", confidence: 84 },
+  { match: /restaurant|pizza|cafe|coffee|doordash|uber eats|grubhub|taco|burger|sq \*/i, category: "Restaurants", confidence: 83 },
+  { match: /shell|exxon|bp|chevron|speedway|fuel|gas station/i, category: "Fuel", confidence: 89 },
+  { match: /auto|tire|mechanic|oil change|parts|registration/i, category: "Vehicle expenses", confidence: 82 },
+  { match: /insurance|geico|progressive|state farm|allstate/i, category: "Insurance", confidence: 86 },
+  { match: /doctor|hospital|pharmacy|cvs|walgreens|medical|dental/i, category: "Medical", confidence: 80 },
+  { match: /amazon|etsy|best buy|home depot|lowes|store|shop/i, category: "Shopping", confidence: 76 },
+  { match: /netflix|spotify|hulu|disney|subscription|apple\.com/i, category: "Subscriptions", confidence: 88 },
+  { match: /movie|theater|concert|steam|xbox|playstation/i, category: "Entertainment", confidence: 80 },
+  { match: /daycare|childcare/i, category: "Childcare", confidence: 82 },
+  { match: /tuition|university|school|student loan/i, category: "Education", confidence: 80 },
+  { match: /credit card payment|payment thank you|online payment received|transfer|zelle|venmo|cash app|savings|refund|reimbursement/i, category: "Transfers", confidence: 78 },
+  { match: /loan payment|minimum payment/i, category: "Debt payments", confidence: 72 },
+  { match: /irs|tax|revenue/i, category: "Taxes", confidence: 84 },
+  { match: /payroll|direct deposit|salary|paycheck|wages/i, category: "Income", confidence: 94 },
+  { match: /online transfer|payment received/i, category: "Transfers", confidence: 74 }
+];
 
 const NASHVILLE_QUERIES = [
   "HVAC contractor in Nashville TN",
@@ -553,6 +579,84 @@ async function requireAdmin(req: express.Request): Promise<admin.auth.DecodedIdT
   return decoded;
 }
 
+async function requireUser(req: express.Request): Promise<admin.auth.DecodedIdToken> {
+  const authHeader = req.header("authorization") || "";
+  const match = authHeader.match(/^Bearer (.+)$/);
+  if (!match) throw Object.assign(new Error("Missing bearer token."), { statusCode: 401 });
+  return admin.auth().verifyIdToken(match[1]);
+}
+
+function normalizeFinancialMerchant(description: string): string {
+  const merchant = safeString(description, "Unknown Merchant")
+    .replace(/^SQ \*/i, "")
+    .replace(/\b\d{4,}\b/g, "")
+    .replace(/[#*]\w+/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return merchant || "Unknown Merchant";
+}
+
+function keywordFinancialCategorize(item: any, allowedCategories = FINANCIAL_CATEGORIES) {
+  const description = safeString(item?.description);
+  const matched = FINANCIAL_KEYWORDS.find((rule) => rule.match.test(description));
+  const category = matched && allowedCategories.includes(matched.category) ? matched.category : "Uncategorized";
+  return {
+    id: safeString(item?.id),
+    merchant: normalizeFinancialMerchant(description),
+    category,
+    confidence: matched?.confidence || 35,
+    reason: matched ? "Matched conservative server-side keyword rules." : "No server-side keyword rule matched; manual review recommended.",
+    source: "server_keyword"
+  };
+}
+
+async function aiFinancialCategorize(transactions: any[], categories: string[]) {
+  if (!process.env.OPENAI_API_KEY) return null;
+  const minimalTransactions = transactions.slice(0, 20).map((item) => ({
+    id: safeString(item?.id),
+    description: safeString(item?.description),
+    amount: Number(item?.amount || 0)
+  }));
+  const allowedCategories = categories.length ? categories.slice(0, 40) : FINANCIAL_CATEGORIES;
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model: FINANCIAL_AI_MODEL,
+      temperature: 0.1,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: "Categorize personal finance transactions. Use only provided transaction descriptions, amounts, and allowed categories. Return JSON with a results array. Each result must include id, merchant, category, confidence 0-100, and reason. Use Transfers for likely account movements or credit-card payments. Use Uncategorized when uncertain."
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ categories: allowedCategories, transactions: minimalTransactions })
+        }
+      ]
+    })
+  });
+  const body: any = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(safeString(body?.error?.message, "AI categorization failed.")), { statusCode: 502 });
+  const content = safeLongString(body?.choices?.[0]?.message?.content || "{}", "{}", 20000);
+  const parsed = JSON.parse(content);
+  const results = Array.isArray(parsed?.results) ? parsed.results : [];
+  return results.map((result: any) => ({
+    id: safeString(result?.id),
+    merchant: safeString(result?.merchant || normalizeFinancialMerchant(transactions.find((item) => item.id === result?.id)?.description || "")),
+    category: allowedCategories.includes(safeString(result?.category)) ? safeString(result?.category) : "Uncategorized",
+    confidence: Math.max(0, Math.min(100, Number(result?.confidence || 0))),
+    reason: safeString(result?.reason || "AI categorization based on supplied transaction fields only."),
+    source: "ai"
+  }));
+}
+
 function asyncRoute(handler: (req: express.Request, res: express.Response) => Promise<void>) {
   return async (req: express.Request, res: express.Response) => {
     try {
@@ -802,6 +906,34 @@ apiApp.post("/admin/outreach/:messageId/send", asyncRoute(async (req, res) => {
   const leadId = safeString(message.get("leadId"));
   if (leadId) await db.collection("leads").doc(leadId).set({ outreachStatus: "sent", lastContactedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
   res.json({ ok: true, resendEmailId: resendBody.id || null });
+}));
+
+apiApp.post("/financial/categorize", asyncRoute(async (req, res) => {
+  const user = await requireUser(req);
+  const transactions = Array.isArray(req.body?.transactions) ? req.body.transactions.slice(0, 20) : [];
+  const categories = Array.isArray(req.body?.categories) ? req.body.categories.map((category: unknown) => safeString(category)).filter(Boolean) : FINANCIAL_CATEGORIES;
+  if (!transactions.length) throw Object.assign(new Error("At least one transaction is required."), { statusCode: 400 });
+  const safeTransactions = transactions.map((item: any) => ({
+    id: safeString(item?.id),
+    description: safeString(item?.description),
+    amount: Number(item?.amount || 0)
+  })).filter((item: any) => item.id && item.description);
+  if (!safeTransactions.length) throw Object.assign(new Error("No valid transactions were provided."), { statusCode: 400 });
+
+  let results = safeTransactions.map((item: any) => keywordFinancialCategorize(item, categories));
+  let source = "server_keyword";
+  try {
+    const aiResults = await aiFinancialCategorize(safeTransactions, categories);
+    if (aiResults?.length) {
+      const aiById = new Map(aiResults.map((item: any) => [item.id, item]));
+      results = results.map((fallback: any) => aiById.get(fallback.id) || fallback);
+      source = "ai";
+    }
+  } catch (error) {
+    logger.warn("Financial AI categorization fell back to keyword rules", { uid: user.uid, error });
+  }
+
+  res.json({ results, source, processed: results.length });
 }));
 
 apiApp.post("/sites/:siteId/create-checkout-session", asyncRoute(async (req, res) => {
