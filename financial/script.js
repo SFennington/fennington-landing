@@ -282,6 +282,7 @@ async function saveState() {
 }
 
 function renderAll() {
+  normalizeCreditCardPaymentSigns();
   const previousRecurring = new Map(state.recurring.map((item) => [item.id, item]));
   state.recurring = detectRecurring(state.transactions).map((item) => ({ ...item, status: previousRecurring.get(item.id)?.status || item.status }));
   renderDashboard();
@@ -293,6 +294,17 @@ function renderAll() {
   renderRecurring();
   renderCategories();
   saveState();
+}
+
+function normalizeCreditCardPaymentSigns() {
+  const creditAccounts = new Set(state.accounts.filter((account) => account.type === "credit").map((account) => account.id));
+  state.transactions.forEach((tx) => {
+    const looksLikePayment = tx.category === "Transfers" || tx.type === "transfer" || /payment|autopay|thank you|payment received|online payment/i.test(`${tx.description} ${tx.merchant}`);
+    if (tx.amount < 0 && creditAccounts.has(tx.accountId) && looksLikePayment) {
+      tx.amount = Math.abs(tx.amount);
+      setCategory(tx, "Transfers", Math.max(90, tx.confidence || 0), tx.source || "Payment sign normalization", "Credit-card payments are tracked as positive credits.", "transfer");
+    }
+  });
 }
 
 function renderDashboard() {
@@ -307,6 +319,8 @@ function renderDashboard() {
     <div class="summary-grid">
       ${summaryCard("Actual income received this month", summary.actualIncome, "good")}
       ${summaryCard("Total spending this month", summary.spending, "danger")}
+      ${summaryCard("Payments and credits this month", summary.payments, "good")}
+      ${summaryCard("Net spending after payments", summary.netSpending, summary.netSpending <= 0 ? "good" : "danger")}
       ${summaryCard("Remaining income", summary.remaining, summary.remaining >= 0 ? "good" : "danger")}
       ${summaryCard("Projected income including potential overtime", projectedIncome(), "warn", "Potential overtime is not received income.")}
       ${summaryCard("Recurring monthly expenses", summary.recurring, "danger")}
@@ -450,12 +464,15 @@ function importTransactions() {
   const imported = preview.rows.map((row) => {
     let account = state.accounts.find((item) => item.name.toLowerCase() === row.accountName.toLowerCase());
     if (!account) {
-      account = { id: uniqueId("acct"), name: row.accountName, institution: pendingImport.institution, type: /card|citi/i.test(row.accountName) ? "credit" : "checking" };
+      account = { id: uniqueId("acct"), name: row.accountName, institution: pendingImport.institution, type: /card|credit|citi|visa|mastercard|amex|discover|capital one|chase/i.test(row.accountName) ? "credit" : "checking" };
       state.accounts.push(account);
     }
     return makeTransaction({ ...row, accountId: account.id, importId }, uniqueId("tx"));
   });
   imported.forEach((tx) => applyCategorization(tx, state));
+  imported.filter((tx) => tx.importDirection === "credit" && state.accounts.find((account) => account.id === tx.accountId)?.type === "credit").forEach((tx) => {
+    setCategory(tx, "Transfers", Math.max(90, tx.confidence || 0), "CSV credit column", "Mapped Credit column on a credit-card account was imported as a card payment or credit.", "transfer");
+  });
   flagDuplicates(imported, state.transactions);
   state.transactions.push(...imported);
   state.imports.push({ id: importId, fileName: pendingImport.fileName, accountName: preview.accountName, count: imported.length, importedAt: new Date().toISOString(), duplicateCount: imported.filter((tx) => tx.flags.includes("possible_duplicate")).length });
@@ -778,6 +795,7 @@ function makeTransaction(row, id) {
     notes: "",
     needsReview: true,
     flags: [],
+    importDirection: row.importDirection || "",
     importId: row.importId || "manual"
   };
   return tx;
@@ -872,10 +890,14 @@ function buildImportPreview(options = {}) {
 function normalizeImportRow(row) {
   const map = pendingImport.mapping;
   let amount = 0;
-  if (map.debit || map.credit) amount = parseMoney(row[map.credit]) - parseMoney(row[map.debit]);
+  let importDirection = "";
+  const hasSplitAmountColumns = Boolean(map.debit || map.credit);
+  if (hasSplitAmountColumns) amount = Math.abs(parseMoney(row[map.credit])) - Math.abs(parseMoney(row[map.debit]));
   else amount = parseMoney(row[map.amount]);
-  if (pendingImport.expensesPositive && amount > 0 && !/credit|deposit|income|payroll/i.test(row[map.type] || row[map.description] || "")) amount = -amount;
-  return { date: normalizeDate(row[map.date]), description: sanitize(row[map.description]), merchant: normalizeMerchant(row[map.description]), amount: round(amount), accountName: sanitize(row[map.account] || row.__sourceAccountName || pendingImport.accountName), sourceFileName: row.__sourceFileName || pendingImport.fileName };
+  if (map.credit && Math.abs(parseMoney(row[map.credit])) > 0 && amount > 0) importDirection = "credit";
+  if (map.debit && Math.abs(parseMoney(row[map.debit])) > 0 && amount < 0) importDirection = "debit";
+  if (!hasSplitAmountColumns && pendingImport.expensesPositive && amount > 0 && !/credit|deposit|income|payroll/i.test(row[map.type] || row[map.description] || "")) amount = -amount;
+  return { date: normalizeDate(row[map.date]), description: sanitize(row[map.description]), merchant: normalizeMerchant(row[map.description]), amount: round(amount), importDirection, accountName: sanitize(row[map.account] || row.__sourceAccountName || pendingImport.accountName), sourceFileName: row.__sourceFileName || pendingImport.fileName };
 }
 
 function inferAccountName(file) {
@@ -908,10 +930,12 @@ function monthlySummary(month) {
   const txs = state.transactions.filter((tx) => tx.date?.startsWith(month));
   const actualIncome = txs.filter((tx) => tx.type === "income" && tx.category !== "Transfers").reduce((sum, tx) => sum + tx.amount, 0);
   const spending = txs.filter((tx) => tx.type === "expense" && tx.category !== "Transfers").reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const payments = txs.filter((tx) => tx.amount > 0 && (tx.type === "transfer" || tx.category === "Transfers")).reduce((sum, tx) => sum + tx.amount, 0);
   const recurring = txs.filter((tx) => tx.recurringStatus === "confirmed" || state.recurring.some((item) => item.merchant === tx.merchant && item.status !== "rejected")).reduce((sum, tx) => tx.type === "expense" ? sum + Math.abs(tx.amount) : sum, 0);
   const byCategory = {};
   txs.filter((tx) => tx.type === "expense" && tx.category !== "Transfers").forEach((tx) => { byCategory[tx.category] = (byCategory[tx.category] || 0) + Math.abs(tx.amount); });
-  return { actualIncome, spending, remaining: actualIncome - spending, recurring, reviewCount: txs.filter((tx) => tx.needsReview).length, byCategory };
+  const netSpending = spending - payments;
+  return { actualIncome, spending, payments, netSpending, remaining: actualIncome - netSpending, recurring, reviewCount: txs.filter((tx) => tx.needsReview).length, byCategory };
 }
 
 function summaryCard(title, value, tone, note = "") {
@@ -927,7 +951,7 @@ function categoryBars(data) {
 }
 
 function quickStatus(summary) {
-  return `<p><span class="tag good">Actual income</span> ${money(summary.actualIncome)}</p><p><span class="tag danger">Spending</span> ${money(summary.spending)}</p><p><span class="tag warn">Potential overtime</span> ${money(overtimeIncome())} kept separate from received income.</p><p><span class="tag warn">Review</span> ${summary.reviewCount} transactions need attention.</p>`;
+  return `<p><span class="tag good">Actual income</span> ${money(summary.actualIncome)}</p><p><span class="tag danger">Spending</span> ${money(summary.spending)}</p><p><span class="tag good">Payments</span> ${money(summary.payments)}</p><p><span class="tag warn">Potential overtime</span> ${money(overtimeIncome())} kept separate from received income.</p><p><span class="tag warn">Review</span> ${summary.reviewCount} transactions need attention.</p>`;
 }
 
 function filteredTransactions() {
@@ -985,7 +1009,7 @@ function monthlyBars(kind) {
 function incomeExpenseBars() {
   const months = monthOptions();
   if (months.length < 2) return `<div class="empty-state">Not enough historical data yet.</div>`;
-  return months.map((m) => { const s = monthlySummary(m); return `<p><strong>${m}</strong> Income ${money(s.actualIncome)} · Expenses ${money(s.spending)} · Remaining ${money(s.remaining)}</p>`; }).join("");
+  return months.map((m) => { const s = monthlySummary(m); return `<p><strong>${m}</strong> Income ${money(s.actualIncome)} · Expenses ${money(s.spending)} · Payments ${money(s.payments)} · Remaining ${money(s.remaining)}</p>`; }).join("");
 }
 
 function trendList(type) {
