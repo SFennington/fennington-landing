@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Fennington HVAC Leads Admin</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Fennington Admin</p>
+      <h1>Nashville HVAC Leads</h1>
+    </div>
+    <div class="auth-actions">
+      <span id="userEmail" class="user-email">Not signed in</span>
+      <button id="signInButton" class="button primary">Sign in</button>
+      <button id="signOutButton" class="button ghost" hidden>Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="setupWarning" class="panel warning" hidden>
+      <h2>Firebase web config required</h2>
+      <p>Update <code>admin/leads/config.js</code> with this Firebase project's web app config before using the dashboard.</p>
+    </section>
+
+    <section class="panel controls">
+      <div class="field"><label for="marketFilter">Market</label><input id="marketFilter" value="nashville-tn"></div>
+      <div class="field"><label for="tradeFilter">Trade</label><input id="tradeFilter" value="hvac"></div>
+      <div class="field"><label for="statusFilter">Status</label><select id="statusFilter"><option value="">All</option><option value="email_ready">Email ready</option><option value="approved">Approved</option><option value="sent">Sent</option><option value="call_queue">Call queue</option><option value="rejected">Rejected</option></select></div>
+      <button id="refreshButton" class="button primary">Refresh</button>
+      <button id="dryRunButton" class="button secondary">Dry-run discovery</button>
+    </section>
+
+    <section class="stats" aria-label="Lead counters">
+      <article><strong id="newCount">0</strong><span>Loaded leads</span></article>
+      <article><strong id="emailReadyCount">0</strong><span>Email ready</span></article>
+      <article><strong id="approvedCount">0</strong><span>Approved</span></article>
+      <article><strong id="sentCount">0</strong><span>Sent</span></article>
+    </section>
+
+    <section class="layout">
+      <div class="panel table-panel">
+        <div class="panel-heading"><h2>Leads</h2><span id="loadStatus">Sign in to load leads.</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Business</th><th>Rating</th><th>Reviews</th><th>Website flags</th><th>Email</th><th>Status</th><th>Preview</th></tr></thead>
+            <tbody id="leadRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <aside class="panel detail-panel">
+        <h2>Lead Detail</h2>
+        <div id="leadDetail" class="detail-empty">Select a lead.</div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>
