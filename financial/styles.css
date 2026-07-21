@@ -1170,6 +1170,75 @@ td select {
   padding: 1rem;
 }
 
+.ai-analysis-card {
+  background:
+    radial-gradient(circle at 100% 0, rgba(124, 58, 237, 0.14), transparent 16rem),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(240, 249, 255, 0.82));
+  border: 1px solid rgba(125, 211, 252, 0.72);
+  border-radius: 24px;
+  box-shadow: 0 18px 46px rgba(37, 99, 235, 0.1);
+  margin: 1.1rem 0;
+  padding: 1rem;
+}
+
+.ai-analysis-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.ai-analysis-heading strong {
+  color: var(--financial-ink);
+  display: block;
+  font-size: 1.1rem;
+  letter-spacing: -0.03em;
+}
+
+.ai-analysis-heading p {
+  color: var(--muted);
+  margin: 0.35rem 0 0;
+}
+
+.ai-analysis-controls,
+.ai-estimate-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-top: 0.9rem;
+}
+
+.ai-web-lookup {
+  align-self: end;
+}
+
+.ai-analysis-estimate {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  margin-top: 0.9rem;
+  padding: 0.85rem;
+}
+
+.ai-estimate-grid span {
+  background: #eff6ff;
+  border: 1px solid rgba(191, 219, 254, 0.8);
+  border-radius: 14px;
+  color: #334155;
+  font-weight: 750;
+  padding: 0.7rem;
+}
+
+.ai-estimate-grid strong {
+  color: var(--brand-dark);
+}
+
+.ai-analysis-estimate p {
+  color: var(--muted);
+  font-weight: 650;
+  margin: 0.85rem 0 0;
+}
+
 .filters-header {
   margin-bottom: 0.85rem;
 }
@@ -1538,12 +1607,14 @@ td select {
   }
 
   .section-heading,
+  .ai-analysis-heading,
   .filters-header,
   .transaction-table-header {
     display: block;
   }
 
   .transaction-count-pill,
+  .ai-analysis-heading .btn,
   .table-legend {
     margin-top: 0.9rem;
   }

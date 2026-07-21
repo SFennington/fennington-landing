@@ -1,15 +1,21 @@
 import * as admin from "firebase-admin";
 import { logger } from "firebase-functions";
+import { defineSecret } from "firebase-functions/params";
 import { onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import cors from "cors";
 import crypto from "crypto";
 import express from "express";
+import fs from "fs";
+import path from "path";
+
+loadLocalEnvFile();
 
 admin.initializeApp();
 
 const db = admin.firestore();
 const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
+const openAiApiKey = defineSecret("OPENAI_API_KEY");
 
 const REGION = "us-central1";
 const TRADE = "hvac";
@@ -19,10 +25,14 @@ const BUSINESS_PHONE = process.env.BUSINESS_PHONE || "413-255-1777";
 const DEFAULT_LEAD_CAP = 25;
 const DEFAULT_EMAIL_CAP = 10;
 const WEBSITE_TIMEOUT_MS = 6500;
-const FINANCIAL_AI_MODEL = process.env.FINANCIAL_AI_MODEL || "gpt-4o-mini";
+const FINANCIAL_AI_MODEL = process.env.FINANCIAL_AI_MODEL || process.env.OPENAI_MODEL || "gpt-5.4-nano";
+const FINANCIAL_AI_MAX_TRANSACTIONS = 100;
+const FINANCIAL_INPUT_PRICE_PER_1M = Number(process.env.FINANCIAL_INPUT_PRICE_PER_1M || process.env.OPENAI_INPUT_PRICE_PER_1M || 0.20);
+const FINANCIAL_OUTPUT_PRICE_PER_1M = Number(process.env.FINANCIAL_OUTPUT_PRICE_PER_1M || process.env.OPENAI_OUTPUT_PRICE_PER_1M || 1.25);
+const FINANCIAL_WEB_SEARCH_PRICE_PER_1K = Number(process.env.FINANCIAL_WEB_SEARCH_PRICE_PER_1K || process.env.OPENAI_WEB_SEARCH_PRICE_PER_1K || 10);
 
 const FINANCIAL_CATEGORIES = [
-  "Housing", "Utilities", "Groceries", "Restaurants", "Transportation", "Fuel", "Vehicle expenses", "Insurance", "Medical", "Shopping", "Entertainment", "Subscriptions", "Childcare", "Education", "Debt payments", "Taxes", "Transfers", "Income", "Uncategorized"
+  "Housing", "Utilities", "Groceries", "Restaurants", "Transportation", "Fuel", "Vehicle expenses", "Insurance", "Medical", "Shopping", "Entertainment", "Subscriptions", "Kids", "Childcare", "Education", "Debt payments", "Taxes", "Transfers", "Credits to the Account", "Income", "Uncategorized"
 ];
 
 const FINANCIAL_KEYWORDS = [
@@ -111,6 +121,27 @@ type EmailDiscovery = {
   confidence: "none" | "medium" | "high";
   status: "not_attempted" | "not_found" | "found" | "error";
 };
+
+function loadLocalEnvFile(): void {
+  const candidatePaths = [
+    path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), "..", ".env")
+  ];
+  for (const filePath of candidatePaths) {
+    if (!fs.existsSync(filePath)) continue;
+    const content = fs.readFileSync(filePath, "utf8");
+    content.split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) return;
+      const separatorIndex = trimmed.indexOf("=");
+      if (separatorIndex <= 0) return;
+      const key = trimmed.slice(0, separatorIndex).trim();
+      const rawValue = trimmed.slice(separatorIndex + 1).trim();
+      if (!key || process.env[key]) return;
+      process.env[key] = rawValue.replace(/^['"]|['"]$/g, "");
+    });
+  }
+}
 
 function safeString(value: unknown, fallback = ""): string {
   if (typeof value !== "string") return fallback;
@@ -598,63 +629,169 @@ function normalizeFinancialMerchant(description: string): string {
   return merchant || "Unknown Merchant";
 }
 
+function estimateFinancialCost(inputTokens: number, outputTokens: number, webSearchCalls = 0) {
+  const inputCost = (Math.max(0, inputTokens) / 1000000) * FINANCIAL_INPUT_PRICE_PER_1M;
+  const outputCost = (Math.max(0, outputTokens) / 1000000) * FINANCIAL_OUTPUT_PRICE_PER_1M;
+  const webSearchCost = (Math.max(0, webSearchCalls) / 1000) * FINANCIAL_WEB_SEARCH_PRICE_PER_1K;
+  return {
+    inputCost,
+    outputCost,
+    webSearchCost,
+    totalCost: inputCost + outputCost + webSearchCost
+  };
+}
+
+function extractOpenAiResponseText(body: any): string {
+  if (typeof body?.output_text === "string") return body.output_text;
+  if (!Array.isArray(body?.output)) return "";
+  return body.output
+    .filter((item: any) => item?.type === "message" && Array.isArray(item?.content))
+    .flatMap((item: any) => item.content)
+    .map((content: any) => safeLongString(content?.text || "", "", 2000))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function countOpenAiWebSearchCalls(body: any): number {
+  if (!Array.isArray(body?.output)) return 0;
+  return body.output.filter((item: any) => item?.type === "web_search_call").length;
+}
+
+function responseUsage(body: any) {
+  const usage = body?.usage || {};
+  const inputTokens = Number(usage.input_tokens || usage.prompt_tokens || 0);
+  const outputTokens = Number(usage.output_tokens || usage.completion_tokens || 0);
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: Number(usage.total_tokens || inputTokens + outputTokens)
+  };
+}
+
+function openAiApiKeyValue(): string {
+  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
+  try {
+    return openAiApiKey.value() || "";
+  } catch {
+    return "";
+  }
+}
+
 function keywordFinancialCategorize(item: any, allowedCategories = FINANCIAL_CATEGORIES) {
   const description = safeString(item?.description);
   const matched = FINANCIAL_KEYWORDS.find((rule) => rule.match.test(description));
   const category = matched && allowedCategories.includes(matched.category) ? matched.category : "Uncategorized";
+  const vendor = normalizeFinancialMerchant(description);
   return {
     id: safeString(item?.id),
-    merchant: normalizeFinancialMerchant(description),
+    displayName: vendor,
+    vendor,
+    merchant: vendor,
     category,
     confidence: matched?.confidence || 35,
+    suggestedDescription: vendor,
     reason: matched ? "Matched conservative server-side keyword rules." : "No server-side keyword rule matched; manual review recommended.",
+    sourceUrls: [],
     source: "server_keyword"
   };
 }
 
-async function aiFinancialCategorize(transactions: any[], categories: string[]) {
-  if (!process.env.OPENAI_API_KEY) return null;
-  const minimalTransactions = transactions.slice(0, 20).map((item) => ({
+async function aiFinancialCategorize(transactions: any[], categories: string[], options: { webLookupEnabled?: boolean } = {}) {
+  const apiKey = openAiApiKeyValue();
+  if (!apiKey) return null;
+  const minimalTransactions = transactions.slice(0, FINANCIAL_AI_MAX_TRANSACTIONS).map((item) => ({
     id: safeString(item?.id),
     description: safeString(item?.description),
-    amount: Number(item?.amount || 0)
+    currentMerchant: safeString(item?.merchant || item?.vendor),
+    amount: Number(item?.amount || 0),
+    date: safeString(item?.date),
+    matchCount: Math.max(1, Math.min(999, Number(item?.matchCount || 1)))
   }));
-  const allowedCategories = categories.length ? categories.slice(0, 40) : FINANCIAL_CATEGORIES;
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const allowedCategories = categories.length ? Array.from(new Set(categories)).slice(0, 80) : FINANCIAL_CATEGORIES;
+  const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
-      authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      authorization: `Bearer ${apiKey}`,
       "content-type": "application/json"
     },
     body: JSON.stringify({
       model: FINANCIAL_AI_MODEL,
       temperature: 0.1,
-      response_format: { type: "json_object" },
-      messages: [
+      max_output_tokens: Math.min(16000, 900 + minimalTransactions.length * 180),
+      ...(options.webLookupEnabled ? { tools: [{ type: "web_search", search_context_size: "low" }], tool_choice: "auto" } : {}),
+      text: {
+        format: {
+          type: "json_schema",
+          name: "financial_transaction_analysis",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              results: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    id: { type: "string" },
+                    displayName: { type: "string" },
+                    vendor: { type: "string" },
+                    category: { type: "string", enum: allowedCategories },
+                    confidence: { type: "number", minimum: 0, maximum: 100 },
+                    suggestedDescription: { type: "string" },
+                    reason: { type: "string" },
+                    sourceUrls: { type: "array", items: { type: "string" }, maxItems: 3 }
+                  },
+                  required: ["id", "displayName", "vendor", "category", "confidence", "suggestedDescription", "reason", "sourceUrls"]
+                }
+              }
+            },
+            required: ["results"]
+          }
+        }
+      },
+      input: [
         {
           role: "system",
-          content: "Categorize personal finance transactions. Use only provided transaction descriptions, amounts, and allowed categories. Return JSON with a results array. Each result must include id, merchant, category, confidence 0-100, and reason. Use Transfers for likely account movements or credit-card payments. Use Uncategorized when uncertain."
+          content: "You clean and categorize personal finance transactions. Return only JSON that matches the schema. For each transaction, create a short recognizable displayName, detect the real vendor, choose exactly one allowed category, and explain the decision. Use description, current merchant, amount, date, and duplicate count. Use Transfers for account movements and credit-card payments. Use Credits to the Account for credit-card credits/payments. Use Uncategorized when uncertain. Do not invent product details. If web search is available, use it only for low-confidence purchases with enough vendor/description context; never search by price alone."
         },
         {
           role: "user",
-          content: JSON.stringify({ categories: allowedCategories, transactions: minimalTransactions })
+          content: JSON.stringify({ categories: allowedCategories, webLookupEnabled: Boolean(options.webLookupEnabled), transactions: minimalTransactions })
         }
       ]
     })
   });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) throw Object.assign(new Error(safeString(body?.error?.message, "AI categorization failed.")), { statusCode: 502 });
-  const content = safeLongString(body?.choices?.[0]?.message?.content || "{}", "{}", 20000);
+  const content = safeLongString(extractOpenAiResponseText(body) || "{}", "{}", 30000);
   const parsed = JSON.parse(content);
   const results = Array.isArray(parsed?.results) ? parsed.results : [];
-  return results.map((result: any) => ({
-    id: safeString(result?.id),
-    merchant: safeString(result?.merchant || normalizeFinancialMerchant(transactions.find((item) => item.id === result?.id)?.description || "")),
-    category: allowedCategories.includes(safeString(result?.category)) ? safeString(result?.category) : "Uncategorized",
-    confidence: Math.max(0, Math.min(100, Number(result?.confidence || 0))),
-    reason: safeString(result?.reason || "AI categorization based on supplied transaction fields only."),
-    source: "ai"
-  }));
+  const usage = responseUsage(body);
+  const webSearchCalls = countOpenAiWebSearchCalls(body);
+  return {
+    results: results.map((result: any) => {
+      const sourceTransaction = transactions.find((item) => item.id === result?.id);
+      const vendor = safeString(result?.vendor || result?.merchant || normalizeFinancialMerchant(sourceTransaction?.description || ""));
+      const displayName = safeString(result?.displayName || vendor || normalizeFinancialMerchant(sourceTransaction?.description || ""));
+      return {
+        id: safeString(result?.id),
+        displayName,
+        vendor,
+        merchant: displayName || vendor,
+        category: allowedCategories.includes(safeString(result?.category)) ? safeString(result?.category) : "Uncategorized",
+        confidence: Math.max(0, Math.min(100, Number(result?.confidence || 0))),
+        suggestedDescription: safeString(result?.suggestedDescription || displayName || vendor),
+        reason: safeString(result?.reason || "AI categorization based on supplied transaction fields."),
+        sourceUrls: Array.isArray(result?.sourceUrls) ? result.sourceUrls.slice(0, 3).map((url: unknown) => safeString(url)).filter(Boolean) : [],
+        source: webSearchCalls ? "ai_web" : "ai"
+      };
+    }),
+    usage,
+    webSearchCalls,
+    cost: estimateFinancialCost(usage.inputTokens, usage.outputTokens, webSearchCalls)
+  };
 }
 
 function asyncRoute(handler: (req: express.Request, res: express.Response) => Promise<void>) {
@@ -910,30 +1047,45 @@ apiApp.post("/admin/outreach/:messageId/send", asyncRoute(async (req, res) => {
 
 apiApp.post("/financial/categorize", asyncRoute(async (req, res) => {
   const user = await requireUser(req);
-  const transactions = Array.isArray(req.body?.transactions) ? req.body.transactions.slice(0, 20) : [];
+  const transactions = Array.isArray(req.body?.transactions) ? req.body.transactions.slice(0, FINANCIAL_AI_MAX_TRANSACTIONS) : [];
   const categories = Array.isArray(req.body?.categories) ? req.body.categories.map((category: unknown) => safeString(category)).filter(Boolean) : FINANCIAL_CATEGORIES;
+  const webLookupEnabled = req.body?.webLookupEnabled === true;
+  const requireAi = req.body?.requireAi !== false;
   if (!transactions.length) throw Object.assign(new Error("At least one transaction is required."), { statusCode: 400 });
   const safeTransactions = transactions.map((item: any) => ({
     id: safeString(item?.id),
     description: safeString(item?.description),
-    amount: Number(item?.amount || 0)
+    merchant: safeString(item?.merchant || item?.vendor),
+    vendor: safeString(item?.vendor || item?.merchant),
+    amount: Number(item?.amount || 0),
+    date: safeString(item?.date),
+    matchCount: Math.max(1, Math.min(999, Number(item?.matchCount || 1)))
   })).filter((item: any) => item.id && item.description);
   if (!safeTransactions.length) throw Object.assign(new Error("No valid transactions were provided."), { statusCode: 400 });
+  if (requireAi && !openAiApiKeyValue()) throw Object.assign(new Error("OPENAI_API_KEY is not configured for the financial analyzer."), { statusCode: 412 });
 
   let results = safeTransactions.map((item: any) => keywordFinancialCategorize(item, categories));
   let source = "server_keyword";
+  let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  let cost = estimateFinancialCost(0, 0, 0);
+  let webSearchCalls = 0;
   try {
-    const aiResults = await aiFinancialCategorize(safeTransactions, categories);
-    if (aiResults?.length) {
-      const aiById = new Map(aiResults.map((item: any) => [item.id, item]));
+    const aiResult = await aiFinancialCategorize(safeTransactions, categories, { webLookupEnabled });
+    if (aiResult?.results?.length) {
+      const aiById = new Map(aiResult.results.map((item: any) => [item.id, item]));
       results = results.map((fallback: any) => aiById.get(fallback.id) || fallback);
-      source = "ai";
+      usage = aiResult.usage;
+      cost = aiResult.cost;
+      webSearchCalls = aiResult.webSearchCalls;
+      source = webSearchCalls ? "ai_web" : "ai";
     }
   } catch (error) {
+    if (requireAi) throw error;
     logger.warn("Financial AI categorization fell back to keyword rules", { uid: user.uid, error });
   }
+  if (requireAi && source === "server_keyword") throw Object.assign(new Error("AI did not return usable transaction analysis results."), { statusCode: 502 });
 
-  res.json({ results, source, processed: results.length });
+  res.json({ results, source, processed: results.length, model: FINANCIAL_AI_MODEL, usage, cost, webSearchCalls });
 }));
 
 apiApp.post("/sites/:siteId/create-checkout-session", asyncRoute(async (req, res) => {
@@ -945,7 +1097,7 @@ apiApp.post("/stripe/webhook", asyncRoute(async (_req, res) => {
   res.status(501).json({ error: "Stripe webhook placeholder only. Enable with raw-body signature verification before production use." });
 }));
 
-export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB" }, apiApp);
+export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [openAiApiKey] }, apiApp);
 
 export const renderSite = onRequest({ region: REGION, timeoutSeconds: 30, memory: "256MiB" }, async (req, res) => {
   const pathname = (req.originalUrl || req.url || "").split("?")[0];

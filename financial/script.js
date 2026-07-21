@@ -17,6 +17,12 @@ const ACCOUNT_CREDIT_CATEGORY = "Credits to the Account";
 const DEMO_IMPORT_ID = "demo-import";
 const DEMO_ACCOUNT_IDS = new Set(["checking-main", "checking-side", "credit-card"]);
 const DEMO_RECURRING_IDS = new Set(["sunrise-apartments-monthly", "city-electric-monthly", "netflix-monthly"]);
+const AI_ANALYSIS_MODEL = "gpt-5.4-nano";
+const AI_INPUT_PRICE_PER_1M = 0.20;
+const AI_OUTPUT_PRICE_PER_1M = 1.25;
+const AI_WEB_SEARCH_PRICE_PER_1K = 10;
+const AI_DEFAULT_BATCH_LIMIT = 50;
+const AI_MAX_BATCH_LIMIT = 100;
 
 const FEATURES = [
   "Automatic transaction categorization",
@@ -91,6 +97,7 @@ let selectedCategoryReportId = "";
 let categoryFilterTerm = "";
 let categorySortMode = "name-asc";
 let themeMode = storedThemePreference();
+let aiAnalysisRunning = false;
 
 applyTheme();
 renderFeatures();
@@ -809,10 +816,9 @@ function importTransactions() {
   state.transactions.push(...imported);
   state.imports.push({ id: importId, fileName: pendingImport.fileName, accountName: preview.accountName, count: imported.length, importedAt: new Date().toISOString(), duplicateCount: imported.filter((tx) => tx.flags.includes("possible_duplicate")).length });
   pendingImport = null;
-  categorizeWithServer(imported);
   state.selectedMonth = latestMonth(state.transactions) || state.selectedMonth;
   renderAll();
-  showStatus(`${imported.length} transactions imported. Low-confidence and possible duplicate items were added to the review queue.`);
+  showStatus(`${imported.length} transactions imported. Low-confidence and possible duplicate items were added to the review queue. Use Analyze Transactions to run AI.`);
 }
 
 function saveMappingTemplate() {
@@ -914,6 +920,7 @@ function renderTransactions() {
       </div>
       ${csvImportDetailsHtml()}
       ${transactionInsightsHtml(rows)}
+      ${aiAnalysisPanelHtml(rows)}
       ${filtersHtml()}
       <div class="transaction-table-shell">
         <div class="transaction-table-header">
@@ -932,6 +939,7 @@ function renderTransactions() {
     </section>
   `;
   bindImportControls(tab);
+  bindAiAnalysisControls(tab);
   bindFilters();
   bindTransactionTable(tab);
   restoreActiveFilter(activeFilter);
@@ -958,6 +966,226 @@ function restoreActiveFilter(activeFilter) {
     el.setSelectionRange(activeFilter.selectionStart, activeFilter.selectionEnd);
   }
   window.scrollTo(activeFilter.scrollX, activeFilter.scrollY);
+}
+
+function aiAnalysisPanelHtml(rows) {
+  const plan = buildAiAnalysisPlan(rows);
+  const scope = state.filters.aiScope || "review";
+  const limit = aiBatchLimit();
+  const webLookup = state.filters.aiWebLookup === true;
+  return `
+    <div class="ai-analysis-card" aria-label="AI transaction analysis controls">
+      <div class="ai-analysis-heading">
+        <div>
+          <span class="eyebrow">OpenAI analysis</span>
+          <strong>Analyze Transactions</strong>
+          <p>Runs only after confirmation. Duplicate transaction patterns are grouped to reduce AI usage.</p>
+        </div>
+        <button id="aiAnalyzeButton" class="btn btn-primary" type="button" ${!plan.groups.length || aiAnalysisRunning ? "disabled" : ""}>${aiAnalysisRunning ? "Analyzing..." : "Analyze Transactions"}</button>
+      </div>
+      <div class="ai-analysis-controls">
+        <div class="field"><label for="aiAnalyzeScope">Transactions to analyze</label><select id="aiAnalyzeScope"><option value="review" ${scope === "review" ? "selected" : ""}>Needs review only</option><option value="filtered" ${scope === "filtered" ? "selected" : ""}>Current filtered view</option><option value="uncategorized" ${scope === "uncategorized" ? "selected" : ""}>Uncategorized only</option></select></div>
+        <div class="field"><label for="aiAnalyzeLimit">Max unique AI requests</label><input id="aiAnalyzeLimit" type="number" min="1" max="${AI_MAX_BATCH_LIMIT}" step="1" value="${escapeAttr(limit)}"></div>
+        <label class="field checkbox-field ai-web-lookup"><span>Use web lookup fallback</span><input id="aiWebLookup" type="checkbox" ${webLookup ? "checked" : ""}></label>
+      </div>
+      <div id="aiAnalysisEstimate" class="ai-analysis-estimate">${aiAnalysisEstimateHtml(plan)}</div>
+    </div>
+  `;
+}
+
+function bindAiAnalysisControls(root) {
+  const scope = root.querySelector("#aiAnalyzeScope");
+  const limit = root.querySelector("#aiAnalyzeLimit");
+  const webLookup = root.querySelector("#aiWebLookup");
+  const estimate = root.querySelector("#aiAnalysisEstimate");
+  const updateEstimate = () => {
+    state.filters.aiScope = scope?.value || "review";
+    state.filters.aiLimit = aiBatchLimit(limit?.value);
+    state.filters.aiWebLookup = Boolean(webLookup?.checked);
+    if (estimate) estimate.innerHTML = aiAnalysisEstimateHtml(buildAiAnalysisPlan(filteredTransactions()));
+    const button = root.querySelector("#aiAnalyzeButton");
+    if (button) button.disabled = !buildAiAnalysisPlan(filteredTransactions()).groups.length || aiAnalysisRunning;
+  };
+  scope?.addEventListener("change", updateEstimate);
+  limit?.addEventListener("input", updateEstimate);
+  webLookup?.addEventListener("change", updateEstimate);
+  root.querySelector("#aiAnalyzeButton")?.addEventListener("click", () => runAiAnalyzeTransactions(root));
+}
+
+function aiAnalysisEstimateHtml(plan) {
+  const webLookupText = plan.webLookupEnabled ? `Web lookup worst-case estimate: ${formatUsd(plan.webLookupEstimate)}.` : "Web lookup fallback is disabled.";
+  return `
+    <div class="ai-estimate-grid">
+      <span><strong>${plan.selectedTransactionCount}</strong> transactions selected</span>
+      <span><strong>${plan.groups.length}</strong> unique AI requests</span>
+      <span><strong>${plan.skippedCategorizedCount}</strong> already categorized skipped</span>
+      <span><strong>${plan.skippedByLimitCount}</strong> deferred by limit</span>
+    </div>
+    <p>Estimated tokens: ${plan.estimatedInputTokens.toLocaleString()} input, ${plan.estimatedOutputTokens.toLocaleString()} output. Estimated AI cost: <strong>${formatUsd(plan.estimatedCost)}</strong>. ${webLookupText}</p>
+  `;
+}
+
+function buildAiAnalysisPlan(rows = filteredTransactions()) {
+  const scope = state.filters.aiScope || "review";
+  const limit = aiBatchLimit();
+  const webLookupEnabled = state.filters.aiWebLookup === true;
+  const eligible = aiEligibleTransactions(rows, scope);
+  const grouped = [];
+  const byKey = new Map();
+  eligible.forEach((tx) => {
+    const key = aiTransactionKey(tx);
+    if (!byKey.has(key)) {
+      const group = { key, representative: tx, transactions: [] };
+      byKey.set(key, group);
+      grouped.push(group);
+    }
+    byKey.get(key).transactions.push(tx);
+  });
+  const groups = grouped.slice(0, limit);
+  const selectedTransactionCount = groups.reduce((sum, group) => sum + group.transactions.length, 0);
+  const payload = JSON.stringify({
+    model: AI_ANALYSIS_MODEL,
+    categories: state.categories.map((cat) => cat.name),
+    transactions: groups.map((group) => aiRequestTransaction(group))
+  });
+  const estimatedInputTokens = Math.ceil((payload.length + 1400) / 4);
+  const estimatedOutputTokens = Math.max(250, groups.length * 120);
+  const modelCost = estimateOpenAiCost(estimatedInputTokens, estimatedOutputTokens);
+  const webLookupEstimate = webLookupEnabled ? (groups.length / 1000) * AI_WEB_SEARCH_PRICE_PER_1K : 0;
+  return {
+    scope,
+    limit,
+    webLookupEnabled,
+    eligibleCount: eligible.length,
+    groups,
+    selectedTransactionCount,
+    skippedCategorizedCount: Math.max(0, state.transactions.length - eligible.length),
+    skippedByLimitCount: Math.max(0, grouped.length - groups.length),
+    estimatedInputTokens,
+    estimatedOutputTokens,
+    estimatedCost: modelCost + webLookupEstimate,
+    webLookupEstimate
+  };
+}
+
+function aiEligibleTransactions(rows, scope) {
+  const threshold = Number(state.profile.confidenceThreshold || 78);
+  const sourceRows = scope === "filtered" ? rows : state.transactions;
+  return sourceRows.filter((tx) => {
+    if (!tx?.id || !tx.description) return false;
+    if (scope === "uncategorized") return tx.category === "Uncategorized";
+    if (scope === "filtered") return true;
+    return tx.needsReview || tx.category === "Uncategorized" || Number(tx.confidence || 0) < threshold;
+  });
+}
+
+function aiRequestTransaction(group) {
+  const tx = group.representative;
+  return {
+    id: tx.id,
+    description: tx.description,
+    merchant: tx.merchant || "",
+    vendor: tx.vendor || tx.merchant || "",
+    amount: tx.amount,
+    date: tx.date,
+    matchCount: group.transactions.length
+  };
+}
+
+function aiTransactionKey(tx) {
+  const text = `${tx.description || ""} ${tx.merchant || ""}`.toLowerCase().replace(/\b\d{4,}\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  return `${text}|${Math.round(Number(tx.amount || 0) * 100)}`;
+}
+
+function aiBatchLimit(value = state.filters.aiLimit) {
+  const numeric = Math.round(Number(value || AI_DEFAULT_BATCH_LIMIT));
+  return Math.max(1, Math.min(AI_MAX_BATCH_LIMIT, numeric || AI_DEFAULT_BATCH_LIMIT));
+}
+
+function estimateOpenAiCost(inputTokens, outputTokens) {
+  return (Math.max(0, inputTokens) / 1000000) * AI_INPUT_PRICE_PER_1M + (Math.max(0, outputTokens) / 1000000) * AI_OUTPUT_PRICE_PER_1M;
+}
+
+function formatUsd(value) {
+  if (Number(value || 0) < 0.01) return `$${Number(value || 0).toFixed(4)}`;
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
+async function runAiAnalyzeTransactions(root) {
+  if (aiAnalysisRunning) return;
+  const plan = buildAiAnalysisPlan(filteredTransactions());
+  if (!plan.groups.length) return showStatus("No transactions match the selected AI analysis scope.");
+  const confirmation = [
+    "Analyze Transactions?",
+    "",
+    `Transactions selected: ${plan.selectedTransactionCount}`,
+    `Already categorized skipped: ${plan.skippedCategorizedCount}`,
+    `Unique AI requests after grouping: ${plan.groups.length}`,
+    `Deferred by batch limit: ${plan.skippedByLimitCount}`,
+    `Estimated input tokens: ${plan.estimatedInputTokens.toLocaleString()}`,
+    `Estimated output tokens: ${plan.estimatedOutputTokens.toLocaleString()}`,
+    `Estimated total cost: ${formatUsd(plan.estimatedCost)}`,
+    `Web lookup fallback: ${plan.webLookupEnabled ? `Enabled, worst-case ${formatUsd(plan.webLookupEstimate)}` : "Disabled"}`,
+    "",
+    "Continue?"
+  ].join("\n");
+  if (!window.confirm(confirmation)) return;
+  aiAnalysisRunning = true;
+  root.querySelector("#aiAnalyzeButton")?.setAttribute("disabled", "disabled");
+  showStatus(`Running AI analysis for ${plan.groups.length} unique transaction patterns...`);
+  try {
+    const token = await currentUser.getIdToken();
+    const response = await fetch("/api/financial/categorize", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        requireAi: true,
+        webLookupEnabled: plan.webLookupEnabled,
+        transactions: plan.groups.map((group) => aiRequestTransaction(group)),
+        categories: state.categories.map((cat) => cat.name)
+      })
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || "AI analysis failed.");
+    const groupsById = new Map(plan.groups.map((group) => [group.representative.id, group]));
+    let updatedCount = 0;
+    (body.results || []).forEach((result) => {
+      const group = groupsById.get(result.id);
+      if (!group) return;
+      group.transactions.forEach((tx) => {
+        applyAiAnalysisToTransaction(tx, result);
+        updatedCount += 1;
+      });
+    });
+    renderAll();
+    const actualCost = body.cost?.totalCost ? formatUsd(body.cost.totalCost) : formatUsd(plan.estimatedCost);
+    showStatus(`AI analyzed ${updatedCount} transactions using ${body.model || AI_ANALYSIS_MODEL}. Estimated/actual cost: ${actualCost}.`);
+  } catch (error) {
+    showStatus(`AI analysis failed: ${error.message}`);
+  } finally {
+    aiAnalysisRunning = false;
+    const button = root.querySelector("#aiAnalyzeButton");
+    if (button) button.disabled = !buildAiAnalysisPlan(filteredTransactions()).groups.length;
+  }
+}
+
+function applyAiAnalysisToTransaction(tx, result) {
+  const threshold = Number(state.profile.confidenceThreshold || 78);
+  const confidence = Math.max(0, Math.min(100, Number(result.confidence || 0)));
+  const category = state.categories.some((cat) => cat.name === result.category) ? result.category : "Uncategorized";
+  tx.vendor = sanitize(result.vendor || result.merchant || tx.vendor || tx.merchant);
+  tx.merchant = sanitize(result.displayName || result.merchant || tx.vendor || tx.merchant);
+  tx.aiDisplayName = sanitize(result.displayName || tx.merchant);
+  tx.category = category;
+  tx.confidence = confidence;
+  tx.reason = sanitize(result.reason || "AI analyzed vendor, description, and price.");
+  tx.source = result.source === "ai_web" ? "AI web" : "AI";
+  tx.type = typeForCategory(tx.category, tx.amount);
+  tx.needsReview = confidence < threshold || category === "Uncategorized";
+  tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized"].includes(flag));
+  if (tx.needsReview) tx.flags.push(category === "Uncategorized" ? "uncategorized" : "low_confidence");
+  tx.aiSourceUrls = Array.isArray(result.sourceUrls) ? result.sourceUrls.slice(0, 3).map((url) => sanitize(url)).filter(Boolean) : [];
+  tx.flags = Array.from(new Set(tx.flags || []));
 }
 
 function filtersHtml() {
@@ -1107,6 +1335,7 @@ function bindTransactionTable(root) {
     const previousCategory = tx.category;
     const selectedType = tr.querySelector("[data-field='type']")?.value || "";
     tr.querySelectorAll("[data-field]").forEach((input) => { tx[input.dataset.field] = sanitize(input.value); });
+    tx.vendor = sanitize(tx.vendor || tx.merchant);
     if (tx.category === "Income" || isTransferCategory(tx.category)) tx.type = typeForCategory(tx.category, tx.amount);
     if (selectedType === "income" || selectedType === "expense") tx.importDirection = "";
     normalizeTransactionAmountSign(tx);
@@ -1508,6 +1737,7 @@ function makeTransaction(row, id) {
     date: normalizeDate(row.date),
     description: sanitize(row.description),
     merchant: sanitize(row.merchant || normalizeMerchant(row.description)),
+    vendor: sanitize(row.vendor || row.merchant || normalizeMerchant(row.description)),
     accountId: row.accountId,
     amount: round(Number(row.amount || 0)),
     category: "Uncategorized",
