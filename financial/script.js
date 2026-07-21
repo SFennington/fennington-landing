@@ -50,6 +50,10 @@ const BUILT_IN_RULES = [
 
 const config = window.FENNINGTON_FIREBASE_CONFIG || {};
 const hasConfig = config.apiKey && !String(config.apiKey).startsWith("REPLACE_");
+const sharedWorkspaceConfig = config.sharedWorkspace || {};
+const sharedWorkspaceId = sanitizeDocId(sharedWorkspaceConfig.id || config.financialWorkspaceId || "fennington-household");
+const profileCollectionNames = ["accounts", "imports", "mappings", "categories", "transactions", "merchantMappings", "rules", "recurring", "overtimeScenarios", "monthlySummaries"];
+const FIRESTORE_BATCH_WRITE_LIMIT = 450;
 const els = {
   featureGrid: document.getElementById("featureGrid"),
   signInButton: document.getElementById("signInButton"),
@@ -327,12 +331,13 @@ function scrollToApp() {
 
 async function loadUserState() {
   state = emptyState();
-  const profileRef = doc(db, "users", currentUser.uid, "financialProfiles", "default");
+  await ensureSharedWorkspace();
+  const profileRef = sharedProfileRef();
+  await migrateLegacyUserProfile(profileRef);
   const profileSnap = await getDoc(profileRef);
   if (profileSnap.exists()) state.profile = { id: "default", ...profileSnap.data() };
-  else await setDoc(profileRef, { ...state.profile, userId: currentUser.uid, updatedAt: serverTimestamp(), createdAt: serverTimestamp() }, { merge: true });
-  const names = ["accounts", "imports", "mappings", "categories", "transactions", "merchantMappings", "rules", "recurring", "overtimeScenarios", "monthlySummaries"];
-  await Promise.all(names.map(async (name) => {
+  else await setDoc(profileRef, { ...state.profile, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp(), createdAt: serverTimestamp() }, { merge: true });
+  await Promise.all(profileCollectionNames.map(async (name) => {
     const snap = await getDocs(collection(profileRef, name));
     if (!snap.empty) state[name] = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
   }));
@@ -345,28 +350,113 @@ async function loadUserState() {
   showApp("user");
 }
 
+async function migrateLegacyUserProfile(profileRef) {
+  const existingProfile = await getDoc(profileRef);
+  if (existingProfile.exists()) return;
+  const legacyProfileRef = doc(db, "users", currentUser.uid, "financialProfiles", "default");
+  const legacyProfile = await getDoc(legacyProfileRef);
+  if (!legacyProfile.exists()) return;
+
+  await setDoc(profileRef, { ...legacyProfile.data(), workspaceId: sharedWorkspaceId, migratedFromUserId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true });
+  await Promise.all(profileCollectionNames.map(async (name) => {
+    const snap = await getDocs(collection(legacyProfileRef, name));
+    await Promise.all(snap.docs.map((item) => setDoc(doc(profileRef, name, item.id), { ...item.data(), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true })));
+  }));
+  const incomeSnap = await getDoc(doc(legacyProfileRef, "settings", "income"));
+  if (incomeSnap.exists()) await setDoc(doc(profileRef, "settings", "income"), { ...incomeSnap.data(), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
+}
+
 async function saveState() {
   if (mode !== "user" || !currentUser || !db) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    const profileRef = doc(db, "users", currentUser.uid, "financialProfiles", "default");
-    await setDoc(doc(db, "users", currentUser.uid), { email: currentUser.email || "", updatedAt: serverTimestamp() }, { merge: true });
-    await setDoc(profileRef, { ...stripId(state.profile), userId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true });
-    await setDoc(doc(profileRef, "settings", "income"), { ...state.incomeSettings, userId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true });
-    const batch = writeBatch(db);
-    const currentCategoryIds = new Set(state.categories.map((category) => category.id));
-    const categorySnap = await getDocs(collection(profileRef, "categories"));
-    categorySnap.docs.forEach((item) => {
-      if (!currentCategoryIds.has(item.id)) pendingCategoryDeletes.add(item.id);
-    });
-    const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !currentCategoryIds.has(id));
-    ["accounts", "imports", "mappings", "categories", "transactions", "merchantMappings", "rules", "recurring", "overtimeScenarios", "monthlySummaries"].forEach((name) => {
-      state[name].forEach((item) => batch.set(doc(profileRef, name, item.id), { ...item, userId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true }));
-    });
-    deletedCategoryIds.forEach((id) => batch.delete(doc(profileRef, "categories", id)));
-    await batch.commit();
-    deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
+    try {
+      await ensureSharedWorkspace();
+      const profileRef = sharedProfileRef();
+      await setDoc(doc(db, "users", currentUser.uid), { email: currentUser.email || "", householdId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(profileRef, { ...stripId(state.profile), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(doc(profileRef, "settings", "income"), { ...state.incomeSettings, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
+      const currentCategoryIds = new Set(state.categories.map((category) => category.id));
+      const categorySnap = await getDocs(collection(profileRef, "categories"));
+      categorySnap.docs.forEach((item) => {
+        if (!currentCategoryIds.has(item.id)) pendingCategoryDeletes.add(item.id);
+      });
+      const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !currentCategoryIds.has(id));
+      await commitProfileCollectionWrites(profileRef, deletedCategoryIds);
+      deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
+    } catch (error) {
+      showStatus(`Save failed: ${error.message}`);
+    }
   }, 450);
+}
+
+async function commitProfileCollectionWrites(profileRef, deletedCategoryIds) {
+  let batch = writeBatch(db);
+  let writeCount = 0;
+  const commits = [];
+
+  const queueWrite = (write) => {
+    write(batch);
+    writeCount += 1;
+    if (writeCount >= FIRESTORE_BATCH_WRITE_LIMIT) {
+      commits.push(batch.commit());
+      batch = writeBatch(db);
+      writeCount = 0;
+    }
+  };
+
+  profileCollectionNames.forEach((name) => {
+    state[name].forEach((item) => {
+      queueWrite((currentBatch) => currentBatch.set(doc(profileRef, name, item.id), { ...item, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true }));
+    });
+  });
+  deletedCategoryIds.forEach((id) => {
+    queueWrite((currentBatch) => currentBatch.delete(doc(profileRef, "categories", id)));
+  });
+
+  if (writeCount) commits.push(batch.commit());
+  await Promise.all(commits);
+}
+
+function sanitizeDocId(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[\/#?\[\]]/g, "-")
+    .slice(0, 120) || "fennington-household";
+}
+
+function normalizedMemberEmails() {
+  const configured = Array.isArray(sharedWorkspaceConfig.memberEmails) ? sharedWorkspaceConfig.memberEmails : [];
+  const emails = [currentUser?.email, ...configured]
+    .map((email) => String(email || "").trim())
+    .filter(Boolean);
+  return Array.from(new Set(emails));
+}
+
+function memberEmailMap() {
+  return normalizedMemberEmails().reduce((acc, email) => {
+    acc[email] = true;
+    return acc;
+  }, {});
+}
+
+function householdRef() {
+  return doc(db, "households", sharedWorkspaceId);
+}
+
+function sharedProfileRef() {
+  return doc(householdRef(), "financialProfiles", "default");
+}
+
+async function ensureSharedWorkspace() {
+  const workspaceName = sharedWorkspaceConfig.name || "Household Workspace";
+  await setDoc(householdRef(), {
+    name: workspaceName,
+    memberEmails: memberEmailMap(),
+    memberUids: { [currentUser.uid]: "member" },
+    updatedAt: serverTimestamp(),
+    createdAt: serverTimestamp()
+  }, { merge: true });
 }
 
 function renderAll() {
@@ -1104,12 +1194,11 @@ function createProfile() {
 }
 
 async function deleteProfileData() {
-  if (!window.confirm("Permanently delete imported transactions and this financial profile from this browser/account? This cannot be undone.")) return;
-  if (!window.confirm("Confirm permanent deletion of Fennington Financial data.")) return;
+  if (!window.confirm("Permanently delete imported transactions and this shared household financial profile for every member? This cannot be undone.")) return;
+  if (!window.confirm("Confirm permanent deletion of Fennington Financial shared workspace data.")) return;
   if (mode === "user" && currentUser && db) {
-    const profileRef = doc(db, "users", currentUser.uid, "financialProfiles", "default");
-    const names = ["accounts", "imports", "mappings", "categories", "transactions", "merchantMappings", "rules", "recurring", "overtimeScenarios", "monthlySummaries"];
-    for (const name of names) {
+    const profileRef = sharedProfileRef();
+    for (const name of profileCollectionNames) {
       const snap = await getDocs(collection(profileRef, name));
       await Promise.all(snap.docs.map((item) => deleteDoc(item.ref)));
     }

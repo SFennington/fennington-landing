@@ -4,5 +4,12 @@ window.FENNINGTON_FIREBASE_CONFIG = window.FENNINGTON_FIREBASE_CONFIG || {
   projectId: "fennington-financial",
   storageBucket: "fennington-financial.firebasestorage.app",
   messagingSenderId: "295520324508",
-  appId: "1:295520324508:web:c55c54552524fd88641659"
+  appId: "1:295520324508:web:c55c54552524fd88641659",
+  sharedWorkspace: {
+    id: "fennington-household",
+    name: "Fennington Household",
+    memberEmails: [
+      "ADD_YOUR_WIFE_EMAIL_HERE"
+    ]
+  }
 };

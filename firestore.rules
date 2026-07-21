@@ -10,6 +10,19 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.admin == true;
     }
 
+    function hasHouseholdAccess(data) {
+      return isSignedIn()
+        && (
+          ('memberEmails' in data && request.auth.token.email != null && data.memberEmails[request.auth.token.email] == true)
+          || ('memberUids' in data && data.memberUids[request.auth.uid] in ['owner', 'member'])
+        );
+    }
+
+    function isHouseholdMember(householdId) {
+      return exists(/databases/$(database)/documents/households/$(householdId))
+        && hasHouseholdAccess(get(/databases/$(database)/documents/households/$(householdId)).data);
+    }
+
     match /sites/{siteId} {
       allow read: if resource.data.status == 'live' && resource.data.seoIndexable == true;
       allow write: if isAdmin();
@@ -83,6 +96,60 @@ service cloud.firestore {
 
         match /monthlySummaries/{recordId} {
           allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        }
+      }
+    }
+
+    match /households/{householdId} {
+      allow read, update: if hasHouseholdAccess(resource.data) && hasHouseholdAccess(request.resource.data);
+      allow create: if hasHouseholdAccess(request.resource.data);
+      allow delete: if hasHouseholdAccess(resource.data);
+
+      match /financialProfiles/{profileId} {
+        allow read, create, update, delete: if isHouseholdMember(householdId);
+
+        match /accounts/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
+        }
+
+        match /imports/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
+        }
+
+        match /mappings/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
+        }
+
+        match /transactions/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
+        }
+
+        match /categories/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
+        }
+
+        match /merchantMappings/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
+        }
+
+        match /rules/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
+        }
+
+        match /recurring/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
+        }
+
+        match /settings/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
+        }
+
+        match /overtimeScenarios/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
+        }
+
+        match /monthlySummaries/{recordId} {
+          allow read, create, update, delete: if isHouseholdMember(householdId);
         }
       }
     }

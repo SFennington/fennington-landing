@@ -16,3 +16,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Firebase deploy cache
+.firebase/
