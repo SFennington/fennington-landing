@@ -674,8 +674,9 @@ td select {
 
 .review-card {
   display: grid;
-  gap: 0.8rem;
-  grid-template-columns: auto minmax(0, 1fr) 220px;
+  align-items: start;
+  gap: 1rem;
+  grid-template-columns: auto minmax(360px, 1fr) minmax(520px, 0.9fr);
 }
 
 .review-card input[type="checkbox"] {
@@ -684,8 +685,27 @@ td select {
 
 .review-actions {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.review-actions select {
+  flex: 1 1 210px;
+  min-width: 180px;
+}
+
+.review-actions label {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.review-actions .mini-btn {
+  flex: 1 1 130px;
+  min-width: 120px;
 }
 
 .review-reason-toolbar {

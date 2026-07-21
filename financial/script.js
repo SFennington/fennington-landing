@@ -2351,10 +2351,13 @@ function renderReview() {
 }
 
 function reviewCard(tx) {
-  const reasonTags = reviewReasonsForTransaction(tx).map((reason) => `<span class="tag subtle">${escapeHtml(reviewReasonLabel(reason))}</span>`).join(" ");
+  const reviewReasons = reviewReasonsForTransaction(tx);
+  const reasonSet = new Set(reviewReasons);
+  const reasonTags = reviewReasons.map((reason) => `<span class="tag subtle">${escapeHtml(reviewReasonLabel(reason))}</span>`).join(" ");
+  const flagTags = (tx.flags || []).filter((flag) => !reasonSet.has(flag)).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ");
   return `<article class="review-card panel" data-id="${tx.id}">
     <input type="checkbox" class="review-select" aria-label="Select transaction">
-    <div><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span> ${splitStatusTag(tx)}</p><p>${flowStatusHtml(tx)}</p>${splitReviewHtml(tx)}<p>${reasonTags} ${(tx.flags || []).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ")}</p><small class="muted">${escapeHtml(tx.flowReason || tx.reason || "Needs manual confirmation.")}</small></div>
+    <div class="review-details"><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span> ${splitStatusTag(tx)}</p><p>${flowStatusHtml(tx)}</p>${splitReviewHtml(tx)}<p>${reasonTags} ${flagTags}</p></div>
     <div class="review-actions"><select data-review-category>${categoryOptions(tx.category)}</select><label><input data-apply-rule type="checkbox"> Apply rule</label><button class="mini-btn" data-review="confirm" type="button">Confirm</button><button class="mini-btn" data-review="split" type="button">Split</button><button class="mini-btn" data-review="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-review="internal" type="button">Confirm Internal</button><button class="mini-btn" data-review="skip" type="button">Skip</button></div>
   </article>`;
 }
