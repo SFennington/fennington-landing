@@ -117,6 +117,10 @@ let categoryExpansionInitialized = false;
 let selectedCategoryReportId = "";
 let categoryFilterTerm = "";
 let categorySortMode = "name-asc";
+const rulesSortState = {
+  category: { key: "", direction: "asc" },
+  vendor: { key: "", direction: "asc" }
+};
 let themeMode = storedThemePreference();
 let aiAnalysisRunning = false;
 const persistedCollectionSnapshots = new Map();
@@ -2863,11 +2867,46 @@ function renderRules() {
 }
 
 function rulesTable(rules) {
-  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable categorization rules table"><table class="rules-table"><thead><tr><th>Match Field</th><th>Criteria</th><th>Category</th><th>Matches</th><th>Created</th><th>Actions</th></tr></thead><tbody>${rules.map((rule) => `<tr data-rule-id="${escapeAttr(rule.id)}"><td><select data-rule-field="type"><option value="merchant" ${rule.type === "merchant" ? "selected" : ""}>Merchant or vendor</option><option value="description" ${rule.type === "description" ? "selected" : ""}>Description</option></select></td><td><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Rule match criteria"></td><td><select data-rule-field="category">${categoryOptions(rule.category || "")}</select></td><td>${ruleMatchCount(rule)}</td><td>${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell"><button class="mini-btn" data-rule-action="save" type="button">Save</button><button class="mini-btn" data-rule-action="rerun" type="button">Rerun</button><button class="mini-btn danger" data-rule-action="delete" type="button">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
+  const sortedRules = sortedRulesForTable(rules, "category");
+  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable categorization rules table"><table class="rules-table"><thead><tr>${ruleSortHeader("category", "type", "Match Field")}${ruleSortHeader("category", "match", "Criteria")}${ruleSortHeader("category", "category", "Category")}${ruleSortHeader("category", "matches", "Matches")}${ruleSortHeader("category", "createdAt", "Created")}<th>Actions</th></tr></thead><tbody>${sortedRules.map((rule) => `<tr data-rule-id="${escapeAttr(rule.id)}"><td><select data-rule-field="type"><option value="merchant" ${rule.type === "merchant" ? "selected" : ""}>Merchant or vendor</option><option value="description" ${rule.type === "description" ? "selected" : ""}>Description</option></select></td><td><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Rule match criteria"></td><td><select data-rule-field="category">${categoryOptions(rule.category || "")}</select></td><td>${ruleMatchCount(rule)}</td><td>${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell"><button class="mini-btn" data-rule-action="save" type="button">Save</button><button class="mini-btn" data-rule-action="rerun" type="button">Rerun</button><button class="mini-btn danger" data-rule-action="delete" type="button">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
 }
 
 function vendorRulesTable(rules) {
-  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable vendor rules table"><table class="rules-table"><thead><tr><th>Criteria</th><th>Vendor</th><th>Matches</th><th>Created</th><th>Actions</th></tr></thead><tbody>${rules.map((rule) => `<tr data-rule-id="${escapeAttr(rule.id)}"><td><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Vendor rule match criteria"></td><td><input data-rule-field="vendor" value="${escapeAttr(rule.vendor || "")}" aria-label="Vendor name"></td><td>${vendorRuleMatchCount(rule)}</td><td>${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell"><button class="mini-btn" data-rule-action="save" type="button">Save</button><button class="mini-btn" data-rule-action="rerun" type="button">Rerun</button><button class="mini-btn danger" data-rule-action="delete" type="button">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
+  const sortedRules = sortedRulesForTable(rules, "vendor");
+  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable vendor rules table"><table class="rules-table"><thead><tr>${ruleSortHeader("vendor", "match", "Criteria")}${ruleSortHeader("vendor", "vendor", "Vendor")}${ruleSortHeader("vendor", "matches", "Matches")}${ruleSortHeader("vendor", "createdAt", "Created")}<th>Actions</th></tr></thead><tbody>${sortedRules.map((rule) => `<tr data-rule-id="${escapeAttr(rule.id)}"><td><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Vendor rule match criteria"></td><td><input data-rule-field="vendor" value="${escapeAttr(rule.vendor || "")}" aria-label="Vendor name"></td><td>${vendorRuleMatchCount(rule)}</td><td>${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell"><button class="mini-btn" data-rule-action="save" type="button">Save</button><button class="mini-btn" data-rule-action="rerun" type="button">Rerun</button><button class="mini-btn danger" data-rule-action="delete" type="button">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function ruleSortHeader(table, key, label) {
+  const sort = rulesSortState[table];
+  const active = sort.key === key;
+  const directionLabel = active ? sort.direction === "asc" ? "ascending" : "descending" : "none";
+  const indicator = active ? sort.direction === "asc" ? "^" : "v" : "-";
+  return `<th aria-sort="${directionLabel}"><button class="table-sort-button" data-rule-sort-table="${table}" data-rule-sort-key="${key}" type="button">${escapeHtml(label)} <span aria-hidden="true">${indicator}</span></button></th>`;
+}
+
+function sortedRulesForTable(rules, table) {
+  const sort = rulesSortState[table];
+  if (!sort.key) return rules;
+  const direction = sort.direction === "desc" ? -1 : 1;
+  return rules.slice().sort((a, b) => compareRuleSortValues(ruleSortValue(a, sort.key, table), ruleSortValue(b, sort.key, table)) * direction);
+}
+
+function ruleSortValue(rule, key, table) {
+  if (key === "matches") return table === "vendor" ? vendorRuleMatchCount(rule) : ruleMatchCount(rule);
+  if (key === "type") return rule.type === "description" ? "Description" : "Merchant or vendor";
+  return rule[key] || "";
+}
+
+function compareRuleSortValues(a, b) {
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).toLowerCase().localeCompare(String(b).toLowerCase(), undefined, { numeric: true, sensitivity: "base" });
+}
+
+function updateRuleFromRow(row) {
+  const rule = state.rules.find((item) => item.id === row?.dataset.ruleId);
+  if (!rule) return null;
+  row.querySelectorAll("[data-rule-field]").forEach((input) => { rule[input.dataset.ruleField] = sanitize(input.value); });
+  return rule;
 }
 
 function bindRuleControls(root) {
@@ -2888,10 +2927,22 @@ function bindRuleControls(root) {
       showStatus("Rule deleted.");
       return;
     }
-    row.querySelectorAll("[data-rule-field]").forEach((input) => { rule[input.dataset.ruleField] = sanitize(input.value); });
+    updateRuleFromRow(row);
     const updated = rule.type === "vendor" ? applyVendorRulesToTransactions(state.transactions, state) : button.dataset.ruleAction === "rerun" ? applyCategoryRuleToTransactions(rule, state.transactions) : 0;
     renderAll();
     showStatus(button.dataset.ruleAction === "rerun" ? `Rule rerun. ${updated} transaction matches updated.` : "Rule saved.");
+  }));
+  root.querySelectorAll("[data-rule-sort-key]").forEach((button) => button.addEventListener("click", () => {
+    root.querySelectorAll("[data-rule-id]").forEach(updateRuleFromRow);
+    const sort = rulesSortState[button.dataset.ruleSortTable];
+    if (!sort) return;
+    if (sort.key === button.dataset.ruleSortKey) {
+      sort.direction = sort.direction === "asc" ? "desc" : "asc";
+    } else {
+      sort.key = button.dataset.ruleSortKey;
+      sort.direction = "asc";
+    }
+    renderRules();
   }));
 }
 

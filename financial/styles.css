@@ -568,6 +568,25 @@ th {
   white-space: nowrap;
 }
 
+.table-sort-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 0.35rem;
+  padding: 0;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.table-sort-button:hover,
+.table-sort-button:focus-visible {
+  color: var(--brand);
+}
+
 td input,
 td select {
   min-width: 125px;
