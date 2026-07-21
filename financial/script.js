@@ -85,6 +85,7 @@ let saveTimer = null;
 let state = emptyState();
 const pendingCategoryDeletes = new Set();
 const categoryExpandedIds = new Set();
+const recurringTransactionExpandedIds = new Set();
 let categoryExpansionInitialized = false;
 let selectedCategoryReportId = "";
 let categoryFilterTerm = "";
@@ -1239,11 +1240,33 @@ function renderRecurring() {
     state.transactions.filter((tx) => tx.merchant === recurring.merchant).forEach((tx) => { tx.recurringStatus = recurring.status === "confirmed" ? "confirmed" : "rejected"; });
     renderAll();
   }));
+  tab.querySelectorAll("[data-recurring-transactions]").forEach((button) => button.addEventListener("click", () => {
+    const id = button.closest("article")?.dataset.id;
+    if (!id) return;
+    if (recurringTransactionExpandedIds.has(id)) recurringTransactionExpandedIds.delete(id);
+    else recurringTransactionExpandedIds.add(id);
+    renderRecurring();
+  }));
 }
 
 function recurringCard(item) {
   const flags = item.flags?.length ? `<div class="recurring-flags">${item.flags.map((flag) => `<span class="tag warn">${escapeHtml(flag)}</span>`).join(" ")}</div>` : "";
-  return `<article class="recurring-card" data-id="${item.id}"><div class="recurring-card-heading"><div><strong>${escapeHtml(item.merchant)}</strong><p>${escapeHtml(item.description || item.category || "Recurring expense")}</p></div><span class="tag ${item.status === "confirmed" ? "good" : item.status === "rejected" ? "danger" : "warn"}">${escapeHtml(label(item.status || "suggested"))}</span></div><dl class="recurring-summary"><div><dt>Total</dt><dd>${money(item.expectedAmount)}</dd></div><div><dt>Last Date</dt><dd>${escapeHtml(item.lastPaymentDate)}</dd></div><div><dt>Number of Payments</dt><dd>${Number(item.paymentCount || 0)}</dd></div><div><dt>Total Paid YTD</dt><dd>${money(item.totalPaidYtd)}</dd></div></dl>${flags}<div class="form-actions" style="margin-top:.8rem"><button class="mini-btn" data-recurring="confirmed" type="button">Confirm</button><button class="mini-btn danger" data-recurring="rejected" type="button">Reject</button></div></article>`;
+  const isExpanded = recurringTransactionExpandedIds.has(item.id);
+  const transactions = isExpanded ? recurringTransactionsHtml(item) : "";
+  return `<article class="recurring-card" data-id="${escapeAttr(item.id)}"><div class="recurring-card-heading"><div><strong>${escapeHtml(item.merchant)}</strong><p>${escapeHtml(item.description || item.category || "Recurring expense")}</p></div><span class="tag ${item.status === "confirmed" ? "good" : item.status === "rejected" ? "danger" : "warn"}">${escapeHtml(label(item.status || "suggested"))}</span></div><dl class="recurring-summary"><div><dt>Total</dt><dd>${money(item.expectedAmount)}</dd></div><div><dt>Last Date</dt><dd>${escapeHtml(item.lastPaymentDate)}</dd></div><div><dt>Number of Payments</dt><dd>${Number(item.paymentCount || 0)}</dd></div><div><dt>Total Paid YTD</dt><dd>${money(item.totalPaidYtd)}</dd></div></dl>${flags}<div class="form-actions" style="margin-top:.8rem"><button class="mini-btn" data-recurring="confirmed" type="button">Confirm</button><button class="mini-btn danger" data-recurring="rejected" type="button">Reject</button><button class="mini-btn" data-recurring-transactions type="button" aria-expanded="${isExpanded}">${isExpanded ? "Hide Transactions" : "Show Transactions"}</button></div>${transactions}</article>`;
+}
+
+function recurringTransactionsHtml(item) {
+  const payments = recurringPayments(item);
+  if (!payments.length) return `<div class="empty-state compact recurring-transactions">No matching payments found.</div>`;
+  const total = round(payments.reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
+  return `<div class="recurring-transactions"><div class="recurring-transactions-heading"><strong>Payments</strong><span>${payments.length} payments · ${money(total)} total</span></div><div class="table-wrap compact-table"><table><thead><tr><th>Date</th><th>Payment</th><th>Total</th></tr></thead><tbody>${payments.map((tx) => `<tr><td>${escapeHtml(tx.date)}</td><td>${escapeHtml(tx.description || tx.merchant)}</td><td>${money(Math.abs(tx.amount))}</td></tr>`).join("")}</tbody></table></div></div>`;
+}
+
+function recurringPayments(item) {
+  return state.transactions
+    .filter((tx) => tx.merchant === item.merchant && tx.type === "expense" && !isTransferCategory(tx.category))
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 function renderCategories() {

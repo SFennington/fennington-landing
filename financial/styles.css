@@ -1684,6 +1684,27 @@ td select {
   margin: 0;
 }
 
+.recurring-transactions {
+  background: rgba(248, 250, 252, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  padding: 0.75rem;
+}
+
+.recurring-transactions-heading {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+}
+
+.recurring-transactions-heading span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 .recurring-flags {
   display: flex;
   flex-wrap: wrap;
@@ -2247,6 +2268,7 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-dark .category-tree-branch,
 .financial-dark .category-tree-leaf,
 .financial-dark .category-drilldown,
+.financial-dark .recurring-transactions,
 .financial-dark .recurring-summary div,
 .financial-dark .empty-state,
 .financial-dark .drilldown-row,
