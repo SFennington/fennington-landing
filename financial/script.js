@@ -539,7 +539,7 @@ function ensureDefaultCategories() {
     const defaultId = slug(name);
     if (deletedDefaults.has(name) || deletedDefaultIds.has(defaultId)) return;
     if (!state.categories.some((cat) => cat.id === defaultId || cat.name.toLowerCase() === name.toLowerCase())) {
-      state.categories.push({ id: slug(name), name, system: true });
+      state.categories.push({ id: uniqueId("cat"), name, parentId: "", system: true });
     }
   });
   DEFAULT_SUBCATEGORIES.forEach((item) => {
@@ -550,7 +550,7 @@ function ensureDefaultCategories() {
     if (deletedDefaults.has(name) || deletedDefaultIds.has(defaultSubcategoryId)) return;
     const category = state.categories.find((cat) => cat.id === defaultSubcategoryId || cat.name.toLowerCase() === name.toLowerCase());
     if (category) category.parentId = category.parentId || parent.id;
-    else state.categories.push({ id: slug(name), name, parentId: parent.id, system: true });
+    else state.categories.push({ id: uniqueId("cat"), name, parentId: parent.id, system: true });
   });
 }
 
@@ -1670,10 +1670,10 @@ function categoryIndent(depth) {
 }
 
 function defaultCategories() {
-  const categories = DEFAULT_CATEGORIES.map((name) => ({ id: slug(name), name, parentId: "", system: true }));
+  const categories = DEFAULT_CATEGORIES.map((name) => ({ id: uniqueId("cat"), name, parentId: "", system: true }));
   DEFAULT_SUBCATEGORIES.forEach((item) => {
     const parent = categories.find((cat) => cat.name === item.parent);
-    if (parent) categories.push({ id: slug(`${parent.name}-${item.name}`), name: subcategoryName(parent.name, item.name), parentId: parent.id, system: true });
+    if (parent) categories.push({ id: uniqueId("cat"), name: subcategoryName(parent.name, item.name), parentId: parent.id, system: true });
   });
   return categories;
 }
