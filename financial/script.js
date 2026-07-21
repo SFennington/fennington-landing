@@ -1963,6 +1963,7 @@ function bindReviewActions(root) {
     tx.confidence = 100;
     tx.source = "User";
     tx.flags = [];
+    resolveRecurringReview(tx, "confirmed");
     if (card.querySelector("[data-apply-rule]").checked) {
       const updatedCount = createReviewRuleAndApplyToMatches(tx);
       if (updatedCount > 1) showStatus(`Rule created and ${updatedCount} matching transactions were categorized.`);
@@ -1981,12 +1982,15 @@ function bindReviewActions(root) {
     tx.type = "transfer";
     tx.source = "User flow";
     tx.confidence = 100;
+    resolveRecurringReview(tx, "confirmed");
     renderAll();
     showStatus("Internal money movement confirmed.");
   }));
   root.querySelectorAll("[data-review='skip']").forEach((button) => button.addEventListener("click", () => {
     const tx = state.transactions.find((item) => item.id === button.closest("article").dataset.id);
     tx.needsReview = false;
+    tx.flags = [];
+    resolveRecurringReview(tx, "rejected");
     tx.notes = `${tx.notes || ""} Skipped during review.`.trim();
     renderAll();
   }));
@@ -2002,9 +2006,17 @@ function bindReviewActions(root) {
       tx.confidence = 100;
       tx.source = "Bulk review";
       tx.flags = [];
+      resolveRecurringReview(tx, "confirmed");
     });
     renderAll();
   });
+}
+
+function resolveRecurringReview(tx, status) {
+  const recurring = state.recurring.find((item) => item.merchant === tx.merchant && item.status === "suggested");
+  if (!recurring) return;
+  recurring.status = status;
+  state.transactions.filter((item) => item.merchant === recurring.merchant).forEach((item) => { item.recurringStatus = status === "confirmed" ? "confirmed" : "rejected"; });
 }
 
 function createReviewRuleAndApplyToMatches(sourceTx) {
