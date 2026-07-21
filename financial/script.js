@@ -2132,7 +2132,7 @@ function bindFilters() {
 }
 
 function transactionTable(rows) {
-  return `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant, vendor & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Flow</th><th>Match</th><th>Recurring</th><th>Type</th><th>Notes</th><th>Action</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant, vendor & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Flow</th><th>Match</th><th>Recurring</th><th>Type</th><th>Notes</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
 }
 
 function transactionRow(tx) {
@@ -2166,7 +2166,9 @@ function transactionRow(tx) {
     <td><select class="recurring-select" data-field="recurringStatus" aria-label="Recurring status">${recurringOptions}</select></td>
     <td><select class="type-select type-${escapeAttr(type)}" data-field="type" aria-label="Transaction type">${typeOptions}</select></td>
     <td><input class="note-input" data-field="notes" aria-label="Transaction notes" value="${escapeAttr(tx.notes || "")}" placeholder="Add note"></td>
-    <td class="table-action-cell"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Apply Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></td>
+  </tr>
+  <tr data-id="${escapeAttr(tx.id)}" class="tx-action-row ${tx.needsReview ? "needs-review" : ""}">
+    <td class="table-action-cell" colspan="10"><div class="row-action-buttons"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Apply Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></div></td>
   </tr>`;
 }
 
@@ -2243,7 +2245,7 @@ function topCategoryMiniList(entries) {
 
 function bindTransactionTable(root) {
   root.querySelectorAll("[data-action='save-row']").forEach((button) => button.addEventListener("click", () => {
-    const tr = button.closest("tr");
+    const tr = transactionDataRowForAction(button);
     const { tx, previousCategory, previousVendor } = saveTransactionRow(tr);
     if (!tx) return;
     let statusMessage = "";
@@ -2259,7 +2261,7 @@ function bindTransactionTable(root) {
     if (statusMessage) showStatus(statusMessage);
   }));
   root.querySelectorAll("[data-action='apply-rule']").forEach((button) => button.addEventListener("click", () => {
-    const tr = button.closest("tr");
+    const tr = transactionDataRowForAction(button);
     const { tx } = saveTransactionRow(tr);
     if (!tx) return;
     const updatedCount = createReviewRuleAndApplyToMatches(tx);
@@ -2268,7 +2270,7 @@ function bindTransactionTable(root) {
     else showStatus("Rule created for future matching transactions.");
   }));
   root.querySelectorAll("[data-action='mark-internal']").forEach((button) => button.addEventListener("click", () => {
-    const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
+    const tx = transactionForAction(button);
     if (!tx) return;
     const counterparty = promptForCounterpartyAccount(tx);
     tx.flowSource = "user";
@@ -2280,14 +2282,14 @@ function bindTransactionTable(root) {
     showStatus("Transaction marked as internal money movement.");
   }));
   root.querySelectorAll("[data-action='mark-external']").forEach((button) => button.addEventListener("click", () => {
-    const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
+    const tx = transactionForAction(button);
     if (!tx) return;
     markExternalFlow(tx);
     renderAll();
     showStatus("Transaction marked as external income or spending.");
   }));
   root.querySelectorAll("[data-action='auto-flow']").forEach((button) => button.addEventListener("click", () => {
-    const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
+    const tx = transactionForAction(button);
     if (!tx) return;
     tx.flowSource = "auto";
     tx.flowType = deriveTransactionFlowType(tx);
@@ -2297,17 +2299,27 @@ function bindTransactionTable(root) {
     showStatus("Transaction returned to automatic flow detection.");
   }));
   root.querySelectorAll("[data-action='split']").forEach((button) => button.addEventListener("click", () => {
-    const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
+    const tx = transactionForAction(button);
     if (!tx) return;
     editTransactionSplits(tx);
   }));
   root.querySelectorAll("[data-action='clear-split']").forEach((button) => button.addEventListener("click", () => {
-    const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
+    const tx = transactionForAction(button);
     if (!tx?.splits?.length || !window.confirm("Clear split/itemized lines and use the parent transaction category again?")) return;
     clearTransactionSplits(tx);
     renderAll();
     showStatus("Split lines cleared.");
   }));
+}
+
+function transactionDataRowForAction(button) {
+  const row = button.closest("tr");
+  return row?.classList.contains("tx-action-row") ? row.previousElementSibling : row;
+}
+
+function transactionForAction(button) {
+  const row = transactionDataRowForAction(button);
+  return state.transactions.find((item) => item.id === row?.dataset.id);
 }
 
 function saveTransactionRow(tr) {
