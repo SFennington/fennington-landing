@@ -76,6 +76,8 @@ let mode = "signed-out";
 let pendingImport = null;
 let saveTimer = null;
 let state = emptyState();
+const categoryExpandedIds = new Set();
+let categoryExpansionInitialized = false;
 
 renderFeatures();
 setupMobileMenu();
@@ -286,6 +288,7 @@ function showApp(nextMode) {
 
 function enterDemo() {
   state = demoState();
+  resetCategoryExpansion();
   showApp("demo");
   scrollToApp();
 }
@@ -309,6 +312,7 @@ async function loadUserState() {
   if (incomeSnap.exists()) state.incomeSettings = { ...state.incomeSettings, ...incomeSnap.data() };
   if (!state.categories.length) state.categories = defaultCategories();
   state.selectedMonth = latestMonth(state.transactions) || monthKey(new Date());
+  resetCategoryExpansion();
   showApp("user");
 }
 
@@ -885,25 +889,32 @@ function renderRecurring() {
 }
 
 function recurringCard(item) {
-  return `<article class="recurring-card" data-id="${item.id}"><strong>${escapeHtml(item.merchant)}</strong><p>Expected amount: ${money(item.expectedAmount)} · Average: ${money(item.averageAmount)}</p><p>Frequency: ${escapeHtml(item.frequency)} · Next: ${escapeHtml(item.expectedNextDate)}</p><p>Last payment: ${escapeHtml(item.lastPaymentDate)} · Confidence: ${item.confidence}</p><p>Category: ${escapeHtml(item.category)}</p>${item.flags.map((flag) => `<span class="tag warn">${escapeHtml(flag)}</span>`).join(" ")}<div class="form-actions" style="margin-top:.8rem"><button class="mini-btn" data-recurring="confirmed" type="button">Confirm</button><button class="mini-btn danger" data-recurring="rejected" type="button">Reject</button></div></article>`;
+  const flags = item.flags?.length ? `<div class="recurring-flags">${item.flags.map((flag) => `<span class="tag warn">${escapeHtml(flag)}</span>`).join(" ")}</div>` : "";
+  return `<article class="recurring-card" data-id="${item.id}"><div class="recurring-card-heading"><div><strong>${escapeHtml(item.merchant)}</strong><p>${escapeHtml(item.description || item.category || "Recurring expense")}</p></div><span class="tag ${item.status === "confirmed" ? "good" : item.status === "rejected" ? "danger" : "warn"}">${escapeHtml(label(item.status || "suggested"))}</span></div><dl class="recurring-summary"><div><dt>Total</dt><dd>${money(item.expectedAmount)}</dd></div><div><dt>Last Date</dt><dd>${escapeHtml(item.lastPaymentDate)}</dd></div><div><dt>Number of Payments</dt><dd>${Number(item.paymentCount || 0)}</dd></div><div><dt>Total Paid YTD</dt><dd>${money(item.totalPaidYtd)}</dd></div></dl>${flags}<div class="form-actions" style="margin-top:.8rem"><button class="mini-btn" data-recurring="confirmed" type="button">Confirm</button><button class="mini-btn danger" data-recurring="rejected" type="button">Reject</button></div></article>`;
 }
 
 function renderCategories() {
   const tab = document.getElementById("categoriesTab");
   const parentOptions = parentCategoryOptions("");
+  seedExpandedCategories();
   tab.innerHTML = `
     <div class="split-panel">
-      <section class="panel"><h3>Categories</h3><p class="status-line">Create top-level categories or nest subcategories under a parent such as Kids.</p><div class="category-grid">${categoryTreeList().map(categoryCard).join("")}</div></section>
+      <section class="panel"><h3>Categories</h3><p class="status-line">Categories are grouped like folders. Expand a parent to see the subcategories nested underneath it.</p>${categoryTreeView()}</section>
       <aside class="panel"><h3>Create or merge category</h3><div class="field"><label for="newCategoryParent">Parent category</label><select id="newCategoryParent"><option value="">Top-level category</option>${parentOptions}</select></div><div class="field"><label for="newCategory">New category or subcategory</label><input id="newCategory" placeholder="Example: Sports and Activities"></div><button id="addCategory" class="btn btn-primary" type="button">Create Category</button><hr style="margin:1rem 0;border:0;border-top:1px solid var(--financial-line)"><div class="field"><label for="mergeFrom">Merge from</label><select id="mergeFrom">${categoryOptions("")}</select></div><div class="field"><label for="mergeTo">Merge to</label><select id="mergeTo">${categoryOptions("")}</select></div><button id="mergeCategory" class="btn btn-secondary" type="button">Merge Categories</button></aside>
     </div>
   `;
+  tab.querySelectorAll(".category-tree-branch").forEach((branch) => branch.addEventListener("toggle", () => {
+    if (branch.open) categoryExpandedIds.add(branch.dataset.categoryId);
+    else categoryExpandedIds.delete(branch.dataset.categoryId);
+  }));
   tab.querySelectorAll("[data-cat-save]").forEach((button) => button.addEventListener("click", () => {
-    const card = button.closest("article");
-    const category = state.categories.find((item) => item.id === card.dataset.id);
+    const node = button.closest("[data-category-id]");
+    const category = state.categories.find((item) => item.id === node.dataset.categoryId);
+    if (!category) return;
     const previousName = category.name;
-    const parentId = card.querySelector("select")?.value || "";
+    const parentId = node.querySelector("[data-cat-parent]")?.value || "";
     const parent = state.categories.find((item) => item.id === parentId);
-    const nextBaseName = sanitize(card.querySelector("input").value);
+    const nextBaseName = sanitize(node.querySelector("[data-cat-name]").value);
     const nextName = parent ? subcategoryName(parent.name, nextBaseName) : nextBaseName;
     if (!nextName) return;
     if (state.categories.some((cat) => cat.id !== category.id && cat.name.toLowerCase() === nextName.toLowerCase())) return showStatus("That category already exists.");
@@ -914,11 +925,14 @@ function renderCategories() {
     renderAll();
   }));
   tab.querySelectorAll("[data-cat-delete]").forEach((button) => button.addEventListener("click", () => {
-    const category = state.categories.find((item) => item.id === button.closest("article").dataset.id);
+    const node = button.closest("[data-category-id]");
+    const category = state.categories.find((item) => item.id === node.dataset.categoryId);
+    if (!category) return;
     if (category.system) return showStatus("Default categories can be renamed or merged but not deleted in this first draft.");
     if (!window.confirm(`Delete ${category.name}? Transactions will become Uncategorized.`)) return;
     state.transactions.filter((tx) => tx.category === category.name).forEach((tx) => { tx.category = "Uncategorized"; tx.needsReview = true; });
     state.categories = state.categories.filter((item) => item.id !== category.id);
+    categoryExpandedIds.delete(category.id);
     renderAll();
   }));
   document.getElementById("addCategory").addEventListener("click", () => {
@@ -928,6 +942,7 @@ function renderCategories() {
     const name = parent ? subcategoryName(parent.name, baseName) : baseName;
     if (!name || state.categories.some((cat) => cat.name.toLowerCase() === name.toLowerCase())) return;
     state.categories.push({ id: uniqueId("cat"), name, parentId: parentId || "", system: false });
+    if (parentId) categoryExpandedIds.add(parentId);
     renderAll();
   });
   document.getElementById("mergeCategory").addEventListener("click", () => {
@@ -940,10 +955,41 @@ function renderCategories() {
   });
 }
 
-function categoryCard(category) {
+function seedExpandedCategories() {
+  if (categoryExpansionInitialized) return;
+  groupedCategories().forEach((category) => {
+    if (state.categories.some((item) => item.parentId === category.id)) categoryExpandedIds.add(category.id);
+  });
+  categoryExpansionInitialized = true;
+}
+
+function resetCategoryExpansion() {
+  categoryExpandedIds.clear();
+  categoryExpansionInitialized = false;
+}
+
+function categoryTreeView() {
+  const parents = groupedCategories();
+  if (!parents.length) return `<div class="empty-state">No categories yet.</div>`;
+  return `<div class="category-tree" aria-label="Category hierarchy">${parents.map(categoryTreeBranch).join("")}</div>`;
+}
+
+function categoryTreeBranch(category) {
+  const children = state.categories.filter((item) => item.parentId === category.id).sort(categorySort);
+  if (!children.length) return categoryTreeLeaf(category, false);
+  const isOpen = categoryExpandedIds.has(category.id);
+  return `<details class="category-tree-branch" data-category-id="${escapeAttr(category.id)}" ${isOpen ? "open" : ""}><summary class="category-tree-summary"><span class="tree-icon" aria-hidden="true"></span><strong>${escapeHtml(category.name)}</strong><span class="tree-count">${children.length} ${children.length === 1 ? "subcategory" : "subcategories"}</span><span class="tag ${category.system ? "good" : ""}">${category.system ? "Default" : "Custom"}</span></summary><div class="category-tree-controls">${categoryEditControls(category, children.length)}</div><div class="category-tree-children">${children.map((child) => categoryTreeLeaf(child, true)).join("")}</div></details>`;
+}
+
+function categoryTreeLeaf(category, isChild) {
   const parent = parentCategory(category);
   const childCount = state.categories.filter((item) => item.parentId === category.id).length;
-  return `<article class="category-card ${parent ? "subcategory-card" : ""}" data-id="${category.id}"><div class="category-card-heading"><span class="tag ${parent ? "" : "good"}">${parent ? "Subcategory" : category.system ? "Default category" : "Custom category"}</span>${parent ? `<small>${escapeHtml(parent.name)}</small>` : childCount ? `<small>${childCount} subcategories</small>` : ""}</div><div class="field"><label>Category name</label><input value="${escapeAttr(categoryBaseName(category))}"></div><div class="field"><label>Parent category</label><select ${childCount ? "disabled" : ""}><option value="">Top-level category</option>${parentCategoryOptions(category.parentId || "", category.id)}</select></div><div class="form-actions"><button class="mini-btn" data-cat-save type="button">Save</button><button class="mini-btn danger" data-cat-delete type="button">Delete</button></div></article>`;
+  return `<div class="category-tree-leaf ${isChild ? "is-child" : "is-parent"}" data-category-id="${escapeAttr(category.id)}"><div class="category-tree-summary"><span class="tree-file" aria-hidden="true"></span><strong>${escapeHtml(categoryBaseName(category))}</strong>${parent ? `<span class="tree-parent">${escapeHtml(parent.name)}</span>` : childCount ? `<span class="tree-count">${childCount} nested</span>` : ""}<span class="tag ${!parent && category.system ? "good" : ""}">${parent ? "Subcategory" : category.system ? "Default" : "Custom"}</span></div>${categoryEditControls(category, childCount)}</div>`;
+}
+
+function categoryEditControls(category, childCount = 0) {
+  const disableParent = childCount ? "disabled" : "";
+  return `<div class="category-edit-grid"><div class="field"><label>Category name</label><input data-cat-name value="${escapeAttr(categoryBaseName(category))}"></div><div class="field"><label>Parent category</label><select data-cat-parent ${disableParent}><option value="">Top-level category</option>${parentCategoryOptions(category.parentId || "", category.id)}</select></div><div class="form-actions category-row-actions"><button class="mini-btn" data-cat-save type="button">Save</button><button class="mini-btn danger" data-cat-delete type="button">Delete</button></div></div>`;
 }
 
 function createProfile() {
@@ -967,6 +1013,7 @@ async function deleteProfileData() {
     await deleteDoc(profileRef);
   }
   state = emptyState();
+  resetCategoryExpansion();
   renderAll();
   showStatus("Financial profile data deleted.");
 }
@@ -1190,24 +1237,107 @@ function reviewQueue() {
 
 function detectRecurring(transactions) {
   const groups = new Map();
-  transactions.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).forEach((tx) => {
+  transactions.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category) && Math.abs(tx.amount) > 0).forEach((tx) => {
     const key = tx.merchant.toLowerCase();
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(tx);
   });
-  return Array.from(groups.values()).filter((items) => items.length >= 3).map((items) => {
-    const sorted = items.sort((a, b) => a.date.localeCompare(b.date));
-    const amounts = sorted.map((tx) => Math.abs(tx.amount));
-    const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
-    const intervals = sorted.slice(1).map((tx, index) => daysBetween(sorted[index].date, tx.date));
-    const interval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-    const frequency = interval < 10 ? "weekly" : interval < 20 ? "biweekly" : interval < 45 ? "monthly" : interval < 110 ? "quarterly" : "annual";
-    const last = sorted[sorted.length - 1];
-    const flags = [];
-    if (amounts[amounts.length - 1] > avg * 1.15) flags.push("price increase");
-    if (daysBetween(last.date, new Date().toISOString().slice(0, 10)) > interval * 1.7) flags.push("missing expected charge");
-    return { id: slug(`${last.merchant}-${frequency}`), merchant: last.merchant, expectedAmount: round(amounts[amounts.length - 1]), averageAmount: round(avg), frequency, expectedNextDate: addDays(last.date, Math.round(interval)), lastPaymentDate: last.date, confidence: Math.min(96, Math.round(55 + sorted.length * 8)), category: last.category, status: "suggested", flags };
-  }).sort((a, b) => b.confidence - a.confidence);
+  return Array.from(groups.values()).map(recurringFromMerchantGroup).filter(Boolean).sort((a, b) => b.confidence - a.confidence);
+}
+
+function recurringFromMerchantGroup(items) {
+  const sorted = [...items].sort((a, b) => a.date.localeCompare(b.date));
+  const monthlyBuckets = Array.from(sorted.reduce((map, tx) => {
+    const month = tx.date.slice(0, 7);
+    if (!map.has(month)) map.set(month, { month, total: 0, payments: [], lastDate: tx.date });
+    const bucket = map.get(month);
+    bucket.total = round(bucket.total + Math.abs(tx.amount));
+    bucket.payments.push(tx);
+    if (tx.date > bucket.lastDate) bucket.lastDate = tx.date;
+    return map;
+  }, new Map()).values()).sort((a, b) => a.month.localeCompare(b.month));
+  if (monthlyBuckets.length < 3 || !hasMonthlyCadence(monthlyBuckets)) return null;
+
+  const totals = monthlyBuckets.map((bucket) => bucket.total);
+  const fit = recurringAmountFit(totals);
+  if (!fit) return null;
+
+  const lastBucket = monthlyBuckets[monthlyBuckets.length - 1];
+  const lastPayment = lastBucket.payments.slice().sort((a, b) => a.date.localeCompare(b.date)).pop();
+  const currentYear = String(new Date().getFullYear());
+  const ytdPayments = sorted.filter((tx) => tx.date.startsWith(currentYear));
+  const paymentCount = monthlyBuckets.reduce((sum, bucket) => sum + bucket.payments.length, 0);
+  const flags = [...fit.flags];
+  const nextDate = new Date(`${lastBucket.lastDate}T00:00:00Z`);
+  nextDate.setUTCMonth(nextDate.getUTCMonth() + 1);
+  const expectedNextDate = nextDate.toISOString().slice(0, 10);
+  if (monthsBetween(lastBucket.month, monthKey(new Date())) > 1) flags.push("missing expected charge");
+
+  return {
+    id: slug(`${lastPayment.merchant}-monthly`),
+    merchant: lastPayment.merchant,
+    description: lastPayment.description || lastPayment.merchant,
+    expectedAmount: round(fit.expectedAmount),
+    averageAmount: round(totals.reduce((a, b) => a + b, 0) / totals.length),
+    frequency: "monthly",
+    expectedNextDate,
+    lastPaymentDate: lastBucket.lastDate,
+    paymentCount,
+    totalPaidYtd: round(ytdPayments.reduce((sum, tx) => sum + Math.abs(tx.amount), 0)),
+    confidence: Math.min(98, Math.round(66 + monthlyBuckets.length * 6 + fit.consistencyScore)),
+    category: lastPayment.category,
+    status: "suggested",
+    flags
+  };
+}
+
+function recurringAmountFit(totals) {
+  const clusters = clusterAmounts(totals);
+  const latestTotal = totals[totals.length - 1];
+  const latestCluster = clusters.find((cluster) => amountsClose(cluster.average, latestTotal));
+  const primaryCluster = clusters.slice().sort((a, b) => b.values.length - a.values.length)[0];
+  if (primaryCluster && primaryCluster.values.length === totals.length) {
+    return { expectedAmount: latestTotal, consistencyScore: 18, flags: [] };
+  }
+  if (primaryCluster && primaryCluster.values.length >= Math.max(3, Math.ceil(totals.length * 0.75)) && amountsClose(primaryCluster.average, latestTotal)) {
+    return { expectedAmount: primaryCluster.average, consistencyScore: 12, flags: [] };
+  }
+  const previousStable = clusters
+    .filter((cluster) => cluster !== latestCluster && cluster.values.length >= 2)
+    .sort((a, b) => b.lastIndex - a.lastIndex)[0];
+  if (previousStable && latestCluster && latestCluster.lastIndex === totals.length - 1 && latestCluster.average > previousStable.average) {
+    const increase = round(latestCluster.average - previousStable.average);
+    const isSmallIncrease = increase <= Math.max(5, previousStable.average * 0.2);
+    const oldThenNew = previousStable.lastIndex < latestCluster.firstIndex || latestCluster.values.length >= 2;
+    if (isSmallIncrease && oldThenNew) {
+      return { expectedAmount: latestCluster.average, consistencyScore: 10, flags: [`price increase ${money(previousStable.average)} → ${money(latestCluster.average)}`] };
+    }
+  }
+  return null;
+}
+
+function clusterAmounts(amounts) {
+  return amounts.reduce((clusters, amount, index) => {
+    const cluster = clusters.find((item) => amountsClose(item.average, amount));
+    if (cluster) {
+      cluster.values.push(amount);
+      cluster.average = cluster.values.reduce((a, b) => a + b, 0) / cluster.values.length;
+      cluster.firstIndex = Math.min(cluster.firstIndex, index);
+      cluster.lastIndex = Math.max(cluster.lastIndex, index);
+    } else clusters.push({ average: amount, values: [amount], firstIndex: index, lastIndex: index });
+    return clusters;
+  }, []);
+}
+
+function amountsClose(a, b) {
+  return Math.abs(a - b) <= Math.max(1, Math.min(a, b) * 0.02);
+}
+
+function hasMonthlyCadence(monthlyBuckets) {
+  const gaps = monthlyBuckets.slice(1).map((bucket, index) => monthsBetween(monthlyBuckets[index].month, bucket.month));
+  if (!gaps.length) return false;
+  const onSchedule = gaps.filter((gap) => gap >= 1 && gap <= 2).length;
+  return onSchedule / gaps.length >= 0.8 && Math.max(...gaps) <= 2;
 }
 
 function monthlyBars(kind) {
@@ -1415,6 +1545,12 @@ function addMonth(month, offset) {
 
 function daysBetween(a, b) {
   return Math.abs((new Date(b) - new Date(a)) / 86400000);
+}
+
+function monthsBetween(a, b) {
+  const start = new Date(`${a}-01T00:00:00Z`);
+  const end = new Date(`${b}-01T00:00:00Z`);
+  return Math.abs((end.getUTCFullYear() - start.getUTCFullYear()) * 12 + end.getUTCMonth() - start.getUTCMonth());
 }
 
 function label(value) {
