@@ -65,7 +65,8 @@ const els = {
   modeLabel: document.getElementById("modeLabel"),
   profileSummary: document.getElementById("profileSummary"),
   createProfileButton: document.getElementById("createProfileButton"),
-  deleteProfileButton: document.getElementById("deleteProfileButton")
+  deleteProfileButton: document.getElementById("deleteProfileButton"),
+  themeToggleButton: document.getElementById("themeToggleButton")
 };
 const isAppPage = Boolean(els.app && els.authGate);
 
@@ -79,7 +80,11 @@ let state = emptyState();
 const categoryExpandedIds = new Set();
 let categoryExpansionInitialized = false;
 let selectedCategoryReportId = "";
+let categoryFilterTerm = "";
+let categorySortMode = "name-asc";
+let themeMode = storedThemePreference();
 
+applyTheme();
 renderFeatures();
 setupMobileMenu();
 setupTabs();
@@ -262,6 +267,27 @@ function bindStaticActions() {
   });
   els.createProfileButton?.addEventListener("click", createProfile);
   els.deleteProfileButton?.addEventListener("click", deleteProfileData);
+  els.themeToggleButton?.addEventListener("click", toggleTheme);
+}
+
+function storedThemePreference() {
+  try { return localStorage.getItem("financialTheme") || "light"; }
+  catch (_) { return "light"; }
+}
+
+function applyTheme() {
+  document.body.classList.toggle("financial-dark", themeMode === "dark");
+  if (els.themeToggleButton) {
+    els.themeToggleButton.textContent = themeMode === "dark" ? "Light Theme" : "Dark Theme";
+    els.themeToggleButton.setAttribute("aria-pressed", String(themeMode === "dark"));
+  }
+}
+
+function toggleTheme() {
+  themeMode = themeMode === "dark" ? "light" : "dark";
+  try { localStorage.setItem("financialTheme", themeMode); }
+  catch (_) { /* Theme preference is still applied for this page view. */ }
+  applyTheme();
 }
 
 function navigateToApp(openDemo = false) {
@@ -910,10 +936,24 @@ function renderCategories() {
   seedExpandedCategories();
   tab.innerHTML = `
     <div class="split-panel">
-      <section class="panel"><h3>Categories</h3><p class="status-line">Categories are grouped like folders and can be nested multiple levels deep, such as Side Businesses → Cuyle's Customs → Apparel Expense.</p>${categoryTreeView()}${reportCategory() ? categoryDrilldown(reportCategory()) : ""}</section>
+      <section class="panel"><h3>Categories</h3><p class="status-line">Categories are grouped like folders and can be nested multiple levels deep, such as Side Businesses → Cuyle's Customs → Apparel Expense.</p>${categoryTreeControls()}${categoryTreeView()}${reportCategory() ? categoryDrilldown(reportCategory()) : ""}</section>
       <aside class="panel"><h3>Create or merge category</h3><div class="field"><label for="newCategoryParent">Parent category</label><select id="newCategoryParent"><option value="">Top-level category</option>${parentOptions}</select></div><div class="field"><label for="newCategory">New category or subcategory</label><input id="newCategory" placeholder="Example: Sports and Activities"></div><button id="addCategory" class="btn btn-primary" type="button">Create Category</button><hr style="margin:1rem 0;border:0;border-top:1px solid var(--financial-line)"><div class="field"><label for="mergeFrom">Merge from</label><select id="mergeFrom">${categoryOptions("")}</select></div><div class="field"><label for="mergeTo">Merge to</label><select id="mergeTo">${categoryOptions("")}</select></div><button id="mergeCategory" class="btn btn-secondary" type="button">Merge Categories</button></aside>
     </div>
   `;
+  document.getElementById("categoryFilter")?.addEventListener("input", (event) => {
+    const caret = event.target.selectionStart || event.target.value.length;
+    categoryFilterTerm = event.target.value;
+    renderCategories();
+    requestAnimationFrame(() => {
+      const next = document.getElementById("categoryFilter");
+      next?.focus();
+      next?.setSelectionRange(caret, caret);
+    });
+  });
+  document.getElementById("categorySort")?.addEventListener("change", (event) => {
+    categorySortMode = event.target.value;
+    renderCategories();
+  });
   tab.querySelectorAll(".category-tree-branch").forEach((branch) => branch.addEventListener("toggle", () => {
     if (branch.open) categoryExpandedIds.add(branch.dataset.categoryId);
     else categoryExpandedIds.delete(branch.dataset.categoryId);
@@ -992,16 +1032,20 @@ function resetCategoryExpansion() {
   selectedCategoryReportId = "";
 }
 
+function categoryTreeControls() {
+  return `<div class="category-toolbar"><div class="field"><label for="categoryFilter">Filter categories</label><input id="categoryFilter" value="${escapeAttr(categoryFilterTerm)}" placeholder="Search category, parent, or vendor bucket"></div><div class="field"><label for="categorySort">Sort categories</label><select id="categorySort"><option value="name-asc" ${categorySortMode === "name-asc" ? "selected" : ""}>Name A–Z</option><option value="name-desc" ${categorySortMode === "name-desc" ? "selected" : ""}>Name Z–A</option><option value="total-desc" ${categorySortMode === "total-desc" ? "selected" : ""}>Highest total</option><option value="count-desc" ${categorySortMode === "count-desc" ? "selected" : ""}>Most transactions</option></select></div></div>`;
+}
+
 function categoryTreeView() {
-  const parents = groupedCategories();
-  if (!parents.length) return `<div class="empty-state">No categories yet.</div>`;
+  const parents = groupedCategories().filter(categoryVisible);
+  if (!parents.length) return `<div class="empty-state">No categories match the current filter.</div>`;
   return `<div class="category-tree" aria-label="Category hierarchy">${parents.map((category) => categoryTreeBranch(category, 0)).join("")}</div>`;
 }
 
 function categoryTreeBranch(category, depth = 0) {
-  const children = childCategories(category.id);
+  const children = childCategories(category.id).filter(categoryVisible);
   if (!children.length) return categoryTreeLeaf(category, depth);
-  const isOpen = categoryExpandedIds.has(category.id);
+  const isOpen = categoryExpandedIds.has(category.id) || Boolean(categoryFilterTerm);
   return `<details class="category-tree-branch depth-${Math.min(depth, 5)}" data-category-id="${escapeAttr(category.id)}" ${isOpen ? "open" : ""}><summary class="category-tree-summary compact-category-row"><span class="tree-icon" aria-hidden="true"></span>${categoryInlineControls(category, children.length)}</summary><div class="category-tree-children">${children.map((child) => categoryTreeBranch(child, depth + 1)).join("")}</div></details>`;
 }
 
@@ -1484,9 +1528,38 @@ function categoryPathName(parent, baseName) {
   return parent ? subcategoryName(parent.name, baseName) : sanitize(baseName);
 }
 
+function categoryVisible(category) {
+  const term = categoryFilterTerm.trim().toLowerCase();
+  if (!term) return true;
+  return categoryMatches(category, term) || categoryAncestorMatches(category, term) || categoryDescendantIds(category.id).some((id) => categoryMatches(state.categories.find((cat) => cat.id === id), term));
+}
+
+function categoryMatches(category, term) {
+  if (!category) return false;
+  return `${category.name} ${categoryBaseName(category)} ${categoryBreadcrumb(category)}`.toLowerCase().includes(term);
+}
+
+function categoryAncestorMatches(category, term) {
+  let parent = parentCategory(category);
+  while (parent) {
+    if (categoryMatches(parent, term)) return true;
+    parent = parentCategory(parent);
+  }
+  return false;
+}
+
+function categoryAggregate(category) {
+  const names = new Set(categoryAndDescendantNames(category));
+  const rows = state.transactions.filter((tx) => names.has(tx.category) && tx.type === "expense" && !isTransferCategory(tx.category));
+  return { count: rows.length, total: round(rows.reduce((sum, tx) => sum + Math.abs(tx.amount), 0)) };
+}
+
 function categorySort(a, b) {
   if (a.name === "Uncategorized") return 1;
   if (b.name === "Uncategorized") return -1;
+  if (categorySortMode === "name-desc") return categoryBaseName(b).localeCompare(categoryBaseName(a));
+  if (categorySortMode === "total-desc") return categoryAggregate(b).total - categoryAggregate(a).total || categoryBaseName(a).localeCompare(categoryBaseName(b));
+  if (categorySortMode === "count-desc") return categoryAggregate(b).count - categoryAggregate(a).count || categoryBaseName(a).localeCompare(categoryBaseName(b));
   return categoryBaseName(a).localeCompare(categoryBaseName(b));
 }
 

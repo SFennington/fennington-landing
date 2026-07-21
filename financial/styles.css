@@ -1961,3 +1961,220 @@ summary.category-tree-summary::-webkit-details-marker {
     grid-column: 2 / -1;
   }
 }
+
+
+/* One-column sortable category explorer */
+.category-toolbar {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 260px);
+  margin: 1rem 0;
+}
+
+.category-tree {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 760px) {
+  .category-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Financial app dark theme */
+.financial-dark {
+  --financial-line: rgba(148, 163, 184, 0.24);
+  --financial-soft: #111827;
+  --financial-ink: #e5eefb;
+  --financial-panel: rgba(15, 23, 42, 0.9);
+  --financial-ring: rgba(96, 165, 250, 0.34);
+  --financial-good: #34d399;
+  --financial-warn: #fbbf24;
+  --financial-danger: #f87171;
+  --text: #e5eefb;
+  --muted: #94a3b8;
+  --brand: #60a5fa;
+  --brand-dark: #bfdbfe;
+  --accent: #22d3ee;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(37, 99, 235, 0.24), transparent 28rem),
+    radial-gradient(circle at 90% 14%, rgba(124, 58, 237, 0.22), transparent 30rem),
+    linear-gradient(180deg, #020617 0%, #0f172a 48%, #111827 100%);
+  color: var(--financial-ink);
+}
+
+.financial-dark .header {
+  background: rgba(2, 6, 23, 0.86);
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.financial-dark .nav a,
+.financial-dark .auth-status,
+.financial-dark .status-line,
+.financial-dark .muted,
+.financial-dark .tree-count,
+.financial-dark .tree-parent,
+.financial-dark .transaction-table-header p,
+.financial-dark .recurring-card-heading p,
+.financial-dark .preview-card span,
+.financial-dark .preview-card small {
+  color: var(--muted);
+}
+
+.financial-dark .nav a:hover,
+.financial-dark .financial-header .nav a:hover {
+  background: rgba(37, 99, 235, 0.18);
+  color: #dbeafe;
+}
+
+.financial-dark .financial-app-page,
+.financial-dark.financial-app-page {
+  background:
+    radial-gradient(circle at 10% 10%, rgba(34, 211, 238, 0.14), transparent 28rem),
+    radial-gradient(circle at 92% 16%, rgba(124, 58, 237, 0.18), transparent 30rem),
+    linear-gradient(180deg, #020617 0%, #0f172a 46%, #111827 100%);
+}
+
+.financial-dark .financial-app,
+.financial-dark .auth-gate {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.9)),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.18), transparent 24rem);
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
+  color: var(--financial-ink);
+}
+
+.financial-dark .app-topbar,
+.financial-dark .filters-card,
+.financial-dark .transactions-panel,
+.financial-dark .app-tabs,
+.financial-dark .panel,
+.financial-dark .chart-card,
+.financial-dark .summary-card,
+.financial-dark .recurring-card,
+.financial-dark .category-card,
+.financial-dark .privacy-card,
+.financial-dark .feature-card,
+.financial-dark .steps-grid article,
+.financial-dark .insight-card,
+.financial-dark .category-tree,
+.financial-dark .category-tree-branch,
+.financial-dark .category-tree-leaf,
+.financial-dark .category-drilldown,
+.financial-dark .recurring-summary div,
+.financial-dark .empty-state,
+.financial-dark .drilldown-row,
+.financial-dark .preview-card,
+.financial-dark .preview-list div {
+  background: rgba(15, 23, 42, 0.86);
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+  color: var(--financial-ink);
+}
+
+.financial-dark .category-tree-branch.depth-1,
+.financial-dark .category-tree-leaf.depth-1,
+.financial-dark .category-tree-branch.depth-2,
+.financial-dark .category-tree-leaf.depth-2,
+.financial-dark .category-tree-branch.depth-3,
+.financial-dark .category-tree-leaf.depth-3,
+.financial-dark .category-tree-branch.depth-4,
+.financial-dark .category-tree-leaf.depth-4,
+.financial-dark .category-tree-branch.depth-5,
+.financial-dark .category-tree-leaf.depth-5 {
+  background: rgba(17, 24, 39, 0.9);
+}
+
+.financial-dark .app-tabs button.active {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.98), rgba(30, 64, 175, 0.36));
+  border-color: rgba(96, 165, 250, 0.34);
+  color: #dbeafe;
+}
+
+.financial-dark .financial-header .btn-secondary,
+.financial-dark .financial-hero .btn-secondary,
+.financial-dark .financial-app-section .btn-secondary,
+.financial-dark .financial-section .btn-secondary,
+.financial-dark .mini-btn {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(96, 165, 250, 0.28);
+  color: #dbeafe;
+}
+
+.financial-dark .danger-btn,
+.financial-dark .mini-btn.danger {
+  background: rgba(127, 29, 29, 0.32);
+  border-color: rgba(248, 113, 113, 0.42);
+  color: #fecaca;
+}
+
+.financial-dark input,
+.financial-dark select,
+.financial-dark textarea,
+.financial-dark .category-inline-input,
+.financial-dark .category-parent-select {
+  background: rgba(2, 6, 23, 0.82);
+  border-color: rgba(148, 163, 184, 0.32);
+  color: var(--financial-ink);
+}
+
+.financial-dark input::placeholder,
+.financial-dark textarea::placeholder {
+  color: #64748b;
+}
+
+.financial-dark table,
+.financial-dark .table-wrap,
+.financial-dark .transaction-table-shell {
+  background: rgba(2, 6, 23, 0.72);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: var(--financial-ink);
+}
+
+.financial-dark th,
+.financial-dark td {
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.financial-dark .tag {
+  background: rgba(37, 99, 235, 0.18);
+  color: #bfdbfe;
+}
+
+.financial-dark .tag.good {
+  background: rgba(16, 185, 129, 0.14);
+  color: #86efac;
+}
+
+.financial-dark .tag.warn {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fde68a;
+}
+
+.financial-dark .tag.danger {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecaca;
+}
+
+.financial-dark .bar-track,
+.financial-dark .mini-category-row em {
+  background: rgba(51, 65, 85, 0.9);
+}
+
+.financial-dark .amount-cell.negative span {
+  color: #fca5a5;
+}
+
+.financial-dark .amount-cell.positive span {
+  color: #86efac;
+}
+
+.financial-dark .tree-icon,
+.financial-dark .tree-file,
+.financial-dark .merchant-avatar,
+.financial-dark .account-pill {
+  background: rgba(37, 99, 235, 0.2);
+  color: #bfdbfe;
+}
