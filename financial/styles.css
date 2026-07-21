@@ -1761,7 +1761,7 @@ td select {
   white-space: nowrap;
 }
 
-.table-action-cell {
+.transaction-table .table-action-cell {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(239, 246, 255, 0.9));
   padding-block: 0.58rem 0.78rem !important;
 }
@@ -1785,7 +1785,14 @@ td select {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-  justify-content: flex-end;
+  justify-content: stretch;
+  width: 100%;
+}
+
+.row-action-buttons .mini-btn {
+  flex: 1 1 120px;
+  justify-content: center;
+  min-height: 36px;
 }
 
 .save-row-btn {
@@ -2817,7 +2824,7 @@ summary.category-tree-summary::-webkit-details-marker {
   background: rgba(51, 65, 85, 0.95);
 }
 
-.financial-dark .table-action-cell {
+.financial-dark .transaction-table .table-action-cell {
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(30, 41, 59, 0.92));
 }
 
