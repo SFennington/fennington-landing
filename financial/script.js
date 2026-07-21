@@ -31,6 +31,17 @@ const AI_OUTPUT_PRICE_PER_1M = 1.25;
 const AI_WEB_SEARCH_PRICE_PER_1K = 10;
 const AI_DEFAULT_BATCH_LIMIT = 50;
 const AI_MAX_BATCH_LIMIT = 100;
+const REVIEW_REASON_DEFINITIONS = [
+  { key: "uncategorized", label: "Uncategorized" },
+  { key: "low_confidence", label: "Low confidence" },
+  { key: "possible_transfer", label: "Possible transfer" },
+  { key: "possible_duplicate", label: "Possible duplicate" },
+  { key: "recurring", label: "New recurring" },
+  { key: "unusually_high_amount", label: "High amount" },
+  { key: "split_review", label: "Split review" },
+  { key: "flow_review", label: "Flow review" },
+  { key: "other", label: "Other" }
+];
 
 const FEATURES = [
   "Automatic transaction categorization",
@@ -2080,7 +2091,7 @@ function transactionRow(tx) {
     <td><select class="recurring-select" data-field="recurringStatus" aria-label="Recurring status">${recurringOptions}</select></td>
     <td><select class="type-select type-${escapeAttr(type)}" data-field="type" aria-label="Transaction type">${typeOptions}</select></td>
     <td><input class="note-input" data-field="notes" aria-label="Transaction notes" value="${escapeAttr(tx.notes || "")}" placeholder="Add note"></td>
-    <td class="table-action-cell"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></td>
+    <td class="table-action-cell"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Apply Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></td>
   </tr>`;
 }
 
@@ -2158,23 +2169,8 @@ function topCategoryMiniList(entries) {
 function bindTransactionTable(root) {
   root.querySelectorAll("[data-action='save-row']").forEach((button) => button.addEventListener("click", () => {
     const tr = button.closest("tr");
-    const tx = state.transactions.find((item) => item.id === tr.dataset.id);
-    const previousCategory = tx.category;
-    const previousVendor = transactionVendor(tx);
-    const selectedType = tr.querySelector("[data-field='type']")?.value || "";
-    tr.querySelectorAll("[data-field]").forEach((input) => { tx[input.dataset.field] = sanitize(input.value); });
-    tx.vendor = transactionVendor(tx);
-    if (tx.category === "Income" || isTransferCategory(tx.category)) tx.type = typeForCategory(tx.category, tx.amount);
-    if (selectedType === "income" || selectedType === "expense") tx.importDirection = "";
-    normalizeTransactionAmountSign(tx);
-    if (previousCategory !== tx.category && tx.flowSource !== "user") {
-      tx.flowType = deriveTransactionFlowType(tx);
-      tx.flowReason = flowReasonFor(tx);
-    }
-    tx.needsReview = false;
-    tx.flags = (tx.flags || []).filter((flag) => flag !== "low_confidence" && flag !== "uncategorized");
-    tx.source = tx.source === "AI" ? tx.source : "User";
-    tx.confidence = 100;
+    const { tx, previousCategory, previousVendor } = saveTransactionRow(tr);
+    if (!tx) return;
     let statusMessage = "";
     if (previousCategory !== tx.category && tx.merchant && window.confirm("Apply this category to future transactions from this merchant?")) {
       state.rules.push({ id: uniqueId("rule"), type: "merchant", match: tx.merchant, category: tx.category, createdAt: new Date().toISOString() });
@@ -2185,6 +2181,15 @@ function bindTransactionTable(root) {
     }
     renderAll();
     if (statusMessage) showStatus(statusMessage);
+  }));
+  root.querySelectorAll("[data-action='apply-rule']").forEach((button) => button.addEventListener("click", () => {
+    const tr = button.closest("tr");
+    const { tx } = saveTransactionRow(tr);
+    if (!tx) return;
+    const updatedCount = createReviewRuleAndApplyToMatches(tx);
+    renderAll();
+    if (updatedCount > 1) showStatus(`Rule created and ${updatedCount} matching transactions were categorized.`);
+    else showStatus("Rule created for future matching transactions.");
   }));
   root.querySelectorAll("[data-action='mark-internal']").forEach((button) => button.addEventListener("click", () => {
     const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
@@ -2227,6 +2232,28 @@ function bindTransactionTable(root) {
     renderAll();
     showStatus("Split lines cleared.");
   }));
+}
+
+function saveTransactionRow(tr) {
+  const tx = state.transactions.find((item) => item.id === tr?.dataset.id);
+  if (!tx) return { tx: null, previousCategory: "", previousVendor: "" };
+  const previousCategory = tx.category;
+  const previousVendor = transactionVendor(tx);
+  const selectedType = tr.querySelector("[data-field='type']")?.value || "";
+  tr.querySelectorAll("[data-field]").forEach((input) => { tx[input.dataset.field] = sanitize(input.value); });
+  tx.vendor = transactionVendor(tx);
+  if (tx.category === "Income" || isTransferCategory(tx.category)) tx.type = typeForCategory(tx.category, tx.amount);
+  if (selectedType === "income" || selectedType === "expense") tx.importDirection = "";
+  normalizeTransactionAmountSign(tx);
+  if (previousCategory !== tx.category && tx.flowSource !== "user") {
+    tx.flowType = deriveTransactionFlowType(tx);
+    tx.flowReason = flowReasonFor(tx);
+  }
+  tx.needsReview = false;
+  tx.flags = (tx.flags || []).filter((flag) => flag !== "low_confidence" && flag !== "uncategorized");
+  tx.source = tx.source === "AI" ? tx.source : "User";
+  tx.confidence = 100;
+  return { tx, previousCategory, previousVendor };
 }
 
 function editTransactionSplits(tx) {
@@ -2315,6 +2342,7 @@ function renderReview() {
     <section class="panel">
       <h3>Manual review queue</h3>
       <p class="status-line">Low-confidence categories, uncategorized items, possible transfers, possible duplicates, new recurring expenses, and unusually high amounts appear here.</p>
+      ${reviewReasonFiltersHtml()}
       <div class="bulk-actions"><select id="bulkCategory"><option value="">Bulk category</option>${categoryOptions("")}</select><button id="bulkCategorize" class="btn btn-secondary" type="button">Apply to Selected</button></div>
       <div style="margin-top:1rem">${queue.length ? queue.map(reviewCard).join("") : `<div class="empty-state">No transactions currently require review.</div>`}</div>
     </section>
@@ -2323,11 +2351,35 @@ function renderReview() {
 }
 
 function reviewCard(tx) {
+  const reasonTags = reviewReasonsForTransaction(tx).map((reason) => `<span class="tag subtle">${escapeHtml(reviewReasonLabel(reason))}</span>`).join(" ");
   return `<article class="review-card panel" data-id="${tx.id}">
     <input type="checkbox" class="review-select" aria-label="Select transaction">
-    <div><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span> ${splitStatusTag(tx)}</p><p>${flowStatusHtml(tx)}</p>${splitReviewHtml(tx)}<p>${(tx.flags || []).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ")}</p><small class="muted">${escapeHtml(tx.flowReason || tx.reason || "Needs manual confirmation.")}</small></div>
+    <div><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span> ${splitStatusTag(tx)}</p><p>${flowStatusHtml(tx)}</p>${splitReviewHtml(tx)}<p>${reasonTags} ${(tx.flags || []).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ")}</p><small class="muted">${escapeHtml(tx.flowReason || tx.reason || "Needs manual confirmation.")}</small></div>
     <div class="review-actions"><select data-review-category>${categoryOptions(tx.category)}</select><label><input data-apply-rule type="checkbox"> Apply rule</label><button class="mini-btn" data-review="confirm" type="button">Confirm</button><button class="mini-btn" data-review="split" type="button">Split</button><button class="mini-btn" data-review="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-review="internal" type="button">Confirm Internal</button><button class="mini-btn" data-review="skip" type="button">Skip</button></div>
   </article>`;
+}
+
+function reviewReasonFiltersHtml() {
+  const selected = reviewReasonFilterSet();
+  const counts = reviewReasonCounts();
+  const buttons = REVIEW_REASON_DEFINITIONS.map((reason) => {
+    const count = counts.get(reason.key) || 0;
+    const active = selected.has(reason.key);
+    return `<button class="review-reason-filter ${active ? "active" : ""}" data-review-reason="${escapeAttr(reason.key)}" type="button" aria-pressed="${active}">${escapeHtml(reason.label)} <span>${count}</span></button>`;
+  }).join("");
+  return `<div class="review-reason-toolbar" aria-label="Review queue reason filters"><button class="review-reason-filter ${selected.size ? "" : "active"}" data-review-reason="all" type="button" aria-pressed="${selected.size ? "false" : "true"}">All <span>${reviewQueue(false).length}</span></button>${buttons}</div>`;
+}
+
+function bindReviewReasonFilters(root) {
+  root.querySelectorAll("[data-review-reason]").forEach((button) => button.addEventListener("click", () => {
+    const key = button.dataset.reviewReason;
+    const selected = reviewReasonFilterSet();
+    if (key === "all") selected.clear();
+    else if (selected.has(key)) selected.delete(key);
+    else selected.add(key);
+    state.filters.reviewReasons = Array.from(selected);
+    renderReview();
+  }));
 }
 
 function splitReviewHtml(tx) {
@@ -2338,6 +2390,7 @@ function splitReviewHtml(tx) {
 }
 
 function bindReviewActions(root) {
+  bindReviewReasonFilters(root);
   root.querySelectorAll("[data-review='confirm']").forEach((button) => button.addEventListener("click", () => {
     const card = button.closest("article");
     const tx = state.transactions.find((item) => item.id === card.dataset.id);
@@ -3081,9 +3134,47 @@ function filteredTransactions() {
   }).sort((a, b) => b.date.localeCompare(a.date));
 }
 
-function reviewQueue() {
+function reviewQueue(applyReasonFilters = true) {
   const recurringMerchants = new Set(state.recurring.filter((item) => item.status === "suggested").map((item) => item.merchant));
-  return state.transactions.filter((tx) => tx.needsReview || tx.reportingType === "review" || tx.splitStatus === "needs_split_review" || tx.category === "Uncategorized" || tx.flags?.length || recurringMerchants.has(tx.merchant)).sort((a, b) => b.date.localeCompare(a.date));
+  const selectedReasons = applyReasonFilters ? reviewReasonFilterSet() : new Set();
+  return state.transactions.filter((tx) => {
+    if (!(tx.needsReview || tx.reportingType === "review" || tx.splitStatus === "needs_split_review" || tx.category === "Uncategorized" || tx.flags?.length || recurringMerchants.has(tx.merchant))) return false;
+    if (!selectedReasons.size) return true;
+    const reasons = reviewReasonsForTransaction(tx, recurringMerchants);
+    return reasons.some((reason) => selectedReasons.has(reason));
+  }).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function reviewReasonFilterSet() {
+  return new Set(Array.isArray(state.filters.reviewReasons) ? state.filters.reviewReasons : []);
+}
+
+function reviewReasonCounts() {
+  const counts = new Map(REVIEW_REASON_DEFINITIONS.map((reason) => [reason.key, 0]));
+  const recurringMerchants = new Set(state.recurring.filter((item) => item.status === "suggested").map((item) => item.merchant));
+  reviewQueue(false).forEach((tx) => {
+    reviewReasonsForTransaction(tx, recurringMerchants).forEach((reason) => counts.set(reason, (counts.get(reason) || 0) + 1));
+  });
+  return counts;
+}
+
+function reviewReasonsForTransaction(tx, recurringMerchants = null) {
+  const reasons = [];
+  const flags = new Set(tx.flags || []);
+  if (tx.category === "Uncategorized" || flags.has("uncategorized")) reasons.push("uncategorized");
+  if (flags.has("low_confidence") || (tx.needsReview && tx.category !== "Uncategorized" && Number(tx.confidence || 0) < Number(state.profile.confidenceThreshold || 78))) reasons.push("low_confidence");
+  if (flags.has("possible_transfer") || tx.transferStatus === "unmatched" || tx.transferStatus === "ambiguous") reasons.push("possible_transfer");
+  if (flags.has("possible_duplicate")) reasons.push("possible_duplicate");
+  if ((recurringMerchants || new Set(state.recurring.filter((item) => item.status === "suggested").map((item) => item.merchant))).has(tx.merchant)) reasons.push("recurring");
+  if (flags.has("unusually_high_amount")) reasons.push("unusually_high_amount");
+  if (tx.splitStatus === "needs_split_review" || flags.has("split_review")) reasons.push("split_review");
+  if (tx.reportingType === "review") reasons.push("flow_review");
+  if (!reasons.length && (tx.needsReview || flags.size)) reasons.push("other");
+  return Array.from(new Set(reasons));
+}
+
+function reviewReasonLabel(key) {
+  return REVIEW_REASON_DEFINITIONS.find((reason) => reason.key === key)?.label || label(String(key).replace(/_/g, " "));
 }
 
 function detectRecurring(transactions) {

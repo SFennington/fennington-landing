@@ -688,6 +688,33 @@ td select {
   gap: 0.45rem;
 }
 
+.review-reason-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 1rem 0;
+}
+
+.review-reason-filter {
+  background: #fff;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 999px;
+  color: var(--brand);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0.48rem 0.75rem;
+}
+
+.review-reason-filter.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.review-reason-filter span {
+  opacity: 0.78;
+}
+
 .split-summary {
   background: rgba(239, 246, 255, 0.72);
   border: 1px solid rgba(191, 219, 254, 0.8);
@@ -2516,6 +2543,18 @@ summary.category-tree-summary::-webkit-details-marker {
   background: rgba(127, 29, 29, 0.32);
   border-color: rgba(248, 113, 113, 0.42);
   color: #fecaca;
+}
+
+.financial-dark .review-reason-filter {
+  background: rgba(15, 23, 42, 0.86);
+  border-color: rgba(96, 165, 250, 0.28);
+  color: #bfdbfe;
+}
+
+.financial-dark .review-reason-filter.active {
+  background: #60a5fa;
+  border-color: #60a5fa;
+  color: #0f172a;
 }
 
 .financial-dark input,
