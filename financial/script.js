@@ -2139,6 +2139,8 @@ function transactionRow(tx) {
   const confidence = Math.max(0, Math.min(100, Number(tx.confidence || 0)));
   const type = tx.type || typeForCategory(tx.category, tx.amount);
   const initial = escapeHtml((tx.merchant || tx.description || "?").trim().charAt(0).toUpperCase() || "?");
+  const vendor = transactionVendor(tx);
+  const vendorInput = shouldShowVendor(tx.merchant, vendor) ? `<input class="vendor-input" data-field="vendor" aria-label="Detected vendor" value="${escapeAttr(vendor)}" placeholder="Vendor">` : "";
   const source = tx.source || "Imported";
   const reviewTag = tx.needsReview ? `<span class="tag warn">Needs review</span>` : "";
   const flagTags = (tx.flags || []).slice(0, 3).map((flag) => `<span class="tag subtle">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join("");
@@ -2152,7 +2154,7 @@ function transactionRow(tx) {
         <span class="merchant-avatar" aria-hidden="true">${initial}</span>
         <div class="merchant-copy">
           <input data-field="merchant" aria-label="Normalized merchant" value="${escapeAttr(tx.merchant)}" placeholder="Merchant display name">
-          <input class="vendor-input" data-field="vendor" aria-label="Detected vendor" value="${escapeAttr(transactionVendor(tx))}" placeholder="Vendor">
+          ${vendorInput}
           <p>${escapeHtml(tx.description)}</p>
         </div>
       </div>
@@ -2170,6 +2172,10 @@ function transactionRow(tx) {
   <tr data-id="${escapeAttr(tx.id)}" class="tx-action-row ${tx.needsReview ? "needs-review" : ""}">
     <td class="table-action-cell" colspan="10"><div class="row-action-buttons"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Apply Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></div></td>
   </tr>`;
+}
+
+function shouldShowVendor(merchant, vendor) {
+  return Boolean(vendor) && normalizedRuleText(merchant) !== normalizedRuleText(vendor);
 }
 
 function splitStatusTag(tx) {
@@ -2328,8 +2334,9 @@ function saveTransactionRow(tr) {
   const previousCategory = tx.category;
   const previousVendor = transactionVendor(tx);
   const selectedType = tr.querySelector("[data-field='type']")?.value || "";
+  const hasVendorInput = Boolean(tr.querySelector("[data-field='vendor']"));
   tr.querySelectorAll("[data-field]").forEach((input) => { tx[input.dataset.field] = sanitize(input.value); });
-  tx.vendor = transactionVendor(tx);
+  tx.vendor = hasVendorInput ? transactionVendor(tx) : sanitize(tx.merchant || "");
   if (tx.category === "Income" || isTransferCategory(tx.category)) tx.type = typeForCategory(tx.category, tx.amount);
   if (selectedType === "income" || selectedType === "expense") tx.importDirection = "";
   normalizeTransactionAmountSign(tx);
