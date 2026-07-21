@@ -1367,6 +1367,39 @@ td select {
   width: 42%;
 }
 
+.ai-analysis-result {
+  border-radius: 18px;
+  margin-top: 0.9rem;
+  padding: 0.85rem;
+}
+
+.ai-analysis-result strong {
+  display: block;
+}
+
+.ai-analysis-result p {
+  font-weight: 650;
+  margin: 0.2rem 0 0;
+}
+
+.ai-analysis-result.good {
+  background: rgba(22, 163, 74, 0.09);
+  border: 1px solid rgba(22, 163, 74, 0.22);
+  color: #166534;
+}
+
+.ai-analysis-result.warn {
+  background: rgba(217, 119, 6, 0.1);
+  border: 1px solid rgba(217, 119, 6, 0.24);
+  color: #92400e;
+}
+
+.ai-analysis-result.danger {
+  background: rgba(220, 38, 38, 0.09);
+  border: 1px solid rgba(220, 38, 38, 0.24);
+  color: #991b1b;
+}
+
 @keyframes aiSpin {
   to { transform: rotate(360deg); }
 }

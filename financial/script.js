@@ -120,6 +120,7 @@ let themeMode = storedThemePreference();
 let aiAnalysisRunning = false;
 const persistedCollectionSnapshots = new Map();
 let aiAnalysisStatus = null;
+let aiAnalysisLastResult = null;
 let aiAnalysisStatusTimer = null;
 
 applyTheme();
@@ -1619,6 +1620,7 @@ function aiAnalysisPanelHtml(rows) {
   const limit = aiBatchLimit();
   const webLookup = state.filters.aiWebLookup === true;
   const status = aiAnalysisStatusHtml();
+  const result = aiAnalysisLastResultHtml();
   return `
     <div class="ai-analysis-card" aria-label="AI transaction analysis controls">
       <div class="ai-analysis-heading">
@@ -1639,6 +1641,7 @@ function aiAnalysisPanelHtml(rows) {
       </div>
       <div id="aiAnalysisEstimate" class="ai-analysis-estimate">${aiAnalysisEstimateHtml(plan)}</div>
       ${status}
+      ${result}
     </div>
   `;
 }
@@ -1693,6 +1696,23 @@ function aiAnalysisStatusHtml() {
       <div class="ai-progress" aria-label="AI transaction analysis in progress"><span></span></div>
     </div>
   `;
+}
+
+function aiAnalysisLastResultHtml() {
+  if (!aiAnalysisLastResult) return "";
+  const tone = aiAnalysisLastResult.type === "error" ? "danger" : aiAnalysisLastResult.type === "running" ? "warn" : "good";
+  return `
+    <div id="aiAnalysisLastResult" class="ai-analysis-result ${tone}" role="status" aria-live="polite">
+      <strong>${escapeHtml(aiAnalysisLastResult.title)}</strong>
+      <p>${escapeHtml(aiAnalysisLastResult.message)}</p>
+    </div>
+  `;
+}
+
+function setAiAnalysisLastResult(type, title, message) {
+  aiAnalysisLastResult = { type, title, message };
+  const target = document.getElementById("aiAnalysisLastResult");
+  if (target) target.outerHTML = aiAnalysisLastResultHtml();
 }
 
 function setAiAnalysisStatus(message, detail) {
@@ -1930,6 +1950,7 @@ function ruleRerunSnapshot(tx) {
 
 async function runAiAnalyzeTransactions(root) {
   if (aiAnalysisRunning) return;
+  if (!currentUser) return showStatus("Sign in before running AI transaction analysis.");
   const vendorRuleUpdates = applyVendorRulesToTransactions(state.transactions, state);
   const plan = buildAiAnalysisPlan(filteredTransactions());
   if (!plan.groups.length) return showStatus("No transactions match the selected AI analysis scope.");
@@ -1954,6 +1975,7 @@ async function runAiAnalyzeTransactions(root) {
     message: "AI transaction analysis is running",
     detail: `${plan.groups.length} unique transaction patterns are being sent to ${AI_ANALYSIS_MODEL}. Keep this tab open.`
   };
+  setAiAnalysisLastResult("running", "AI analysis started", `${plan.groups.length} unique transaction patterns are being sent. This can take up to two minutes.`);
   aiAnalysisStatusTimer = window.setInterval(() => {
     const target = document.getElementById("aiAnalysisStatus");
     if (target) target.outerHTML = aiAnalysisStatusHtml();
@@ -2012,11 +2034,13 @@ async function runAiAnalyzeTransactions(root) {
     });
     const actualCost = body.cost?.totalCost ? formatUsd(body.cost.totalCost) : formatUsd(plan.estimatedCost);
     clearAiAnalysisStatus();
+    finalStatusMessage = `${aiAnalysisSummaryText(summary, actualCost)} Model: ${body.model || AI_ANALYSIS_MODEL}.`;
+    setAiAnalysisLastResult("success", "AI analysis complete", finalStatusMessage);
     renderAll();
     uiRestored = true;
-    finalStatusMessage = `${aiAnalysisSummaryText(summary, actualCost)} Model: ${body.model || AI_ANALYSIS_MODEL}.`;
   } catch (error) {
     finalStatusMessage = `AI analysis failed: ${error.message}`;
+    setAiAnalysisLastResult("error", "AI analysis failed", error.message || "The analyzer stopped before returning results.");
   } finally {
     clearAiAnalysisStatus();
     if (!uiRestored) renderTransactions();
