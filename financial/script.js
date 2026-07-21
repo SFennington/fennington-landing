@@ -98,6 +98,8 @@ let categoryFilterTerm = "";
 let categorySortMode = "name-asc";
 let themeMode = storedThemePreference();
 let aiAnalysisRunning = false;
+let aiAnalysisStatus = null;
+let aiAnalysisStatusTimer = null;
 
 applyTheme();
 renderFeatures();
@@ -973,6 +975,7 @@ function aiAnalysisPanelHtml(rows) {
   const scope = state.filters.aiScope || "review";
   const limit = aiBatchLimit();
   const webLookup = state.filters.aiWebLookup === true;
+  const status = aiAnalysisStatusHtml();
   return `
     <div class="ai-analysis-card" aria-label="AI transaction analysis controls">
       <div class="ai-analysis-heading">
@@ -989,6 +992,7 @@ function aiAnalysisPanelHtml(rows) {
         <label class="field checkbox-field ai-web-lookup"><span>Use web lookup fallback</span><input id="aiWebLookup" type="checkbox" ${webLookup ? "checked" : ""}></label>
       </div>
       <div id="aiAnalysisEstimate" class="ai-analysis-estimate">${aiAnalysisEstimateHtml(plan)}</div>
+      ${status}
     </div>
   `;
 }
@@ -1023,6 +1027,40 @@ function aiAnalysisEstimateHtml(plan) {
     </div>
     <p>Estimated tokens: ${plan.estimatedInputTokens.toLocaleString()} input, ${plan.estimatedOutputTokens.toLocaleString()} output. Estimated AI cost: <strong>${formatUsd(plan.estimatedCost)}</strong>. ${webLookupText}</p>
   `;
+}
+
+function aiAnalysisStatusHtml() {
+  if (!aiAnalysisRunning || !aiAnalysisStatus) return "";
+  const elapsed = Math.max(0, Math.round((Date.now() - aiAnalysisStatus.startedAt) / 1000));
+  return `
+    <div id="aiAnalysisStatus" class="ai-analysis-status" role="status" aria-live="polite">
+      <div class="ai-status-row">
+        <span class="ai-status-spinner" aria-hidden="true"></span>
+        <div>
+          <strong>${escapeHtml(aiAnalysisStatus.message)}</strong>
+          <p>${escapeHtml(aiAnalysisStatus.detail)} Elapsed: ${elapsed}s.</p>
+        </div>
+      </div>
+      <div class="ai-progress" aria-label="AI transaction analysis in progress"><span></span></div>
+    </div>
+  `;
+}
+
+function setAiAnalysisStatus(message, detail) {
+  if (!aiAnalysisStatus) aiAnalysisStatus = { startedAt: Date.now(), message, detail };
+  aiAnalysisStatus.message = message;
+  aiAnalysisStatus.detail = detail;
+  const target = document.getElementById("aiAnalysisStatus");
+  if (target) target.outerHTML = aiAnalysisStatusHtml();
+}
+
+function clearAiAnalysisStatus() {
+  aiAnalysisRunning = false;
+  aiAnalysisStatus = null;
+  if (aiAnalysisStatusTimer) {
+    window.clearInterval(aiAnalysisStatusTimer);
+    aiAnalysisStatusTimer = null;
+  }
 }
 
 function buildAiAnalysisPlan(rows = filteredTransactions()) {
@@ -1131,10 +1169,23 @@ async function runAiAnalyzeTransactions(root) {
   ].join("\n");
   if (!window.confirm(confirmation)) return;
   aiAnalysisRunning = true;
-  root.querySelector("#aiAnalyzeButton")?.setAttribute("disabled", "disabled");
-  showStatus(`Running AI analysis for ${plan.groups.length} unique transaction patterns...`);
+  aiAnalysisStatus = {
+    startedAt: Date.now(),
+    message: "AI transaction analysis is running",
+    detail: `${plan.groups.length} unique transaction patterns are being sent to ${AI_ANALYSIS_MODEL}. Keep this tab open.`
+  };
+  aiAnalysisStatusTimer = window.setInterval(() => {
+    const target = document.getElementById("aiAnalysisStatus");
+    if (target) target.outerHTML = aiAnalysisStatusHtml();
+  }, 1000);
+  renderTransactions();
+  showStatus(`Running AI analysis for ${plan.groups.length} unique transaction patterns... Keep this tab open.`);
+  let finalStatusMessage = "";
+  let uiRestored = false;
   try {
+    setAiAnalysisStatus("Authorizing AI analysis", "Getting your Firebase session token before sending transactions.");
     const token = await currentUser.getIdToken();
+    setAiAnalysisStatus("Waiting for AI categorization", `${plan.groups.length} unique transaction patterns are processing on the server.`);
     const response = await fetch("/api/financial/categorize", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
@@ -1147,6 +1198,7 @@ async function runAiAnalyzeTransactions(root) {
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || "AI analysis failed.");
+    setAiAnalysisStatus("Applying AI results", "Updating matching transactions in this workspace.");
     const groupsById = new Map(plan.groups.map((group) => [group.representative.id, group]));
     let updatedCount = 0;
     (body.results || []).forEach((result) => {
@@ -1157,15 +1209,19 @@ async function runAiAnalyzeTransactions(root) {
         updatedCount += 1;
       });
     });
-    renderAll();
     const actualCost = body.cost?.totalCost ? formatUsd(body.cost.totalCost) : formatUsd(plan.estimatedCost);
-    showStatus(`AI analyzed ${updatedCount} transactions using ${body.model || AI_ANALYSIS_MODEL}. Estimated/actual cost: ${actualCost}.`);
+    clearAiAnalysisStatus();
+    renderAll();
+    uiRestored = true;
+    finalStatusMessage = `AI analyzed ${updatedCount} transactions using ${body.model || AI_ANALYSIS_MODEL}. Estimated/actual cost: ${actualCost}.`;
   } catch (error) {
-    showStatus(`AI analysis failed: ${error.message}`);
+    finalStatusMessage = `AI analysis failed: ${error.message}`;
   } finally {
-    aiAnalysisRunning = false;
-    const button = root.querySelector("#aiAnalyzeButton");
+    clearAiAnalysisStatus();
+    if (!uiRestored) renderTransactions();
+    const button = document.getElementById("aiAnalyzeButton") || root.querySelector("#aiAnalyzeButton");
     if (button) button.disabled = !buildAiAnalysisPlan(filteredTransactions()).groups.length;
+    if (finalStatusMessage) showStatus(finalStatusMessage);
   }
 }
 

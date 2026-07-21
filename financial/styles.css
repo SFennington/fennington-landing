@@ -1239,6 +1239,75 @@ td select {
   margin: 0.85rem 0 0;
 }
 
+.ai-analysis-status {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 18px;
+  margin-top: 0.9rem;
+  overflow: hidden;
+  padding: 0.85rem;
+}
+
+.ai-status-row {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.ai-status-row strong {
+  color: var(--financial-ink);
+  display: block;
+}
+
+.ai-status-row p {
+  color: var(--muted);
+  font-weight: 650;
+  margin: 0.2rem 0 0;
+}
+
+.ai-status-spinner {
+  animation: aiSpin 0.9s linear infinite;
+  border: 3px solid rgba(37, 99, 235, 0.18);
+  border-top-color: #2563eb;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  height: 28px;
+  width: 28px;
+}
+
+.ai-progress {
+  background: rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  height: 10px;
+  margin-top: 0.85rem;
+  overflow: hidden;
+}
+
+.ai-progress span {
+  animation: aiProgress 1.4s ease-in-out infinite;
+  background: linear-gradient(90deg, #2563eb, #06b6d4, #7c3aed);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  width: 42%;
+}
+
+@keyframes aiSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes aiProgress {
+  0% { transform: translateX(-105%); }
+  100% { transform: translateX(245%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-status-spinner,
+  .ai-progress span {
+    animation: none;
+  }
+}
+
 .filters-header {
   margin-bottom: 0.85rem;
 }
@@ -2647,6 +2716,28 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-dark .ai-analysis-estimate {
   background: rgba(2, 6, 23, 0.52);
   border-color: rgba(148, 163, 184, 0.24);
+}
+
+.financial-dark .ai-analysis-status {
+  background: rgba(37, 99, 235, 0.16);
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+.financial-dark .ai-status-row strong {
+  color: #f8fafc;
+}
+
+.financial-dark .ai-status-row p {
+  color: #b6c3d8;
+}
+
+.financial-dark .ai-status-spinner {
+  border-color: rgba(147, 197, 253, 0.2);
+  border-top-color: #93c5fd;
+}
+
+.financial-dark .ai-progress {
+  background: rgba(15, 23, 42, 0.72);
 }
 
 .financial-dark .ai-estimate-grid span {
