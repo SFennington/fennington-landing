@@ -79,6 +79,7 @@ const BUILT_IN_RULES = [
 const config = window.FENNINGTON_FIREBASE_CONFIG || {};
 const hasConfig = config.apiKey && !String(config.apiKey).startsWith("REPLACE_");
 const sharedWorkspaceConfig = config.sharedWorkspace || {};
+const financialApiBaseUrl = String(config.financialApiBaseUrl || config.apiBaseUrl || (window.location.hostname === "fennington.com" ? "https://fennington-financial.web.app/api" : "")).replace(/\/+$/, "");
 const sharedWorkspaceId = sanitizeDocId(sharedWorkspaceConfig.id || config.financialWorkspaceId || "fennington-household");
 const shouldAutoMigrateLegacyProfile = sharedWorkspaceConfig.autoMigrateLegacy === true;
 const profileCollectionNames = ["accounts", "imports", "mappings", "categories", "transactions", "merchantMappings", "rules", "recurring", "overtimeScenarios", "monthlySummaries"];
@@ -448,6 +449,11 @@ async function commitProfileCollectionWrites(profileRef, deletedCategoryIds) {
     if (snapshot === null) deletePersistedCollectionSnapshot(name, id);
     else markPersistedCollectionSnapshot(name, { id, __snapshot: snapshot });
   });
+}
+
+function financialApiUrl(path) {
+  const normalizedPath = String(path || "").startsWith("/") ? String(path || "") : `/${path || ""}`;
+  return financialApiBaseUrl ? `${financialApiBaseUrl}${normalizedPath}` : normalizedPath;
 }
 
 function markPersistedCollectionSnapshot(name, item) {
@@ -1988,7 +1994,7 @@ async function runAiAnalyzeTransactions(root) {
     setAiAnalysisStatus("Authorizing AI analysis", "Getting your Firebase session token before sending transactions.");
     const token = await currentUser.getIdToken();
     setAiAnalysisStatus("Waiting for AI categorization", `${plan.groups.length} unique transaction patterns are processing on the server.`);
-    const response = await fetch("/api/financial/categorize", {
+    const response = await fetch(financialApiUrl("/financial/categorize"), {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -3158,7 +3164,7 @@ async function categorizeWithServer(imported) {
   if (!candidates.length) return;
   try {
     const token = await currentUser.getIdToken();
-    const response = await fetch("/api/financial/categorize", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ transactions: candidates, categories: state.categories.map((cat) => cat.name) }) });
+    const response = await fetch(financialApiUrl("/financial/categorize"), { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ transactions: candidates, categories: state.categories.map((cat) => cat.name) }) });
     const body = await response.json();
     if (!response.ok) throw new Error(body.error || "AI categorization failed.");
     (body.results || []).forEach((result) => {
