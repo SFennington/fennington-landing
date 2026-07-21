@@ -1845,6 +1845,18 @@ summary.category-tree-summary::-webkit-details-marker {
   padding: 1rem;
 }
 
+.category-tree-branch > .category-drilldown,
+.category-tree-leaf > .category-drilldown {
+  margin: 0 0.85rem 0.85rem 3rem;
+}
+
+@media (max-width: 760px) {
+  .category-tree-branch > .category-drilldown,
+  .category-tree-leaf > .category-drilldown {
+    margin-left: 0.85rem;
+  }
+}
+
 .category-drilldown h4 {
   color: var(--financial-ink);
   margin: 1rem 0 0.5rem;
