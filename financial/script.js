@@ -2365,9 +2365,9 @@ function reviewReasonFiltersHtml() {
   const buttons = REVIEW_REASON_DEFINITIONS.map((reason) => {
     const count = counts.get(reason.key) || 0;
     const active = selected.has(reason.key);
-    return `<button class="review-reason-filter ${active ? "active" : ""}" data-review-reason="${escapeAttr(reason.key)}" type="button" aria-pressed="${active}">${escapeHtml(reason.label)} <span>${count}</span></button>`;
+    return `<button class="review-reason-filter ${active ? "active" : ""}" data-review-reason="${escapeAttr(reason.key)}" type="button" aria-pressed="${active}">${escapeHtml(reason.label)} <span>(${count})</span></button>`;
   }).join("");
-  return `<div class="review-reason-toolbar" aria-label="Review queue reason filters"><button class="review-reason-filter ${selected.size ? "" : "active"}" data-review-reason="all" type="button" aria-pressed="${selected.size ? "false" : "true"}">All <span>${reviewQueue(false).length}</span></button>${buttons}</div>`;
+  return `<div class="review-reason-toolbar" aria-label="Review queue reason filters"><button class="review-reason-filter ${selected.size ? "" : "active"}" data-review-reason="all" type="button" aria-pressed="${selected.size ? "false" : "true"}">All <span>(${reviewQueue(false).length})</span></button>${buttons}</div>`;
 }
 
 function bindReviewReasonFilters(root) {
