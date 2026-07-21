@@ -502,6 +502,7 @@ async function ensureSharedWorkspace() {
 
 function renderAll(options = {}) {
   ensureDefaultCategories();
+  normalizeTransactionAmountSigns();
   normalizeCreditCardPaymentSigns();
   const previousRecurring = new Map(state.recurring.map((item) => [item.id, item]));
   state.recurring = detectRecurring(state.transactions).map((item) => ({ ...item, status: previousRecurring.get(item.id)?.status || item.status }));
@@ -596,6 +597,27 @@ function normalizeCreditCardPaymentSigns() {
       setCategory(tx, ACCOUNT_CREDIT_CATEGORY, Math.max(90, tx.confidence || 0), tx.source || "Payment sign normalization", "Credit-card payments are tracked as positive credits.", "transfer");
     }
   });
+}
+
+function normalizeTransactionAmountSigns() {
+  state.transactions.forEach((tx) => normalizeTransactionAmountSign(tx));
+}
+
+function normalizeTransactionAmountSign(tx) {
+  const amount = Number(tx.amount || 0);
+  if (!Number.isFinite(amount) || amount === 0) return;
+  if (tx.importDirection === "credit") {
+    tx.amount = Math.abs(amount);
+    if (tx.type === "expense") tx.type = typeForCategory(tx.category, tx.amount);
+    return;
+  }
+  if (tx.importDirection === "debit") {
+    tx.amount = -Math.abs(amount);
+    if (tx.type === "income" && tx.category !== "Income") tx.type = typeForCategory(tx.category, tx.amount);
+    return;
+  }
+  if (tx.type === "income") tx.amount = Math.abs(amount);
+  if (tx.type === "expense") tx.amount = -Math.abs(amount);
 }
 
 function renderDashboard() {
@@ -876,6 +898,7 @@ function accountsTable(rows) {
 function renderTransactions() {
   const tab = document.getElementById("transactionsTab");
   const rows = filteredTransactions();
+  const activeFilter = captureActiveFilter();
   tab.innerHTML = `
     <section class="panel transactions-panel">
       <div class="section-heading transaction-heading">
@@ -911,6 +934,30 @@ function renderTransactions() {
   bindImportControls(tab);
   bindFilters();
   bindTransactionTable(tab);
+  restoreActiveFilter(activeFilter);
+}
+
+function captureActiveFilter() {
+  const el = document.activeElement;
+  if (!el?.id?.startsWith("filter")) return null;
+  return {
+    id: el.id,
+    selectionStart: typeof el.selectionStart === "number" ? el.selectionStart : null,
+    selectionEnd: typeof el.selectionEnd === "number" ? el.selectionEnd : null,
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+  };
+}
+
+function restoreActiveFilter(activeFilter) {
+  if (!activeFilter) return;
+  const el = document.getElementById(activeFilter.id);
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  if (activeFilter.selectionStart !== null && typeof el.setSelectionRange === "function") {
+    el.setSelectionRange(activeFilter.selectionStart, activeFilter.selectionEnd);
+  }
+  window.scrollTo(activeFilter.scrollX, activeFilter.scrollY);
 }
 
 function filtersHtml() {
@@ -1058,8 +1105,11 @@ function bindTransactionTable(root) {
     const tr = button.closest("tr");
     const tx = state.transactions.find((item) => item.id === tr.dataset.id);
     const previousCategory = tx.category;
+    const selectedType = tr.querySelector("[data-field='type']")?.value || "";
     tr.querySelectorAll("[data-field]").forEach((input) => { tx[input.dataset.field] = sanitize(input.value); });
     if (tx.category === "Income" || isTransferCategory(tx.category)) tx.type = typeForCategory(tx.category, tx.amount);
+    if (selectedType === "income" || selectedType === "expense") tx.importDirection = "";
+    normalizeTransactionAmountSign(tx);
     tx.needsReview = false;
     tx.flags = (tx.flags || []).filter((flag) => flag !== "low_confidence" && flag !== "uncategorized");
     tx.source = tx.source === "AI" ? tx.source : "User";
@@ -1583,10 +1633,12 @@ function normalizeImportRow(row) {
   let amount = 0;
   let importDirection = "";
   const hasSplitAmountColumns = Boolean(map.debit || map.credit);
-  if (hasSplitAmountColumns) amount = Math.abs(parseMoney(row[map.credit])) - Math.abs(parseMoney(row[map.debit]));
+  const creditAmount = map.credit ? parseMoney(row[map.credit]) : 0;
+  const debitAmount = map.debit ? parseMoney(row[map.debit]) : 0;
+  if (hasSplitAmountColumns) amount = Math.abs(creditAmount) - Math.abs(debitAmount);
   else amount = parseMoney(row[map.amount]);
-  if (map.credit && Math.abs(parseMoney(row[map.credit])) > 0 && amount > 0) importDirection = "credit";
-  if (map.debit && Math.abs(parseMoney(row[map.debit])) > 0 && amount < 0) importDirection = "debit";
+  if (Math.abs(creditAmount) > 0) importDirection = "credit";
+  else if (Math.abs(debitAmount) > 0) importDirection = "debit";
   if (!hasSplitAmountColumns && pendingImport.expensesPositive && amount > 0 && !/credit|deposit|income|payroll/i.test(row[map.type] || row[map.description] || "")) amount = -amount;
   return { date: normalizeDate(row[map.date]), description: sanitize(row[map.description]), merchant: normalizeMerchant(row[map.description]), amount: round(amount), importDirection, accountName: sanitize(row[map.account] || row.__sourceAccountName || pendingImport.accountName), sourceFileName: row.__sourceFileName || pendingImport.fileName };
 }
