@@ -118,6 +118,7 @@ let categoryFilterTerm = "";
 let categorySortMode = "name-asc";
 let themeMode = storedThemePreference();
 let aiAnalysisRunning = false;
+const persistedCollectionSnapshots = new Map();
 let aiAnalysisStatus = null;
 let aiAnalysisStatusTimer = null;
 
@@ -292,6 +293,7 @@ async function loadUserState() {
   }));
   await purgeDemoWorkspaceArtifacts(profileRef, loadedDocs);
   state.categories = uniqueCategoriesById(state.categories);
+  resetPersistedCollectionSnapshots();
   const incomeSnap = await getDoc(doc(profileRef, "settings", "income"));
   if (incomeSnap.exists()) state.incomeSettings = { ...state.incomeSettings, ...incomeSnap.data() };
   if (!state.categories.length) state.categories = defaultCategories();
@@ -413,6 +415,7 @@ async function commitProfileCollectionWrites(profileRef, deletedCategoryIds) {
   let batch = writeBatch(db);
   let writeCount = 0;
   const commits = [];
+  const persistedUpdates = [];
 
   const queueWrite = (write) => {
     write(batch);
@@ -425,16 +428,54 @@ async function commitProfileCollectionWrites(profileRef, deletedCategoryIds) {
   };
 
   profileCollectionNames.forEach((name) => {
+    const collectionSnapshots = persistedCollectionSnapshots.get(name) || new Map();
     state[name].forEach((item) => {
+      const snapshot = persistedCollectionSnapshot(item);
+      if (collectionSnapshots.get(item.id) === snapshot) return;
       queueWrite((currentBatch) => currentBatch.set(doc(profileRef, name, item.id), { ...item, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true }));
+      persistedUpdates.push({ name, id: item.id, snapshot });
     });
   });
   deletedCategoryIds.forEach((id) => {
     queueWrite((currentBatch) => currentBatch.delete(doc(profileRef, "categories", id)));
+    persistedUpdates.push({ name: "categories", id, snapshot: null });
   });
 
   if (writeCount) commits.push(batch.commit());
   await Promise.all(commits);
+  persistedUpdates.forEach(({ name, id, snapshot }) => {
+    if (snapshot === null) deletePersistedCollectionSnapshot(name, id);
+    else markPersistedCollectionSnapshot(name, { id, __snapshot: snapshot });
+  });
+}
+
+function markPersistedCollectionSnapshot(name, item) {
+  if (!persistedCollectionSnapshots.has(name)) persistedCollectionSnapshots.set(name, new Map());
+  persistedCollectionSnapshots.get(name).set(item.id, item.__snapshot || persistedCollectionSnapshot(item));
+}
+
+function deletePersistedCollectionSnapshot(name, id) {
+  if (!persistedCollectionSnapshots.has(name)) persistedCollectionSnapshots.set(name, new Map());
+  persistedCollectionSnapshots.get(name).delete(id);
+}
+
+function resetPersistedCollectionSnapshots() {
+  persistedCollectionSnapshots.clear();
+  profileCollectionNames.forEach((name) => {
+    persistedCollectionSnapshots.set(name, new Map(state[name].map((item) => [item.id, persistedCollectionSnapshot(item)])));
+  });
+}
+
+function persistedCollectionSnapshot(item) {
+  return stableStringify({ ...item, workspaceId: sharedWorkspaceId, updatedAt: undefined });
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).filter((key) => value[key] !== undefined).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 async function saveCategoryState(affectedTransactions = []) {
@@ -456,6 +497,9 @@ async function saveCategoryState(affectedTransactions = []) {
       batchWrites.push((batch) => batch.set(doc(profileRef, "transactions", tx.id), { ...tx, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true }));
     });
     await commitBatchWrites(batchWrites);
+    state.categories.forEach((item) => markPersistedCollectionSnapshot("categories", item));
+    affectedTransactions.forEach((tx) => markPersistedCollectionSnapshot("transactions", tx));
+    deletedCategoryIds.forEach((id) => deletePersistedCollectionSnapshot("categories", id));
     deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
     showStatus("Categories saved.");
   } catch (error) {
