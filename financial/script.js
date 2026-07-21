@@ -1102,7 +1102,11 @@ function bindReviewActions(root) {
     tx.confidence = 100;
     tx.source = "User";
     tx.flags = [];
-    if (card.querySelector("[data-apply-rule]").checked && tx.merchant) state.rules.push({ id: uniqueId("rule"), type: "merchant", match: tx.merchant, category: tx.category, createdAt: new Date().toISOString() });
+    if (card.querySelector("[data-apply-rule]").checked) {
+      const updatedCount = createReviewRuleAndApplyToMatches(tx);
+      if (updatedCount > 1) showStatus(`Rule created and ${updatedCount} matching transactions were categorized.`);
+      else showStatus("Rule created for future matching transactions.");
+    }
     renderAll();
   }));
   root.querySelectorAll("[data-review='skip']").forEach((button) => button.addEventListener("click", () => {
@@ -1125,6 +1129,31 @@ function bindReviewActions(root) {
     });
     renderAll();
   });
+}
+
+function createReviewRuleAndApplyToMatches(sourceTx) {
+  const match = sanitize(sourceTx.description || sourceTx.merchant);
+  if (!match) return 0;
+  const rule = { id: uniqueId("rule"), type: sourceTx.description ? "description" : "merchant", match, category: sourceTx.category, createdAt: new Date().toISOString() };
+  const hasRule = state.rules.some((item) => item.type === rule.type && item.match.toLowerCase() === rule.match.toLowerCase() && item.category === rule.category);
+  if (!hasRule) state.rules.push(rule);
+  const sourceDescription = normalizedRuleText(sourceTx.description);
+  const sourceMerchant = normalizedRuleText(sourceTx.merchant);
+  const matches = state.transactions.filter((tx) => sourceDescription ? normalizedRuleText(tx.description) === sourceDescription : normalizedRuleText(tx.merchant) === sourceMerchant);
+  matches.forEach((tx) => {
+    tx.category = sourceTx.category;
+    tx.type = typeForCategory(sourceTx.category, tx.amount);
+    tx.needsReview = false;
+    tx.confidence = 100;
+    tx.source = "User rule";
+    tx.reason = "Matched a user-created categorization rule.";
+    tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized"].includes(flag));
+  });
+  return matches.length;
+}
+
+function normalizedRuleText(value) {
+  return sanitize(value).toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function renderReports() {
