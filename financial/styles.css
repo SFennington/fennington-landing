@@ -1910,12 +1910,15 @@ summary.category-tree-summary::-webkit-details-marker {
 
 .compact-category-row {
   display: grid;
-  grid-template-columns: auto minmax(140px, 1fr) minmax(130px, 0.85fr) auto auto auto auto;
+  grid-template-columns: auto minmax(120px, 0.72fr) minmax(120px, 0.64fr) minmax(90px, 0.38fr) auto auto auto auto;
   padding: 0.65rem;
 }
 
 .compact-category-row .tree-count {
   margin-left: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

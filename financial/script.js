@@ -77,6 +77,7 @@ let mode = "signed-out";
 let pendingImport = null;
 let saveTimer = null;
 let state = emptyState();
+const pendingCategoryDeletes = new Set();
 const categoryExpandedIds = new Set();
 let categoryExpansionInitialized = false;
 let selectedCategoryReportId = "";
@@ -93,7 +94,7 @@ bindStaticActions();
 
 function emptyState() {
   return {
-    profile: { id: "default", name: "Household Profile", confidenceThreshold: 78, createdAt: new Date().toISOString() },
+    profile: { id: "default", name: "Household Profile", confidenceThreshold: 78, deletedDefaultCategories: [], deletedDefaultCategoryIds: [], createdAt: new Date().toISOString() },
     accounts: [],
     imports: [],
     mappings: [],
@@ -352,10 +353,13 @@ async function saveState() {
     await setDoc(profileRef, { ...stripId(state.profile), userId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true });
     await setDoc(doc(profileRef, "settings", "income"), { ...state.incomeSettings, userId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true });
     const batch = writeBatch(db);
+    const deletedCategoryIds = Array.from(pendingCategoryDeletes);
     ["accounts", "imports", "mappings", "categories", "transactions", "merchantMappings", "rules", "recurring", "overtimeScenarios", "monthlySummaries"].forEach((name) => {
       state[name].forEach((item) => batch.set(doc(profileRef, name, item.id), { ...item, userId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true }));
     });
+    deletedCategoryIds.forEach((id) => batch.delete(doc(profileRef, "categories", id)));
     await batch.commit();
+    deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
   }, 450);
 }
 
@@ -376,7 +380,10 @@ function renderAll() {
 }
 
 function ensureDefaultCategories() {
+  const deletedDefaults = new Set(state.profile.deletedDefaultCategories || []);
+  const deletedDefaultIds = new Set(state.profile.deletedDefaultCategoryIds || []);
   DEFAULT_CATEGORIES.forEach((name) => {
+    if (deletedDefaults.has(name) || deletedDefaultIds.has(slug(name))) return;
     if (!state.categories.some((cat) => cat.name.toLowerCase() === name.toLowerCase())) {
       state.categories.push({ id: slug(name), name, system: true });
     }
@@ -385,6 +392,8 @@ function ensureDefaultCategories() {
     const parent = state.categories.find((cat) => cat.name.toLowerCase() === item.parent.toLowerCase() && !cat.parentId);
     if (!parent) return;
     const name = subcategoryName(parent.name, item.name);
+    const defaultSubcategoryId = slug(`${item.parent}-${item.name}`);
+    if (deletedDefaults.has(name) || deletedDefaultIds.has(defaultSubcategoryId)) return;
     const category = state.categories.find((cat) => cat.name.toLowerCase() === name.toLowerCase());
     if (category) category.parentId = category.parentId || parent.id;
     else state.categories.push({ id: slug(name), name, parentId: parent.id, system: true });
@@ -988,12 +997,30 @@ function renderCategories() {
     const node = button.closest("[data-category-id]");
     const category = state.categories.find((item) => item.id === node.dataset.categoryId);
     if (!category) return;
-    if (category.system) return showStatus("Default categories can be renamed or merged but not deleted in this first draft.");
     if (childCategories(category.id).length) return showStatus("Move or delete nested categories before deleting this parent category.");
     if (!window.confirm(`Delete ${category.name}? Transactions will become Uncategorized.`)) return;
     state.transactions.filter((tx) => tx.category === category.name).forEach((tx) => { tx.category = "Uncategorized"; tx.needsReview = true; });
+    if (category.system) {
+      state.profile.deletedDefaultCategories = Array.from(new Set([...(state.profile.deletedDefaultCategories || []), category.name]));
+      state.profile.deletedDefaultCategoryIds = Array.from(new Set([...(state.profile.deletedDefaultCategoryIds || []), category.id]));
+    }
+    pendingCategoryDeletes.add(category.id);
     state.categories = state.categories.filter((item) => item.id !== category.id);
     categoryExpandedIds.delete(category.id);
+    renderAll();
+  }));
+  tab.querySelectorAll("[data-cat-add-child]").forEach((button) => button.addEventListener("click", () => {
+    const parentId = button.closest("[data-category-id]")?.dataset.categoryId;
+    const parent = state.categories.find((cat) => cat.id === parentId);
+    if (!parent) return;
+    const baseName = sanitize(window.prompt(`Add subcategory under ${categoryBaseName(parent)}:`, "") || "");
+    const name = categoryPathName(parent, baseName);
+    if (!name) return;
+    if (state.categories.some((cat) => cat.name.toLowerCase() === name.toLowerCase())) return showStatus("That category already exists.");
+    const newCategory = { id: uniqueId("cat"), name, parentId, system: false };
+    state.categories.push(newCategory);
+    selectedCategoryReportId = newCategory.id;
+    categoryExpandedIds.add(parentId);
     renderAll();
   }));
   document.getElementById("addCategory").addEventListener("click", () => {
@@ -1057,7 +1084,7 @@ function categoryTreeLeaf(category, depth = 0) {
 function categoryInlineControls(category, childCount = 0) {
   const parent = parentCategory(category);
   const meta = childCount ? `${childCount} ${childCount === 1 ? "child" : "children"}` : parent ? categoryBreadcrumb(parent) : category.system ? "Default" : "Top level";
-  return `<input class="category-inline-input" data-cat-name aria-label="Category" value="${escapeAttr(categoryBaseName(category))}" title="${escapeAttr(category.name)}"><select class="category-parent-select" data-cat-parent aria-label="Parent category"><option value="">Top-level category</option>${parentCategoryOptions(category.parentId || "", category.id)}</select><span class="tree-count">${escapeHtml(meta)}</span><button class="mini-btn" data-cat-save type="button">Save</button><button class="mini-btn" data-cat-report="${escapeAttr(category.id)}" type="button">Totals</button><button class="mini-btn danger" data-cat-delete type="button">Delete</button>`;
+  return `<input class="category-inline-input" data-cat-name aria-label="Category" value="${escapeAttr(categoryBaseName(category))}" title="${escapeAttr(category.name)}"><select class="category-parent-select" data-cat-parent aria-label="Parent category"><option value="">Top-level category</option>${parentCategoryOptions(category.parentId || "", category.id)}</select><span class="tree-count">${escapeHtml(meta)}</span><button class="mini-btn" data-cat-save type="button">Save</button><button class="mini-btn" data-cat-report="${escapeAttr(category.id)}" type="button">Totals</button><button class="mini-btn" data-cat-add-child type="button">+ Add Subcategory</button><button class="mini-btn danger" data-cat-delete type="button">Delete</button>`;
 }
 
 function createProfile() {
