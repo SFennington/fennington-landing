@@ -535,10 +535,11 @@ function ensureDefaultCategories() {
   const deletedDefaults = new Set(state.profile.deletedDefaultCategories || []);
   const deletedDefaultIds = new Set(state.profile.deletedDefaultCategoryIds || []);
   state.categories = uniqueCategoriesById(state.categories);
+  removeRecreatedDefaultCategoryDuplicates();
   DEFAULT_CATEGORIES.forEach((name) => {
     const defaultId = slug(name);
     if (deletedDefaults.has(name) || deletedDefaultIds.has(defaultId)) return;
-    if (!state.categories.some((cat) => cat.id === defaultId || cat.name.toLowerCase() === name.toLowerCase())) {
+    if (!state.categories.some((cat) => cat.id === defaultId || cat.name.toLowerCase() === name.toLowerCase() || (cat.system && categoryBaseName(cat).toLowerCase() === name.toLowerCase()))) {
       state.categories.push({ id: uniqueId("cat"), name, parentId: "", system: true });
     }
   });
@@ -548,9 +549,29 @@ function ensureDefaultCategories() {
     const name = subcategoryName(parent.name, item.name);
     const defaultSubcategoryId = slug(`${item.parent}-${item.name}`);
     if (deletedDefaults.has(name) || deletedDefaultIds.has(defaultSubcategoryId)) return;
-    const category = state.categories.find((cat) => cat.id === defaultSubcategoryId || cat.name.toLowerCase() === name.toLowerCase());
+    const category = state.categories.find((cat) => cat.id === defaultSubcategoryId || cat.name.toLowerCase() === name.toLowerCase() || (cat.system && categoryBaseName(cat).toLowerCase() === item.name.toLowerCase()));
     if (category) category.parentId = category.parentId || parent.id;
     else state.categories.push({ id: uniqueId("cat"), name, parentId: parent.id, system: true });
+  });
+}
+
+function removeRecreatedDefaultCategoryDuplicates() {
+  const defaultNames = new Set([...DEFAULT_CATEGORIES, ...DEFAULT_SUBCATEGORIES.map((item) => item.name)].map((name) => name.toLowerCase()));
+  const movedDefaults = state.categories.filter((cat) => cat.system && cat.parentId && defaultNames.has(categoryBaseName(cat).toLowerCase()));
+  if (!movedDefaults.length) return;
+  const movedBaseNames = new Set(movedDefaults.map((cat) => categoryBaseName(cat).toLowerCase()));
+  state.categories = state.categories.filter((cat) => {
+    if (!cat.system) return true;
+    const baseName = categoryBaseName(cat).toLowerCase();
+    const isRecreatedTopLevel = !cat.parentId && movedBaseNames.has(baseName);
+    const isRecreatedDefaultSubcategory = DEFAULT_SUBCATEGORIES.some((item) => {
+      if (item.name.toLowerCase() !== baseName) return false;
+      const parent = parentCategory(cat);
+      return parent?.name.toLowerCase() === item.parent.toLowerCase() && movedDefaults.some((moved) => moved.id !== cat.id && categoryBaseName(moved).toLowerCase() === baseName);
+    });
+    if (!isRecreatedTopLevel && !isRecreatedDefaultSubcategory) return true;
+    pendingCategoryDeletes.add(cat.id);
+    return false;
   });
 }
 
