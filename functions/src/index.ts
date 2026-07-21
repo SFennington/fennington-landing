@@ -1,4 +1,6 @@
-import * as admin from "firebase-admin";
+import { initializeApp } from "firebase-admin/app";
+import { getAuth, type DecodedIdToken } from "firebase-admin/auth";
+import { FieldValue, getFirestore, type DocumentSnapshot, type Query } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { defineSecret } from "firebase-functions/params";
 import { onRequest } from "firebase-functions/v2/https";
@@ -11,10 +13,10 @@ import path from "path";
 
 loadLocalEnvFile();
 
-admin.initializeApp();
+initializeApp();
 
-const db = admin.firestore();
-const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
+const db = getFirestore();
+const serverTimestamp = FieldValue.serverTimestamp;
 const openAiApiKey = defineSecret("OPENAI_API_KEY");
 
 const REGION = "us-central1";
@@ -596,12 +598,12 @@ async function getAdminEmails(): Promise<string[]> {
   return Array.from(new Set([...envEmails, ...configEmails]));
 }
 
-async function requireAdmin(req: express.Request): Promise<admin.auth.DecodedIdToken> {
+async function requireAdmin(req: express.Request): Promise<DecodedIdToken> {
   const authHeader = req.header("authorization") || "";
   const match = authHeader.match(/^Bearer (.+)$/);
   if (!match) throw Object.assign(new Error("Missing bearer token."), { statusCode: 401 });
 
-  const decoded = await admin.auth().verifyIdToken(match[1]);
+  const decoded = await getAuth().verifyIdToken(match[1]);
   const emails = await getAdminEmails();
   const email = safeString(decoded.email).toLowerCase();
   if (!decoded.admin && (!email || !emails.includes(email))) {
@@ -610,11 +612,11 @@ async function requireAdmin(req: express.Request): Promise<admin.auth.DecodedIdT
   return decoded;
 }
 
-async function requireUser(req: express.Request): Promise<admin.auth.DecodedIdToken> {
+async function requireUser(req: express.Request): Promise<DecodedIdToken> {
   const authHeader = req.header("authorization") || "";
   const match = authHeader.match(/^Bearer (.+)$/);
   if (!match) throw Object.assign(new Error("Missing bearer token."), { statusCode: 401 });
-  return admin.auth().verifyIdToken(match[1]);
+  return getAuth().verifyIdToken(match[1]);
 }
 
 function normalizeFinancialMerchant(description: string): string {
@@ -805,7 +807,7 @@ function asyncRoute(handler: (req: express.Request, res: express.Response) => Pr
   };
 }
 
-async function getSiteBySlug(slug: string): Promise<FirebaseFirestore.DocumentSnapshot | null> {
+async function getSiteBySlug(slug: string): Promise<DocumentSnapshot | null> {
   const snapshot = await db.collection("sites").where("slug", "==", slug).limit(1).get();
   return snapshot.empty ? null : snapshot.docs[0];
 }
@@ -873,7 +875,7 @@ apiApp.get("/health", (_req, res) => {
 
 apiApp.get("/admin/leads", asyncRoute(async (req, res) => {
   await requireAdmin(req);
-  let query: FirebaseFirestore.Query = db.collection("leads");
+  let query: Query = db.collection("leads");
   if (req.query.market) query = query.where("market", "==", safeString(req.query.market));
   if (req.query.trade) query = query.where("trade", "==", safeString(req.query.trade));
   if (req.query.status) query = query.where("outreachStatus", "==", safeString(req.query.status));
