@@ -560,11 +560,34 @@ function renderTransactions() {
   const tab = document.getElementById("transactionsTab");
   const rows = filteredTransactions();
   tab.innerHTML = `
-    <section class="panel">
-      <h3>Transaction table</h3>
+    <section class="panel transactions-panel">
+      <div class="section-heading transaction-heading">
+        <div>
+          <p class="eyebrow">Transaction center</p>
+          <h3>Transactions</h3>
+          <p class="status-line">Review, recategorize, and annotate imported activity without losing sight of cash flow.</p>
+        </div>
+        <div class="transaction-count-pill" aria-label="Filtered transaction count">
+          <strong>${rows.length}</strong>
+          <span>of ${state.transactions.length} shown</span>
+        </div>
+      </div>
+      ${transactionInsightsHtml(rows)}
       ${filtersHtml()}
-      <div class="status-line">Showing ${rows.length} of ${state.transactions.length} transactions.</div>
-      ${rows.length ? transactionTable(rows) : `<div class="empty-state">No transactions match the current filters.</div>`}
+      <div class="transaction-table-shell">
+        <div class="transaction-table-header">
+          <div>
+            <span class="eyebrow">Ledger</span>
+            <strong>Transaction activity</strong>
+            <p>Inline edits save back to the profile, rules, and review queue.</p>
+          </div>
+          <div class="table-legend" aria-label="Amount legend">
+            <span><i class="legend-dot income"></i>Income / credits</span>
+            <span><i class="legend-dot expense"></i>Spending</span>
+          </div>
+        </div>
+        ${rows.length ? transactionTable(rows) : `<div class="empty-state">No transactions match the current filters.</div>`}
+      </div>
     </section>
   `;
   bindFilters();
@@ -574,17 +597,27 @@ function renderTransactions() {
 function filtersHtml() {
   const cats = categoryOptions(state.filters.category || "");
   const accounts = [`<option value="">All accounts</option>`, ...state.accounts.map((a) => `<option value="${a.id}" ${state.filters.account === a.id ? "selected" : ""}>${escapeHtml(a.name)}</option>`)].join("");
+  const activeFilterCount = ["search", "start", "end", "month", "account", "category", "merchant", "type"].filter((key) => Boolean(state.filters[key])).length + (state.filters.hideCredits ? 1 : 0);
   return `
-    <div class="filters">
-      <div class="field"><label for="filterSearch">Search</label><input id="filterSearch" value="${escapeAttr(state.filters.search || "")}" placeholder="Merchant or description"></div>
-      <div class="field"><label for="filterStart">Date range start</label><input id="filterStart" type="date" value="${escapeAttr(state.filters.start || "")}"></div>
-      <div class="field"><label for="filterEnd">Date range end</label><input id="filterEnd" type="date" value="${escapeAttr(state.filters.end || "")}"></div>
-      <div class="field"><label for="filterMonth">Month</label><select id="filterMonth"><option value="">All months</option>${monthOptions().map((m) => `<option value="${m}" ${state.filters.month === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
-      <div class="field"><label for="filterAccount">Account</label><select id="filterAccount">${accounts}</select></div>
-      <div class="field"><label for="filterCategory">Category</label><select id="filterCategory"><option value="">All categories</option>${cats}</select></div>
-      <div class="field"><label for="filterMerchant">Merchant</label><input id="filterMerchant" value="${escapeAttr(state.filters.merchant || "")}" placeholder="Merchant"></div>
-      <div class="field"><label for="filterType">Type</label><select id="filterType"><option value="">Any</option>${["income", "expense", "transfer", "uncategorized", "review"].map((t) => `<option value="${t}" ${state.filters.type === t ? "selected" : ""}>${label(t)}</option>`).join("")}</select></div>
-      <label class="field checkbox-field"><span>Hide Credits from Transactions</span><input id="filterHideCredits" type="checkbox" ${state.filters.hideCredits ? "checked" : ""}></label>
+    <div class="filters-card">
+      <div class="filters-header">
+        <div>
+          <span class="eyebrow">Filters</span>
+          <strong>Refine the ledger</strong>
+        </div>
+        <span class="chip">${activeFilterCount || "No"} active ${activeFilterCount === 1 ? "filter" : "filters"}</span>
+      </div>
+      <div class="filters">
+        <div class="field search-field"><label for="filterSearch">Search</label><input id="filterSearch" value="${escapeAttr(state.filters.search || "")}" placeholder="Merchant or description"></div>
+        <div class="field"><label for="filterStart">Date range start</label><input id="filterStart" type="date" value="${escapeAttr(state.filters.start || "")}"></div>
+        <div class="field"><label for="filterEnd">Date range end</label><input id="filterEnd" type="date" value="${escapeAttr(state.filters.end || "")}"></div>
+        <div class="field"><label for="filterMonth">Month</label><select id="filterMonth"><option value="">All months</option>${monthOptions().map((m) => `<option value="${m}" ${state.filters.month === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
+        <div class="field"><label for="filterAccount">Account</label><select id="filterAccount">${accounts}</select></div>
+        <div class="field"><label for="filterCategory">Category</label><select id="filterCategory"><option value="">All categories</option>${cats}</select></div>
+        <div class="field"><label for="filterMerchant">Merchant</label><input id="filterMerchant" value="${escapeAttr(state.filters.merchant || "")}" placeholder="Merchant"></div>
+        <div class="field"><label for="filterType">Type</label><select id="filterType"><option value="">Any</option>${["income", "expense", "transfer", "uncategorized", "review"].map((t) => `<option value="${t}" ${state.filters.type === t ? "selected" : ""}>${label(t)}</option>`).join("")}</select></div>
+        <label class="field checkbox-field"><span>Hide Credits from Transactions</span><input id="filterHideCredits" type="checkbox" ${state.filters.hideCredits ? "checked" : ""}></label>
+      </div>
     </div>
   `;
 }
@@ -608,23 +641,97 @@ function bindFilters() {
 }
 
 function transactionTable(rows) {
-  return `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Original description</th><th>Normalized merchant</th><th>Account</th><th>Amount</th><th>Category</th><th>Confidence</th><th>Source</th><th>Recurring</th><th>Notes</th><th>Action</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Match</th><th>Recurring</th><th>Type</th><th>Notes</th><th>Action</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
 }
 
 function transactionRow(tx) {
-  return `<tr data-id="${tx.id}">
-    <td><input data-field="date" type="date" value="${escapeAttr(tx.date)}"></td>
-    <td>${escapeHtml(tx.description)}${tx.needsReview ? ` <span class="tag warn">Needs Review</span>` : ""}</td>
-    <td><input data-field="merchant" value="${escapeAttr(tx.merchant)}"></td>
-    <td>${escapeHtml(accountName(tx.accountId))}</td>
-    <td class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</td>
-    <td><select data-field="category">${categoryOptions(tx.category)}</select></td>
-    <td>${Number(tx.confidence || 0)}</td>
-    <td>${escapeHtml(tx.source || "")}</td>
-    <td><select data-field="recurringStatus"><option ${tx.recurringStatus === "none" ? "selected" : ""}>none</option><option ${tx.recurringStatus === "suggested" ? "selected" : ""}>suggested</option><option ${tx.recurringStatus === "confirmed" ? "selected" : ""}>confirmed</option><option ${tx.recurringStatus === "rejected" ? "selected" : ""}>rejected</option></select></td>
-    <td><input data-field="notes" value="${escapeAttr(tx.notes || "")}"></td>
-    <td><select data-field="type"><option value="expense" ${tx.type === "expense" ? "selected" : ""}>Expense</option><option value="income" ${tx.type === "income" ? "selected" : ""}>Income</option><option value="transfer" ${tx.type === "transfer" ? "selected" : ""}>Transfer</option></select><br><button class="mini-btn" data-action="save-row" type="button">Save</button></td>
+  const confidence = Math.max(0, Math.min(100, Number(tx.confidence || 0)));
+  const type = tx.type || typeForCategory(tx.category, tx.amount);
+  const initial = escapeHtml((tx.merchant || tx.description || "?").trim().charAt(0).toUpperCase() || "?");
+  const source = tx.source || "Imported";
+  const reviewTag = tx.needsReview ? `<span class="tag warn">Needs review</span>` : "";
+  const flagTags = (tx.flags || []).slice(0, 3).map((flag) => `<span class="tag subtle">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join("");
+  const recurringOptions = ["none", "suggested", "confirmed", "rejected"].map((status) => `<option value="${status}" ${tx.recurringStatus === status ? "selected" : ""}>${label(status)}</option>`).join("");
+  const typeOptions = ["expense", "income", "transfer"].map((option) => `<option value="${option}" ${type === option ? "selected" : ""}>${label(option)}</option>`).join("");
+  return `<tr data-id="${escapeAttr(tx.id)}" class="tx-row ${tx.needsReview ? "needs-review" : ""}">
+    <td class="date-cell"><input class="date-input" data-field="date" aria-label="Transaction date" type="date" value="${escapeAttr(tx.date)}"></td>
+    <td class="tx-description-cell">
+      <div class="merchant-control">
+        <span class="merchant-avatar" aria-hidden="true">${initial}</span>
+        <div class="merchant-copy">
+          <input data-field="merchant" aria-label="Normalized merchant" value="${escapeAttr(tx.merchant)}">
+          <p>${escapeHtml(tx.description)}</p>
+        </div>
+      </div>
+      <div class="tx-tag-row">${reviewTag}${flagTags}</div>
+    </td>
+    <td><span class="account-pill">${escapeHtml(accountName(tx.accountId))}</span></td>
+    <td class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}"><span>${money(tx.amount)}</span><small>${tx.amount >= 0 ? "Money in" : "Money out"}</small></td>
+    <td><select class="category-select" data-field="category" aria-label="Transaction category">${categoryOptions(tx.category)}</select></td>
+    <td class="confidence-cell"><div class="confidence-meter" aria-label="${confidence} percent confidence"><span style="width:${confidence}%"></span></div><div class="confidence-meta"><strong>${confidence}%</strong><small>${escapeHtml(source)}</small></div></td>
+    <td><select class="recurring-select" data-field="recurringStatus" aria-label="Recurring status">${recurringOptions}</select></td>
+    <td><select class="type-select type-${escapeAttr(type)}" data-field="type" aria-label="Transaction type">${typeOptions}</select></td>
+    <td><input class="note-input" data-field="notes" aria-label="Transaction notes" value="${escapeAttr(tx.notes || "")}" placeholder="Add note"></td>
+    <td class="table-action-cell"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button></td>
   </tr>`;
+}
+
+function transactionInsightsHtml(rows) {
+  const expenses = rows.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const income = rows.filter((tx) => tx.type === "income" && !isTransferCategory(tx.category)).reduce((sum, tx) => sum + Math.max(0, tx.amount), 0);
+  const transfers = rows.filter((tx) => tx.type === "transfer" || isTransferCategory(tx.category) || isAccountCredit(tx)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const expenseCount = rows.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).length;
+  const reviewCount = rows.filter((tx) => tx.needsReview || tx.category === "Uncategorized").length;
+  const net = income - expenses;
+  const averageExpense = expenseCount ? expenses / expenseCount : 0;
+  const maxFlow = Math.max(income, expenses, 1);
+  const incomeWidth = Math.max(5, (income / maxFlow) * 100);
+  const expenseWidth = Math.max(5, (expenses / maxFlow) * 100);
+  const expenseShare = rows.length ? Math.round((expenseCount / rows.length) * 100) : 0;
+  const topCategories = topSpendingCategories(rows, 5);
+  return `
+    <div class="transaction-insights" aria-label="Filtered transaction insights">
+      <article class="insight-card hero-insight ${net >= 0 ? "good" : "danger"}">
+        <span>Filtered net cash flow</span>
+        <strong>${money(net)}</strong>
+        <p>Income ${money(income)} versus spending ${money(expenses)}</p>
+        <div class="cashflow-mini-chart" aria-hidden="true">
+          <span class="cashflow-bar income" style="width:${incomeWidth}%"></span>
+          <span class="cashflow-bar expense" style="width:${expenseWidth}%"></span>
+        </div>
+      </article>
+      <article class="insight-card">
+        <span>Spending mix</span>
+        <div class="donut-stat" style="--expense-share:${expenseShare}%"><strong>${expenseShare}%</strong></div>
+        <p>${expenseCount} expenses · average ${money(averageExpense)}</p>
+      </article>
+      <article class="insight-card">
+        <span>Needs attention</span>
+        <strong>${reviewCount}</strong>
+        <p>${reviewCount ? "Review uncategorized or low-confidence activity." : "All filtered rows are currently categorized."}</p>
+        <span class="tag ${reviewCount ? "warn" : "good"}">${reviewCount ? "Review queue" : "Clean ledger"}</span>
+      </article>
+      <article class="insight-card category-snapshot">
+        <span>Top categories</span>
+        ${topCategoryMiniList(topCategories)}
+        <p class="muted">Transfers in this view total ${money(transfers)}.</p>
+      </article>
+    </div>
+  `;
+}
+
+function topSpendingCategories(rows, limit = 5) {
+  const totals = {};
+  rows.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).forEach((tx) => {
+    totals[tx.category || "Uncategorized"] = (totals[tx.category || "Uncategorized"] || 0) + Math.abs(tx.amount);
+  });
+  return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, limit);
+}
+
+function topCategoryMiniList(entries) {
+  if (!entries.length) return `<div class="empty-state compact">No spending categories in this filtered view.</div>`;
+  const max = Math.max(...entries.map((entry) => entry[1]), 1);
+  return `<div class="mini-category-list">${entries.map(([name, value]) => `<div class="mini-category-row"><div><span>${escapeHtml(name)}</span><strong>${money(value)}</strong></div><em><i style="width:${Math.max(7, (value / max) * 100)}%"></i></em></div>`).join("")}</div>`;
 }
 
 function bindTransactionTable(root) {

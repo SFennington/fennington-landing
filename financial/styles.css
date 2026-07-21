@@ -839,3 +839,793 @@ td select {
     border-radius: 18px;
   }
 }
+
+
+/* ========================================
+   FINANCIAL APP WIDE LAYOUT + MODERN LEDGER
+   ======================================== */
+:root {
+  --finance-purple: #7c3aed;
+  --finance-pink: #ec4899;
+  --finance-mint: #10b981;
+  --finance-amber: #f59e0b;
+  --finance-card-shadow: 0 24px 80px rgba(15, 23, 42, 0.12);
+}
+
+.financial-app-page {
+  background:
+    radial-gradient(circle at 10% 10%, rgba(34, 211, 238, 0.18), transparent 28rem),
+    radial-gradient(circle at 92% 16%, rgba(124, 58, 237, 0.12), transparent 30rem),
+    linear-gradient(180deg, #f8fbff 0%, #f3f7ff 46%, #fbfdff 100%);
+}
+
+.financial-app-section .app-container {
+  max-width: min(1920px, calc(100vw - 32px));
+  padding-inline: clamp(12px, 1.7vw, 32px);
+  width: 100%;
+}
+
+.financial-app-page .financial-app-section {
+  padding-block: clamp(34px, 4vw, 72px);
+}
+
+.financial-app {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.88)),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.14), transparent 24rem);
+  border-color: rgba(148, 163, 184, 0.28);
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+  position: relative;
+}
+
+.financial-app::before {
+  background:
+    radial-gradient(circle, rgba(6, 182, 212, 0.16), transparent 64%),
+    linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(124, 58, 237, 0.08));
+  border-radius: 999px;
+  content: "";
+  height: 360px;
+  pointer-events: none;
+  position: absolute;
+  right: -150px;
+  top: -190px;
+  width: 360px;
+}
+
+.financial-app > * {
+  position: relative;
+  z-index: 1;
+}
+
+.app-topbar {
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.82), rgba(255, 255, 255, 0.9)),
+    radial-gradient(circle at 0 0, rgba(6, 182, 212, 0.18), transparent 18rem);
+  border: 1px solid rgba(191, 219, 254, 0.72);
+  border-radius: 24px;
+  padding: clamp(1rem, 2.2vw, 1.5rem);
+}
+
+.app-tabs {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(37, 99, 235, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.app-tabs button.active {
+  background: linear-gradient(135deg, #ffffff, #eff6ff);
+  border-color: rgba(37, 99, 235, 0.22);
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.16);
+}
+
+.panel,
+.chart-card,
+.summary-card,
+.recurring-card,
+.category-card {
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+}
+
+.section-heading,
+.filters-header,
+.transaction-table-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.section-heading h3,
+.transaction-table-header strong,
+.filters-header strong {
+  color: var(--financial-ink);
+  letter-spacing: -0.03em;
+}
+
+.transactions-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.9)),
+    radial-gradient(circle at 8% 0, rgba(6, 182, 212, 0.12), transparent 22rem);
+  padding: clamp(1rem, 2vw, 1.45rem);
+}
+
+.transaction-heading .status-line,
+.transaction-table-header p {
+  margin: 0.3rem 0 0;
+}
+
+.transaction-count-pill {
+  align-items: center;
+  background: linear-gradient(135deg, #0f172a, #1e3a8a 58%, #155e75);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 22px;
+  box-shadow: 0 18px 40px rgba(30, 64, 175, 0.22);
+  color: #fff;
+  display: inline-flex;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  white-space: nowrap;
+}
+
+.transaction-count-pill strong {
+  font-size: clamp(1.35rem, 2vw, 1.9rem);
+  letter-spacing: -0.04em;
+}
+
+.transaction-count-pill span {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.transaction-insights {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(260px, 1.25fr) repeat(3, minmax(210px, 1fr));
+  margin: 1.2rem 0;
+}
+
+.insight-card {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9)),
+    radial-gradient(circle at 100% 0, rgba(37, 99, 235, 0.09), transparent 12rem);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 24px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+  min-height: 168px;
+  overflow: hidden;
+  padding: 1rem;
+  position: relative;
+}
+
+.insight-card::after {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.13), rgba(6, 182, 212, 0.08));
+  border-radius: 999px;
+  content: "";
+  height: 110px;
+  position: absolute;
+  right: -46px;
+  top: -52px;
+  width: 110px;
+}
+
+.insight-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.insight-card span:first-child,
+.filters-header .eyebrow,
+.transaction-table-header .eyebrow {
+  color: #64748b;
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+.insight-card strong {
+  color: var(--financial-ink);
+  display: block;
+  font-size: clamp(1.55rem, 2.7vw, 2.35rem);
+  letter-spacing: -0.05em;
+  line-height: 1.05;
+}
+
+.insight-card p {
+  color: #64748b;
+  font-weight: 650;
+  margin: 0.65rem 0 0;
+}
+
+.hero-insight {
+  background:
+    radial-gradient(circle at 92% 12%, rgba(34, 211, 238, 0.36), transparent 12rem),
+    linear-gradient(135deg, #111827 0%, #1d4ed8 48%, #0e7490 100%);
+  color: #fff;
+}
+
+.hero-insight strong,
+.hero-insight p,
+.hero-insight span:first-child {
+  color: #fff;
+}
+
+.hero-insight p {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.cashflow-mini-chart {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.cashflow-bar {
+  border-radius: 999px;
+  display: block;
+  height: 10px;
+  min-width: 26px;
+}
+
+.cashflow-bar.income {
+  background: linear-gradient(90deg, #34d399, #a7f3d0);
+}
+
+.cashflow-bar.expense {
+  background: linear-gradient(90deg, #fb7185, #f97316);
+}
+
+.donut-stat {
+  align-items: center;
+  background: conic-gradient(#ef4444 0 var(--expense-share), #dbeafe var(--expense-share) 100%);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 86px;
+  justify-content: center;
+  margin-top: 0.35rem;
+  position: relative;
+  width: 86px;
+}
+
+.donut-stat::after {
+  background: #fff;
+  border-radius: inherit;
+  content: "";
+  inset: 11px;
+  position: absolute;
+}
+
+.donut-stat strong {
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  position: relative;
+  z-index: 1;
+}
+
+.mini-category-list {
+  display: grid;
+  gap: 0.58rem;
+  margin-top: 0.6rem;
+}
+
+.mini-category-row {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.mini-category-row div {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.mini-category-row span {
+  color: var(--financial-ink);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin: 0;
+  text-transform: none;
+}
+
+.mini-category-row strong {
+  color: #334155;
+  font-size: 0.9rem;
+  letter-spacing: -0.01em;
+}
+
+.mini-category-row em {
+  background: #e2e8f0;
+  border-radius: 999px;
+  display: block;
+  height: 7px;
+  overflow: hidden;
+}
+
+.mini-category-row i {
+  background: linear-gradient(90deg, var(--finance-purple), var(--accent));
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
+.empty-state.compact {
+  padding: 1rem;
+  text-align: left;
+}
+
+.filters-card {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.74));
+  border: 1px solid rgba(191, 219, 254, 0.7);
+  border-radius: 24px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 16px 40px rgba(37, 99, 235, 0.08);
+  margin: 1.1rem 0;
+  padding: 1rem;
+}
+
+.filters-header {
+  margin-bottom: 0.85rem;
+}
+
+.filters-header strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.filters-card .chip {
+  background: #dbeafe;
+  color: #1e40af;
+  white-space: nowrap;
+}
+
+.filters {
+  align-items: end;
+  grid-template-columns: minmax(260px, 1.35fr) repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.filters .search-field {
+  grid-column: span 2;
+}
+
+.field input,
+.field select,
+.field textarea {
+  background-color: rgba(255, 255, 255, 0.96);
+  border-color: rgba(148, 163, 184, 0.45);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: rgba(37, 99, 235, 0.72);
+  transform: translateY(-1px);
+}
+
+.checkbox-field {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 16px;
+  min-height: 44px;
+  padding: 0.5rem 0.7rem;
+}
+
+.checkbox-field span {
+  color: #334155;
+  font-weight: 750;
+}
+
+.transaction-table-shell {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 26px;
+  box-shadow: var(--finance-card-shadow);
+  overflow: hidden;
+}
+
+.transaction-table-header {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 64, 175, 0.92)),
+    radial-gradient(circle at 100% 0, rgba(6, 182, 212, 0.32), transparent 15rem);
+  color: #fff;
+  padding: 1rem clamp(1rem, 2vw, 1.25rem);
+}
+
+.transaction-table-header strong {
+  color: #fff;
+  display: block;
+  font-size: 1.25rem;
+}
+
+.transaction-table-header p,
+.transaction-table-header .eyebrow {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.table-legend {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.table-legend span {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.83rem;
+  font-weight: 800;
+  gap: 0.4rem;
+  padding: 0.42rem 0.7rem;
+}
+
+.legend-dot {
+  border-radius: 999px;
+  display: inline-block;
+  height: 0.62rem;
+  width: 0.62rem;
+}
+
+.legend-dot.income {
+  background: #34d399;
+}
+
+.legend-dot.expense {
+  background: #fb7185;
+}
+
+.table-wrap.transaction-table-wrap {
+  border: 0;
+  border-radius: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  max-height: min(72vh, 780px);
+  overflow: auto;
+}
+
+.transaction-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 1360px;
+}
+
+.transaction-table thead th {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+  color: #475569;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  padding: 0.9rem 0.85rem;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.transaction-table th,
+.transaction-table td {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+  padding: 0.82rem 0.85rem;
+  vertical-align: middle;
+}
+
+.transaction-table tbody tr {
+  background: rgba(255, 255, 255, 0.96);
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.transaction-table tbody tr:nth-child(odd) {
+  background: rgba(248, 250, 252, 0.84);
+}
+
+.transaction-table tbody tr:hover {
+  background: #eff6ff;
+  box-shadow: inset 4px 0 0 rgba(37, 99, 235, 0.54);
+}
+
+.transaction-table tbody tr.needs-review {
+  box-shadow: inset 4px 0 0 var(--finance-amber);
+}
+
+.transaction-table td input,
+.transaction-table td select {
+  border: 1px solid rgba(203, 213, 225, 0.86);
+  border-radius: 12px;
+  color: #0f172a;
+  font-size: 0.92rem;
+  min-height: 38px;
+  min-width: 0;
+  padding: 0.52rem 0.62rem;
+}
+
+.transaction-table td select {
+  background-color: #fff;
+}
+
+.date-cell {
+  width: 148px;
+}
+
+.date-input {
+  min-width: 130px !important;
+}
+
+.tx-description-cell {
+  min-width: 340px;
+  width: 31%;
+}
+
+.merchant-control {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.merchant-avatar {
+  align-items: center;
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
+  border-radius: 15px;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.18);
+  color: #fff;
+  display: inline-flex;
+  flex: 0 0 40px;
+  font-weight: 900;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.merchant-copy {
+  min-width: 0;
+  width: 100%;
+}
+
+.merchant-copy input {
+  background: rgba(255, 255, 255, 0.86);
+  font-weight: 800;
+  width: 100%;
+}
+
+.merchant-copy p {
+  color: #64748b;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  margin: 0.38rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.tx-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+  min-height: 0.2rem;
+}
+
+.tag.subtle {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.account-pill {
+  background: linear-gradient(135deg, #eef2ff, #ecfeff);
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  border-radius: 999px;
+  color: #334155;
+  display: inline-flex;
+  font-size: 0.86rem;
+  font-weight: 800;
+  max-width: 190px;
+  padding: 0.42rem 0.65rem;
+}
+
+.amount-cell span {
+  display: block;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.amount-cell small {
+  color: #64748b;
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 750;
+  margin-top: 0.18rem;
+}
+
+.category-select {
+  min-width: 196px !important;
+}
+
+.recurring-select,
+.type-select {
+  min-width: 132px !important;
+}
+
+.note-input {
+  min-width: 185px !important;
+}
+
+.confidence-cell {
+  min-width: 138px;
+}
+
+.confidence-meter {
+  background: #e2e8f0;
+  border-radius: 999px;
+  height: 9px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.confidence-meter span {
+  background: linear-gradient(90deg, #8b5cf6, #06b6d4, #10b981);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
+.confidence-meta {
+  align-items: center;
+  display: flex;
+  gap: 0.45rem;
+  justify-content: space-between;
+  margin-top: 0.4rem;
+}
+
+.confidence-meta strong {
+  color: #334155;
+  font-size: 0.88rem;
+}
+
+.confidence-meta small {
+  color: #64748b;
+  font-weight: 750;
+  max-width: 78px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-action-cell,
+.transaction-table th:last-child {
+  position: sticky;
+  right: 0;
+}
+
+.table-action-cell {
+  background: inherit;
+  box-shadow: -18px 0 24px rgba(248, 250, 252, 0.82);
+  z-index: 2;
+}
+
+.transaction-table th:last-child {
+  box-shadow: -18px 0 24px rgba(226, 232, 240, 0.72);
+  z-index: 4;
+}
+
+.save-row-btn {
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
+  border: 0;
+  color: #fff;
+  min-width: 76px;
+}
+
+.save-row-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8, #0891b2);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 1280px) {
+  .transaction-insights {
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .financial-app-section .app-container {
+    max-width: calc(100vw - 20px);
+    padding-inline: 10px;
+  }
+
+  .section-heading,
+  .filters-header,
+  .transaction-table-header {
+    display: block;
+  }
+
+  .transaction-count-pill,
+  .table-legend {
+    margin-top: 0.9rem;
+  }
+
+  .transaction-insights {
+    grid-template-columns: 1fr;
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .filters .search-field {
+    grid-column: auto;
+  }
+
+  .transaction-table {
+    min-width: 1180px;
+  }
+
+  .table-wrap.transaction-table-wrap {
+    max-height: 72vh;
+  }
+}
+
+
+/* Modernize dashboard/report cards and bar charts to match the ledger treatment. */
+.summary-card,
+.chart-card {
+  overflow: hidden;
+  position: relative;
+}
+
+.summary-card::after,
+.chart-card::after {
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.12), transparent 68%);
+  border-radius: 999px;
+  content: "";
+  height: 130px;
+  pointer-events: none;
+  position: absolute;
+  right: -58px;
+  top: -68px;
+  width: 130px;
+}
+
+.summary-card.good {
+  background: linear-gradient(145deg, rgba(236, 253, 245, 0.98), rgba(255, 255, 255, 0.94));
+}
+
+.summary-card.warn {
+  background: linear-gradient(145deg, rgba(255, 251, 235, 0.98), rgba(255, 255, 255, 0.94));
+}
+
+.summary-card.danger {
+  background: linear-gradient(145deg, rgba(254, 242, 242, 0.98), rgba(255, 255, 255, 0.94));
+}
+
+.summary-card > *,
+.chart-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.bar-row {
+  background: rgba(248, 250, 252, 0.78);
+  border: 1px solid rgba(226, 232, 240, 0.82);
+  border-radius: 16px;
+  padding: 0.72rem;
+}
+
+.bar-label {
+  color: #334155;
+  font-size: 0.92rem;
+}
+
+.bar-track {
+  background: #dbeafe;
+  height: 10px;
+}
+
+.bar-fill {
+  background: linear-gradient(90deg, #2563eb, #7c3aed 55%, #06b6d4);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
+}
