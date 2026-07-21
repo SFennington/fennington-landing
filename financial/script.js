@@ -14,6 +14,9 @@ const DEFAULT_SUBCATEGORIES = [
 ];
 
 const ACCOUNT_CREDIT_CATEGORY = "Credits to the Account";
+const DEMO_IMPORT_ID = "demo-import";
+const DEMO_ACCOUNT_IDS = new Set(["checking-main", "checking-side", "credit-card"]);
+const DEMO_RECURRING_IDS = new Set(["sunrise-apartments-monthly", "city-electric-monthly", "netflix-monthly"]);
 
 const FEATURES = [
   "Automatic transaction categorization",
@@ -60,9 +63,7 @@ const els = {
   signInButton: document.getElementById("signInButton"),
   signOutButton: document.getElementById("signOutButton"),
   gateSignInButton: document.getElementById("gateSignInButton"),
-  gateDemoButton: document.getElementById("gateDemoButton"),
   analyzeButton: document.getElementById("analyzeButton"),
-  demoButton: document.getElementById("demoButton"),
   authStatus: document.getElementById("authStatus"),
   setupWarning: document.getElementById("setupWarning"),
   authGate: document.getElementById("authGate"),
@@ -120,75 +121,6 @@ function emptyState() {
   };
 }
 
-function demoState() {
-  const s = emptyState();
-  s.profile = { ...s.profile, name: "Fictional Demo Household", demo: true, confidenceThreshold: 82 };
-  s.accounts = [
-    { id: "checking-main", name: "Demo Primary Checking", type: "checking", institution: "Fennington Demo Bank", userId: "demo" },
-    { id: "checking-side", name: "Demo Household Checking", type: "checking", institution: "Fennington Demo Bank", userId: "demo" },
-    { id: "credit-card", name: "Demo Rewards Credit Card", type: "credit", institution: "Fennington Demo Credit", userId: "demo" }
-  ];
-  const seed = [
-    ["2026-02-02", "PAYROLL DIRECT DEP", "Employer Payroll", 2920, "checking-main"],
-    ["2026-02-05", "SUNRISE APARTMENTS RENT", "Sunrise Apartments", -1625, "checking-main"],
-    ["2026-02-06", "CITY ELECTRIC BILL", "City Electric", -151.22, "checking-main"],
-    ["2026-02-08", "KROGER #441", "Kroger", -143.8, "credit-card"],
-    ["2026-02-10", "SQ *JOES PIZZA 4135551234", "Joe's Pizza", -42.6, "credit-card"],
-    ["2026-02-12", "SHELL OIL 8841", "Shell", -58.14, "credit-card"],
-    ["2026-02-15", "NETFLIX.COM", "Netflix", -18.99, "credit-card"],
-    ["2026-02-17", "PAYMENT THANK YOU", "Credit Card Payment", -700, "checking-main"],
-    ["2026-02-17", "ONLINE PAYMENT RECEIVED", "Credit Card Payment", 700, "credit-card"],
-    ["2026-03-01", "PAYROLL DIRECT DEP", "Employer Payroll", 2920, "checking-main"],
-    ["2026-03-05", "SUNRISE APARTMENTS RENT", "Sunrise Apartments", -1625, "checking-main"],
-    ["2026-03-06", "CITY ELECTRIC BILL", "City Electric", -167.85, "checking-main"],
-    ["2026-03-09", "ALDI 3201", "Aldi", -118.43, "credit-card"],
-    ["2026-03-11", "UNKNOWN POS 9931", "Unknown POS", -214.88, "credit-card"],
-    ["2026-03-13", "BP FUEL 5482", "BP", -62.12, "credit-card"],
-    ["2026-03-15", "NETFLIX.COM", "Netflix", -18.99, "credit-card"],
-    ["2026-03-20", "OVERTIME PAYROLL", "Employer Payroll", 420, "checking-main"],
-    ["2026-04-01", "PAYROLL DIRECT DEP", "Employer Payroll", 2920, "checking-main"],
-    ["2026-04-05", "SUNRISE APARTMENTS RENT", "Sunrise Apartments", -1625, "checking-main"],
-    ["2026-04-07", "CITY ELECTRIC BILL", "City Electric", -139.1, "checking-main"],
-    ["2026-04-08", "WALMART SUPERCENTER", "Walmart", -232.74, "credit-card"],
-    ["2026-04-10", "JOES PIZZA", "Joe's Pizza", -39.25, "credit-card"],
-    ["2026-04-13", "CHEVRON 2210", "Chevron", -55.92, "credit-card"],
-    ["2026-04-15", "NETFLIX.COM", "Netflix", -21.99, "credit-card"],
-    ["2026-04-22", "TRANSFER TO SAVINGS", "Savings Transfer", -300, "checking-main"],
-    ["2026-05-01", "PAYROLL DIRECT DEP", "Employer Payroll", 2920, "checking-main"],
-    ["2026-05-05", "SUNRISE APARTMENTS RENT", "Sunrise Apartments", -1625, "checking-main"],
-    ["2026-05-06", "CITY ELECTRIC BILL", "City Electric", -149.44, "checking-main"],
-    ["2026-05-09", "TRADER JOES", "Trader Joe's", -156.32, "credit-card"],
-    ["2026-05-12", "AMAZON MKTPLACE", "Amazon", -286.2, "credit-card"],
-    ["2026-05-14", "SHELL OIL 8841", "Shell", -61.44, "credit-card"],
-    ["2026-05-15", "NETFLIX.COM", "Netflix", -21.99, "credit-card"],
-    ["2026-06-01", "PAYROLL DIRECT DEP", "Employer Payroll", 2920, "checking-main"],
-    ["2026-06-05", "SUNRISE APARTMENTS RENT", "Sunrise Apartments", -1625, "checking-main"],
-    ["2026-06-06", "CITY ELECTRIC BILL", "City Electric", -171.5, "checking-main"],
-    ["2026-06-08", "KROGER #441", "Kroger", -171.2, "credit-card"],
-    ["2026-06-11", "SQ *JOES PIZZA", "Joe's Pizza", -48.18, "credit-card"],
-    ["2026-06-15", "NETFLIX.COM", "Netflix", -21.99, "credit-card"],
-    ["2026-06-19", "OVERTIME PAYROLL", "Employer Payroll", 510, "checking-main"],
-    ["2026-07-01", "PAYROLL DIRECT DEP", "Employer Payroll", 2920, "checking-main"],
-    ["2026-07-05", "SUNRISE APARTMENTS RENT", "Sunrise Apartments", -1625, "checking-main"],
-    ["2026-07-06", "CITY ELECTRIC BILL", "City Electric", -186.7, "checking-main"],
-    ["2026-07-08", "ALDI 3201", "Aldi", -126.9, "credit-card"],
-    ["2026-07-10", "MYSTERY WEB CHARGE", "Mystery Web Charge", -89.99, "credit-card"],
-    ["2026-07-12", "SHELL OIL 8841", "Shell", -64.77, "credit-card"],
-    ["2026-07-15", "NETFLIX.COM", "Netflix", -21.99, "credit-card"],
-    ["2026-07-18", "PAYMENT THANK YOU", "Credit Card Payment", -900, "checking-main"],
-    ["2026-07-18", "ONLINE PAYMENT RECEIVED", "Credit Card Payment", 900, "credit-card"]
-  ];
-  s.transactions = seed.map((row, index) => makeTransaction({ date: row[0], description: row[1], merchant: row[2], amount: row[3], accountId: row[4], importId: "demo-import" }, `demo-${index}`));
-  s.transactions.forEach((tx) => applyCategorization(tx, s));
-  s.transactions.filter((tx) => /UNKNOWN|MYSTERY|TRANSFER|PAYMENT/i.test(tx.description)).forEach((tx) => {
-    tx.needsReview = true;
-    tx.flags = Array.from(new Set([...(tx.flags || []), /TRANSFER|PAYMENT/i.test(tx.description) ? "possible_transfer" : "low_confidence"]));
-  });
-  s.selectedMonth = "2026-07";
-  s.recurring = detectRecurring(s.transactions);
-  return s;
-}
-
 function renderFeatures() {
   if (!els.featureGrid) return;
   els.featureGrid.innerHTML = FEATURES.map((feature) => `<article class="feature-card"><strong>${escapeHtml(feature)}</strong><p>Included in the first-draft workflow.</p></article>`).join("");
@@ -227,10 +159,9 @@ function setupTabs() {
 function setupAuth() {
   if (!hasConfig) {
     els.setupWarning.hidden = false;
-    els.authStatus.textContent = "Demo available";
+    els.authStatus.textContent = "Configuration required";
     els.signInButton.disabled = true;
     els.gateSignInButton.disabled = true;
-    if (shouldOpenDemo()) enterDemo();
     return;
   }
   const app = initializeApp(config);
@@ -253,7 +184,6 @@ function setupAuth() {
       await loadUserState();
       scrollToApp();
     }
-    else if (shouldOpenDemo()) enterDemo();
     else showGate();
   });
 }
@@ -262,11 +192,8 @@ function bindStaticActions() {
   if (!isAppPage) {
     els.signInButton?.addEventListener("click", () => navigateToApp());
     els.analyzeButton?.addEventListener("click", () => navigateToApp());
-    els.demoButton?.addEventListener("click", () => navigateToApp(true));
     return;
   }
-  els.demoButton?.addEventListener("click", enterDemo);
-  els.gateDemoButton?.addEventListener("click", enterDemo);
   els.analyzeButton?.addEventListener("click", () => {
     if (currentUser) showApp("user");
     scrollToApp();
@@ -296,12 +223,8 @@ function toggleTheme() {
   applyTheme();
 }
 
-function navigateToApp(openDemo = false) {
-  window.location.href = openDemo ? "app.html?demo=1" : "app.html";
-}
-
-function shouldOpenDemo() {
-  return new URLSearchParams(window.location.search).get("demo") === "1";
+function navigateToApp() {
+  window.location.href = "app.html";
 }
 
 function showGate() {
@@ -314,16 +237,9 @@ function showApp(nextMode, options = {}) {
   mode = nextMode;
   els.authGate.hidden = true;
   els.app.hidden = false;
-  els.modeLabel.textContent = mode === "demo" ? "Demo mode: fictional data" : "Authenticated profile";
-  els.profileSummary.textContent = mode === "demo" ? "All data shown here is fictional demo data." : `${state.profile.name || "Financial Profile"} for ${currentUser?.email || "signed-in user"}.`;
+  els.modeLabel.textContent = "Authenticated profile";
+  els.profileSummary.textContent = `${state.profile.name || "Financial Profile"} for ${currentUser?.email || "signed-in user"}.`;
   renderAll(options);
-}
-
-function enterDemo() {
-  state = demoState();
-  resetCategoryExpansion();
-  showApp("demo");
-  scrollToApp();
 }
 
 function scrollToApp() {
@@ -338,10 +254,13 @@ async function loadUserState() {
   const profileSnap = await getDoc(profileRef);
   if (profileSnap.exists()) state.profile = { id: "default", ...profileSnap.data() };
   else await setDoc(profileRef, { ...state.profile, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp(), createdAt: serverTimestamp() }, { merge: true });
+  const loadedDocs = {};
   await Promise.all(profileCollectionNames.map(async (name) => {
     const snap = await getDocs(collection(profileRef, name));
+    loadedDocs[name] = snap.docs;
     if (!snap.empty) state[name] = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
   }));
+  await purgeDemoWorkspaceArtifacts(profileRef, loadedDocs);
   state.categories = uniqueCategoriesById(state.categories);
   const incomeSnap = await getDoc(doc(profileRef, "settings", "income"));
   if (incomeSnap.exists()) state.incomeSettings = { ...state.incomeSettings, ...incomeSnap.data() };
@@ -373,6 +292,71 @@ async function copyMissingLegacyDocs(profileRef, name, docs) {
   for (let i = 0; i < docs.length; i += 100) {
     await Promise.all(docs.slice(i, i + 100).map((item) => setDoc(doc(profileRef, name, item.id), { ...item.data(), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true })));
   }
+}
+
+async function purgeDemoWorkspaceArtifacts(profileRef, loadedDocs = {}) {
+  const demoAccountIds = new Set(DEMO_ACCOUNT_IDS);
+  (loadedDocs.accounts || []).forEach((item) => {
+    const account = { id: item.id, ...item.data() };
+    if (isDemoAccount(account)) demoAccountIds.add(item.id);
+  });
+
+  const deleteRefs = [];
+  const queueDeletes = (collectionName, predicate) => {
+    (loadedDocs[collectionName] || []).forEach((item) => {
+      const data = { id: item.id, ...item.data() };
+      if (predicate(data, demoAccountIds)) deleteRefs.push(item.ref);
+    });
+  };
+
+  queueDeletes("accounts", isDemoAccount);
+  queueDeletes("transactions", isDemoTransaction);
+  queueDeletes("imports", isDemoImport);
+  queueDeletes("recurring", isDemoRecurring);
+  const profilePatch = demoProfileCleanupPatch();
+  removeDemoWorkspaceArtifactsFromState(demoAccountIds);
+
+  if (deleteRefs.length) await commitBatchWrites(deleteRefs.map((ref) => (batch) => batch.delete(ref)));
+  if (profilePatch) await setDoc(profileRef, profilePatch, { merge: true });
+}
+
+function demoProfileCleanupPatch() {
+  const hasDemoName = /fictional demo/i.test(String(state.profile.name || ""));
+  if (state.profile.demo !== true && !hasDemoName) return null;
+  state.profile.name = "Household Profile";
+  state.profile.demo = false;
+  return { name: state.profile.name, demo: false, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() };
+}
+
+function removeDemoWorkspaceArtifactsFromState(demoAccountIds = DEMO_ACCOUNT_IDS) {
+  const accountIds = new Set([...demoAccountIds, ...state.accounts.filter(isDemoAccount).map((account) => account.id)]);
+  state.accounts = state.accounts.filter((account) => !isDemoAccount(account));
+  state.transactions = state.transactions.filter((tx) => !isDemoTransaction(tx, accountIds));
+  state.imports = state.imports.filter((item) => !isDemoImport(item));
+  state.recurring = state.recurring.filter((item) => !isDemoRecurring(item, accountIds));
+}
+
+function isDemoAccount(account) {
+  const id = String(account.id || "");
+  const name = String(account.name || "");
+  const institution = String(account.institution || "");
+  return DEMO_ACCOUNT_IDS.has(id) || account.userId === "demo" || /^demo\b/i.test(name) || /fennington demo/i.test(institution);
+}
+
+function isDemoTransaction(tx, demoAccountIds = DEMO_ACCOUNT_IDS) {
+  const id = String(tx.id || "");
+  return String(tx.importId || "") === DEMO_IMPORT_ID || /^demo-\d+$/i.test(id) || demoAccountIds.has(tx.accountId);
+}
+
+function isDemoImport(item) {
+  return String(item.id || "") === DEMO_IMPORT_ID || String(item.importId || "") === DEMO_IMPORT_ID;
+}
+
+function isDemoRecurring(item, demoAccountIds = DEMO_ACCOUNT_IDS) {
+  const id = String(item.id || "");
+  if (item.userId === "demo") return true;
+  if (!DEMO_RECURRING_IDS.has(id)) return false;
+  return !state.transactions.some((tx) => tx.merchant === item.merchant && !isDemoTransaction(tx, demoAccountIds));
 }
 
 async function saveState() {
@@ -521,7 +505,7 @@ function renderAll(options = {}) {
   const previousRecurring = new Map(state.recurring.map((item) => [item.id, item]));
   state.recurring = detectRecurring(state.transactions).map((item) => ({ ...item, status: previousRecurring.get(item.id)?.status || item.status }));
   renderDashboard();
-  renderImport();
+  renderAccounts();
   renderTransactions();
   renderReview();
   renderReports();
@@ -620,7 +604,6 @@ function renderDashboard() {
   tab.innerHTML = `
     <div class="toolbar">
       <div class="field"><label for="dashboardMonth">Dashboard month</label><select id="dashboardMonth">${months.map((m) => `<option value="${m}" ${m === state.selectedMonth ? "selected" : ""}>${m}</option>`).join("")}</select></div>
-      ${mode === "demo" ? `<p class="status-line"><span class="tag warn">Fictional demo data</span> This dashboard is not connected to a real financial profile.</p>` : ""}
     </div>
     <div class="summary-grid">
       ${summaryCard("Actual income received this month", summary.actualIncome, "good")}
@@ -643,12 +626,28 @@ function renderDashboard() {
   });
 }
 
-function renderImport() {
-  const tab = document.getElementById("importTab");
+
+function csvImportDetailsHtml() {
+  return `
+    <details class="import-disclosure" ${pendingImport ? "open" : ""}>
+      <summary>
+        <span class="import-summary-copy">
+          <span class="eyebrow">CSV import</span>
+          <strong>Import transaction CSV files</strong>
+          <small>Upload bank or credit-card exports without leaving Transactions.</small>
+        </span>
+        <span class="chip">${pendingImport ? "Preview ready" : "Expand import"}</span>
+      </summary>
+      <div class="import-disclosure-body">${csvImportPanelHtml()}</div>
+    </details>
+  `;
+}
+
+function csvImportPanelHtml() {
   const headers = pendingImport?.headers || [];
-  tab.innerHTML = `
-    <div class="split-panel">
-      <section class="panel">
+  return `
+    <div class="split-panel csv-import-grid">
+      <section class="panel import-upload-panel">
         <h3>Upload transaction CSV files</h3>
         <p class="status-line">Supported files: <code>.csv</code> or text CSV exports up to 5 MB. Extra columns are ignored unless mapped.</p>
         <div class="field"><label for="csvFile">CSV file or files</label><input id="csvFile" type="file" accept=".csv,text/csv" multiple></div>
@@ -656,18 +655,21 @@ function renderImport() {
         <div id="importStatus" class="status-line">No file selected.</div>
         ${pendingImport ? mappingForm(headers) : ""}
       </section>
-      <aside class="panel">
+      <aside class="panel import-preview-panel">
         <h3>Import preview</h3>
         <div id="importPreview">${pendingImport ? importPreviewHtml() : `<div class="empty-state">Upload a CSV to preview detected transactions, date range, totals, duplicates, and account selection.</div>`}</div>
       </aside>
     </div>
   `;
-      document.getElementById("csvFile").addEventListener("change", handleFile);
-      document.getElementById("csvFolder").addEventListener("change", handleFile);
+}
+
+function bindImportControls(root = document) {
+  root.querySelector("#csvFile")?.addEventListener("change", handleFile);
+  root.querySelector("#csvFolder")?.addEventListener("change", handleFile);
   if (pendingImport) {
-    document.getElementById("previewImportButton").addEventListener("click", updateImportPreview);
-    document.getElementById("importTransactionsButton").addEventListener("click", importTransactions);
-    document.getElementById("saveMappingButton").addEventListener("click", saveMappingTemplate);
+    root.querySelector("#previewImportButton")?.addEventListener("click", updateImportPreview);
+    root.querySelector("#importTransactionsButton")?.addEventListener("click", importTransactions);
+    root.querySelector("#saveMappingButton")?.addEventListener("click", saveMappingTemplate);
   }
 }
 
@@ -741,12 +743,13 @@ async function handleFile(event) {
   if (!bodyRows.length) return showStatus("No transaction rows were detected in the selected CSV files.");
   const accountNames = Array.from(new Set(bodyRows.map((row) => row.__sourceAccountName)));
   pendingImport = { fileName: files.length === 1 ? files[0].name : `${files.length} CSV files`, headers, rows: bodyRows, mapping: autoMap(headers), accountName: accountNames.length === 1 ? accountNames[0] : "Multiple source accounts", accountNames, institution: "" };
-  renderImport();
+  renderTransactions();
 }
 
 function updateImportPreview() {
   captureMapping();
-  document.getElementById("importPreview").innerHTML = importPreviewHtml();
+  const preview = document.getElementById("importPreview");
+  if (preview) preview.innerHTML = importPreviewHtml();
 }
 
 function captureMapping() {
@@ -798,6 +801,77 @@ function saveMappingTemplate() {
   showStatus("Mapping template saved.");
 }
 
+function renderAccounts() {
+  const tab = document.getElementById("accountsTab");
+  if (!tab) return;
+  const rows = state.accounts
+    .map((account) => ({ account, ...accountActivityStats(account.id) }))
+    .sort((a, b) => a.account.name.localeCompare(b.account.name));
+  const creditCount = rows.filter((row) => row.account.type === "credit").length;
+  const latest = rows.map((row) => row.latestDate).filter(Boolean).sort().pop() || "No activity";
+  tab.innerHTML = `
+    <section class="panel accounts-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Account center</p>
+          <h3>Accounts</h3>
+          <p class="status-line">Accounts are created from imported CSV files and used to group transactions, filters, and credit-card payments.</p>
+        </div>
+      </div>
+      <div class="summary-grid compact-summary accounts-summary">
+        ${summaryCard("Accounts", String(rows.length), "")}
+        ${summaryCard("Credit accounts", String(creditCount), "")}
+        ${summaryCard("Linked transactions", rows.reduce((sum, row) => sum + row.transactionCount, 0), "warn", "Count")}
+        ${summaryCard("Latest activity", latest, "")}
+      </div>
+      ${rows.length ? `<div class="accounts-grid">${rows.map(accountCard).join("")}</div>${accountsTable(rows)}` : `<div class="empty-state">No accounts yet. Expand CSV import at the top of Transactions and import a CSV to create accounts automatically.</div>`}
+    </section>
+  `;
+}
+
+function accountActivityStats(accountId) {
+  const transactions = state.transactions.filter((tx) => tx.accountId === accountId);
+  const moneyIn = round(transactions.filter((tx) => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0));
+  const moneyOut = round(transactions.filter((tx) => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
+  const reviewCount = transactions.filter((tx) => tx.needsReview || tx.category === "Uncategorized").length;
+  const latestDate = transactions.map((tx) => tx.date).filter(Boolean).sort().pop() || "";
+  return { transactionCount: transactions.length, moneyIn, moneyOut, reviewCount, latestDate };
+}
+
+function accountCard(row) {
+  const { account, transactionCount, moneyIn, moneyOut, reviewCount, latestDate } = row;
+  return `
+    <article class="account-card">
+      <div class="account-card-heading">
+        <div>
+          <span class="eyebrow">${escapeHtml(label(account.type || "account"))}</span>
+          <h4>${escapeHtml(account.name || "Unnamed account")}</h4>
+          <p>${escapeHtml(account.institution || "Institution not set")}</p>
+        </div>
+        <span class="tag ${account.type === "credit" ? "warn" : "good"}">${escapeHtml(label(account.type || "account"))}</span>
+      </div>
+      <dl class="account-metrics">
+        <div><dt>Transactions</dt><dd>${transactionCount}</dd></div>
+        <div><dt>Money in</dt><dd class="positive">${money(moneyIn)}</dd></div>
+        <div><dt>Money out</dt><dd class="negative">${money(moneyOut)}</dd></div>
+        <div><dt>Needs review</dt><dd>${reviewCount}</dd></div>
+      </dl>
+      <p class="status-line">Latest activity: <strong>${escapeHtml(latestDate || "No activity")}</strong></p>
+    </article>
+  `;
+}
+
+function accountsTable(rows) {
+  return `
+    <div class="table-wrap accounts-table-wrap" tabindex="0" aria-label="Scrollable accounts table">
+      <table class="accounts-table">
+        <thead><tr><th>Account</th><th>Institution</th><th>Type</th><th>Transactions</th><th>Money in</th><th>Money out</th><th>Needs review</th><th>Latest activity</th></tr></thead>
+        <tbody>${rows.map(({ account, transactionCount, moneyIn, moneyOut, reviewCount, latestDate }) => `<tr><td><strong>${escapeHtml(account.name || "Unnamed account")}</strong></td><td>${escapeHtml(account.institution || "—")}</td><td>${escapeHtml(label(account.type || "account"))}</td><td>${transactionCount}</td><td class="positive">${money(moneyIn)}</td><td class="negative">${money(moneyOut)}</td><td>${reviewCount}</td><td>${escapeHtml(latestDate || "No activity")}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderTransactions() {
   const tab = document.getElementById("transactionsTab");
   const rows = filteredTransactions();
@@ -814,6 +888,7 @@ function renderTransactions() {
           <span>of ${state.transactions.length} shown</span>
         </div>
       </div>
+      ${csvImportDetailsHtml()}
       ${transactionInsightsHtml(rows)}
       ${filtersHtml()}
       <div class="transaction-table-shell">
@@ -832,6 +907,7 @@ function renderTransactions() {
       </div>
     </section>
   `;
+  bindImportControls(tab);
   bindFilters();
   bindTransactionTable(tab);
 }
@@ -1303,7 +1379,7 @@ function createProfile() {
   const name = window.prompt("Financial profile name:", state.profile.name || "Household Profile");
   if (!name) return;
   state.profile.name = sanitize(name);
-  showApp(mode === "demo" ? "demo" : "user");
+  showApp("user");
 }
 
 async function deleteProfileData() {

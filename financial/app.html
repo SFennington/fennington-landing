@@ -37,24 +37,23 @@
       <div class="container app-container">
         <section id="setupWarning" class="app-alert warning" hidden>
           <strong>Firebase web config required for account storage.</strong>
-          <span>Update <code>financial/config.js</code> with this Firebase project's web app config. Demo mode works without configuration.</span>
+          <span>Update <code>financial/config.js</code> with this Firebase project's web app config before using the dashboard.</span>
         </section>
         <section id="authGate" class="auth-gate">
           <p class="eyebrow">Fennington Financial App</p>
           <h1>Open Your Financial Dashboard</h1>
-          <p>Sign in to save financial profiles, accounts, mappings, rules, transactions, and reports. You can also open a fictional demo without signing in.</p>
+          <p>Sign in to save financial profiles, accounts, mappings, rules, transactions, and reports.</p>
           <div class="gate-actions">
             <button id="gateSignInButton" class="btn btn-primary btn-lg" type="button">Sign In With Google</button>
-            <button id="gateDemoButton" class="btn btn-secondary btn-lg" type="button">Open Fictional Demo</button>
           </div>
         </section>
 
         <section id="financialApp" class="financial-app" hidden>
           <div class="app-topbar">
             <div>
-              <p class="eyebrow" id="modeLabel">Demo mode</p>
+              <p class="eyebrow" id="modeLabel">Authenticated profile</p>
               <h1>Fennington Financial Dashboard</h1>
-              <p id="profileSummary">Fictional sample profile loaded.</p>
+              <p id="profileSummary">Your financial profile is loaded.</p>
             </div>
             <div class="app-actions">
               <button id="themeToggleButton" class="btn btn-secondary" type="button" aria-pressed="false">Dark Theme</button>
@@ -65,7 +64,7 @@
 
           <nav class="app-tabs" aria-label="Financial app sections">
             <button data-tab="dashboard" class="active" type="button">Dashboard</button>
-            <button data-tab="import" type="button">CSV Import</button>
+            <button data-tab="accounts" type="button">Accounts</button>
             <button data-tab="transactions" type="button">Transactions</button>
             <button data-tab="review" type="button">Review Queue</button>
             <button data-tab="reports" type="button">Reports</button>
@@ -77,7 +76,7 @@
             <label for="appTabSelect">Financial app section</label>
             <select id="appTabSelect" aria-label="Financial app section">
               <option value="dashboard">Dashboard</option>
-              <option value="import">CSV Import</option>
+              <option value="accounts">Accounts</option>
               <option value="transactions">Transactions</option>
               <option value="review">Review Queue</option>
               <option value="reports">Reports</option>
@@ -88,7 +87,7 @@
           </div>
 
           <section id="dashboardTab" class="tab-panel active"></section>
-          <section id="importTab" class="tab-panel"></section>
+          <section id="accountsTab" class="tab-panel"></section>
           <section id="transactionsTab" class="tab-panel"></section>
           <section id="reviewTab" class="tab-panel"></section>
           <section id="reportsTab" class="tab-panel"></section>
