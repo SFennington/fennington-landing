@@ -1956,12 +1956,27 @@ summary.category-tree-summary::-webkit-details-marker {
 
 @media (max-width: 760px) {
   .compact-category-row {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: stretch;
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
+  .compact-category-row .category-inline-input,
   .compact-category-row .category-parent-select,
   .compact-category-row .tree-count {
     grid-column: 2 / -1;
+  }
+
+  .compact-category-row .mini-btn {
+    justify-content: center;
+    white-space: normal;
+    width: 100%;
+  }
+
+  .compact-category-row .mini-btn:nth-of-type(1),
+  .compact-category-row .mini-btn:nth-of-type(2),
+  .compact-category-row .mini-btn:nth-of-type(3),
+  .compact-category-row .mini-btn:nth-of-type(4) {
+    grid-column: 1 / -1;
   }
 }
 
