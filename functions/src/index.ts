@@ -27,7 +27,7 @@ const BUSINESS_PHONE = process.env.BUSINESS_PHONE || "413-255-1777";
 const DEFAULT_LEAD_CAP = 25;
 const DEFAULT_EMAIL_CAP = 10;
 const WEBSITE_TIMEOUT_MS = 6500;
-const FINANCIAL_AI_MODEL = process.env.FINANCIAL_AI_MODEL || process.env.OPENAI_MODEL || "gpt-5.4-nano";
+const FINANCIAL_AI_MODEL = process.env.FINANCIAL_AI_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-nano";
 const FINANCIAL_AI_MAX_TRANSACTIONS = 100;
 const FINANCIAL_INPUT_PRICE_PER_1M = Number(process.env.FINANCIAL_INPUT_PRICE_PER_1M || process.env.OPENAI_INPUT_PRICE_PER_1M || 0.20);
 const FINANCIAL_OUTPUT_PRICE_PER_1M = Number(process.env.FINANCIAL_OUTPUT_PRICE_PER_1M || process.env.OPENAI_OUTPUT_PRICE_PER_1M || 1.25);
@@ -689,6 +689,21 @@ function openAiApiKeyValue(): string {
   }
 }
 
+function supportsOpenAiTemperature(model: string): boolean {
+  return !/^(gpt-5|o[0-9]|o1|o3|o4)/i.test(model.trim());
+}
+
+function openAiErrorMessage(body: any, status: number): string {
+  const error = body?.error || {};
+  const parts = [
+    safeString(error.message, "AI categorization failed."),
+    safeString(error.code),
+    safeString(error.param),
+    safeString(error.type)
+  ].filter(Boolean);
+  return `OpenAI request failed (${status}): ${parts.join("; ")}`;
+}
+
 function keywordFinancialCategorize(item: any, allowedCategories = FINANCIAL_CATEGORIES) {
   const description = safeString(item?.description);
   const matched = FINANCIAL_KEYWORDS.find((rule) => rule.match.test(description));
@@ -721,63 +736,64 @@ async function aiFinancialCategorize(transactions: any[], categories: string[], 
     matchCount: Math.max(1, Math.min(999, Number(item?.matchCount || 1)))
   }));
   const allowedCategories = categories.length ? Array.from(new Set(categories)).slice(0, 80) : FINANCIAL_CATEGORIES;
+  const responsePayload = {
+    model: FINANCIAL_AI_MODEL,
+    max_output_tokens: Math.min(16000, 900 + minimalTransactions.length * 180),
+    ...(supportsOpenAiTemperature(FINANCIAL_AI_MODEL) ? { temperature: 0.1 } : {}),
+    ...(options.webLookupEnabled ? { tools: [{ type: "web_search_preview", search_context_size: "low" }], tool_choice: "auto" } : {}),
+    text: {
+      format: {
+        type: "json_schema",
+        name: "financial_transaction_analysis",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            results: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  id: { type: "string" },
+                  displayName: { type: "string" },
+                  vendor: { type: "string" },
+                  category: { type: "string", enum: allowedCategories },
+                  confidence: { type: "number", minimum: 0, maximum: 100 },
+                  suggestedDescription: { type: "string" },
+                  reason: { type: "string" },
+                  sourceUrls: { type: "array", items: { type: "string" }, maxItems: 3 }
+                },
+                required: ["id", "displayName", "vendor", "category", "confidence", "suggestedDescription", "reason", "sourceUrls"]
+              }
+            }
+          },
+          required: ["results"]
+        }
+      }
+    },
+    input: [
+      {
+        role: "system",
+        content: "You clean and categorize personal finance transactions. Return only JSON that matches the schema. For each transaction, create a short recognizable displayName, detect the real vendor, choose exactly one allowed category, and explain the decision. Use description, currentMerchant, currentVendor, amount, date, and duplicate count. Treat payment processors such as PayPal, Venmo, Cash App, Square, Stripe, Apple Pay, and Google Pay as processors, not vendors, when the description contains a more specific seller token or name. In PayPal descriptions like PAYPAL *SELLER 4029357733, the real vendor is the token after PAYPAL *. Use Transfers for likely account movements and credit-card payments, but do not assume the final money-flow treatment; local account-aware reconciliation decides whether a transfer is internal, matched, single-sided, or reportable. Use Credits to the Account for credit-card credits/payments. Use Uncategorized when uncertain. Do not invent product details. If web search is available, use it only for low-confidence purchases with enough vendor/description context; never search by price alone."
+      },
+      {
+        role: "user",
+        content: JSON.stringify({ categories: allowedCategories, webLookupEnabled: Boolean(options.webLookupEnabled), transactions: minimalTransactions })
+      }
+    ]
+  };
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json"
     },
-    body: JSON.stringify({
-      model: FINANCIAL_AI_MODEL,
-      temperature: 0.1,
-      max_output_tokens: Math.min(16000, 900 + minimalTransactions.length * 180),
-      ...(options.webLookupEnabled ? { tools: [{ type: "web_search", search_context_size: "low" }], tool_choice: "auto" } : {}),
-      text: {
-        format: {
-          type: "json_schema",
-          name: "financial_transaction_analysis",
-          strict: true,
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              results: {
-                type: "array",
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    id: { type: "string" },
-                    displayName: { type: "string" },
-                    vendor: { type: "string" },
-                    category: { type: "string", enum: allowedCategories },
-                    confidence: { type: "number", minimum: 0, maximum: 100 },
-                    suggestedDescription: { type: "string" },
-                    reason: { type: "string" },
-                    sourceUrls: { type: "array", items: { type: "string" }, maxItems: 3 }
-                  },
-                  required: ["id", "displayName", "vendor", "category", "confidence", "suggestedDescription", "reason", "sourceUrls"]
-                }
-              }
-            },
-            required: ["results"]
-          }
-        }
-      },
-      input: [
-        {
-          role: "system",
-          content: "You clean and categorize personal finance transactions. Return only JSON that matches the schema. For each transaction, create a short recognizable displayName, detect the real vendor, choose exactly one allowed category, and explain the decision. Use description, currentMerchant, currentVendor, amount, date, and duplicate count. Treat payment processors such as PayPal, Venmo, Cash App, Square, Stripe, Apple Pay, and Google Pay as processors, not vendors, when the description contains a more specific seller token or name. In PayPal descriptions like PAYPAL *SELLER 4029357733, the real vendor is the token after PAYPAL *. Use Transfers for likely account movements and credit-card payments, but do not assume the final money-flow treatment; local account-aware reconciliation decides whether a transfer is internal, matched, single-sided, or reportable. Use Credits to the Account for credit-card credits/payments. Use Uncategorized when uncertain. Do not invent product details. If web search is available, use it only for low-confidence purchases with enough vendor/description context; never search by price alone."
-        },
-        {
-          role: "user",
-          content: JSON.stringify({ categories: allowedCategories, webLookupEnabled: Boolean(options.webLookupEnabled), transactions: minimalTransactions })
-        }
-      ]
-    })
+    body: JSON.stringify(responsePayload)
   });
   const body: any = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(safeString(body?.error?.message, "AI categorization failed.")), { statusCode: 502 });
+  if (!response.ok) throw Object.assign(new Error(openAiErrorMessage(body, response.status)), { statusCode: 502 });
   const content = safeLongString(extractOpenAiResponseText(body) || "{}", "{}", 30000);
   const parsed = JSON.parse(content);
   const results = Array.isArray(parsed?.results) ? parsed.results : [];
