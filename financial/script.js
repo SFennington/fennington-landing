@@ -2635,9 +2635,9 @@ function renderRecurring() {
   tab.innerHTML = `<section class="panel"><h3>Recurring expenses</h3><p class="status-line">Repeated charges are suggestions until confirmed. Repeated transactions are not automatically assumed to be subscriptions.</p><div class="recurring-grid">${state.recurring.length ? state.recurring.map(recurringCard).join("") : `<div class="empty-state">Not enough repeated charges to identify recurring expenses yet.</div>`}</div></section>`;
   tab.querySelectorAll("[data-recurring]").forEach((button) => button.addEventListener("click", () => {
     const recurring = state.recurring.find((item) => item.id === button.closest("article").dataset.id);
-    recurring.status = button.dataset.recurring;
-    state.transactions.filter((tx) => tx.merchant === recurring.merchant).forEach((tx) => { tx.recurringStatus = recurring.status === "confirmed" ? "confirmed" : "rejected"; });
-    renderAll();
+    updateRecurringStatus(recurring, button.dataset.recurring);
+    renderRecurring();
+    saveState();
   }));
   tab.querySelectorAll("[data-recurring-transactions]").forEach((button) => button.addEventListener("click", () => {
     const id = button.closest("article")?.dataset.id;
@@ -2646,6 +2646,13 @@ function renderRecurring() {
     else recurringTransactionExpandedIds.add(id);
     renderRecurring();
   }));
+}
+
+function updateRecurringStatus(recurring, status) {
+  if (!recurring) return;
+  recurring.status = status;
+  const transactionStatus = status === "confirmed" ? "confirmed" : "rejected";
+  state.transactions.filter((tx) => tx.merchant === recurring.merchant).forEach((tx) => { tx.recurringStatus = transactionStatus; });
 }
 
 function moneyFlowReport(summary) {
