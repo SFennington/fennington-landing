@@ -111,6 +111,7 @@ let pendingAmazonImport = null;
 let saveTimer = null;
 let state = emptyState();
 const pendingCategoryDeletes = new Set();
+const pendingRuleDeletes = new Set();
 const categoryExpandedIds = new Set();
 const recurringTransactionExpandedIds = new Set();
 let categoryExpansionInitialized = false;
@@ -408,16 +409,19 @@ async function saveState() {
       await setDoc(profileRef, { ...stripId(state.profile), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
       await setDoc(doc(profileRef, "settings", "income"), { ...state.incomeSettings, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
       const currentCategoryIds = new Set(state.categories.map((category) => category.id));
+      const currentRuleIds = new Set(state.rules.map((rule) => rule.id));
       const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !currentCategoryIds.has(id));
-      await commitProfileCollectionWrites(profileRef, deletedCategoryIds);
+      const deletedRuleIds = Array.from(pendingRuleDeletes).filter((id) => !currentRuleIds.has(id));
+      await commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds);
       deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
+      deletedRuleIds.forEach((id) => pendingRuleDeletes.delete(id));
     } catch (error) {
       showStatus(`Save failed: ${error.message}`);
     }
   }, 450);
 }
 
-async function commitProfileCollectionWrites(profileRef, deletedCategoryIds) {
+async function commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds = []) {
   let batch = writeBatch(db);
   let writeCount = 0;
   const commits = [];
@@ -445,6 +449,10 @@ async function commitProfileCollectionWrites(profileRef, deletedCategoryIds) {
   deletedCategoryIds.forEach((id) => {
     queueWrite((currentBatch) => currentBatch.delete(doc(profileRef, "categories", id)));
     persistedUpdates.push({ name: "categories", id, snapshot: null });
+  });
+  deletedRuleIds.forEach((id) => {
+    queueWrite((currentBatch) => currentBatch.delete(doc(profileRef, "rules", id)));
+    persistedUpdates.push({ name: "rules", id, snapshot: null });
   });
 
   if (writeCount) commits.push(batch.commit());
@@ -2960,6 +2968,7 @@ function bindRuleControls(root) {
     if (!rule) return;
     if (button.dataset.ruleAction === "delete") {
       if (!window.confirm("Delete this saved rule? Existing transaction categories will not be reverted.")) return;
+      pendingRuleDeletes.add(rule.id);
       state.rules = state.rules.filter((item) => item.id !== rule.id);
       renderAll();
       showStatus("Rule deleted.");
