@@ -12,7 +12,7 @@
             "accounts/{accountId}": ["userId", "name", "institution", "type", "flowRole", "includeInMoneyFlow", "transferMatchingEnabled", "notes", "updatedAt"],
             "imports/{importId}": ["userId", "fileName", "accountId", "count", "duplicateCount", "importedAt", "updatedAt"],
             "mappings/{mappingId}": ["userId", "name", "mapping", "expensesPositive", "createdAt", "updatedAt"],
-            "transactions/{transactionId}": ["userId", "accountId", "importId", "date", "description", "merchant", "amount", "category", "type", "flowType", "reportingType", "recognizedMonth", "transferGroupId", "transferPeerTransactionId", "counterpartyAccountId", "transferDirection", "transferStatus", "flowConfidence", "flowReason", "flowSource", "confidence", "source", "reason", "recurringStatus", "needsReview", "flags", "notes", "updatedAt"],
+            "transactions/{transactionId}": ["userId", "accountId", "importId", "date", "description", "merchant", "amount", "category", "type", "flowType", "reportingType", "recognizedMonth", "transferGroupId", "transferPeerTransactionId", "counterpartyAccountId", "transferDirection", "transferStatus", "flowConfidence", "flowReason", "flowSource", "splits", "splitStatus", "splitTotal", "itemizationSource", "itemizationMatchConfidence", "confidence", "source", "reason", "recurringStatus", "needsReview", "flags", "notes", "updatedAt"],
             "categories/{categoryId}": ["userId", "name", "system", "updatedAt"],
             "merchantMappings/{mappingId}": ["userId", "merchant", "category", "createdAt", "updatedAt"],
             "rules/{ruleId}": ["userId", "type", "match", "category", "createdAt", "updatedAt"],

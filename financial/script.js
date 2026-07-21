@@ -21,6 +21,7 @@ const INTERNAL_FLOW_TYPES = new Set(["internal_transfer", "credit_card_payment",
 const TRANSFER_MATCH_WINDOW_DAYS = 3;
 const TRANSFER_MATCH_THRESHOLD = 80;
 const TRANSFER_AMBIGUITY_GAP = 8;
+const SPLIT_TOLERANCE = 0.01;
 const DEMO_IMPORT_ID = "demo-import";
 const DEMO_ACCOUNT_IDS = new Set(["checking-main", "checking-side", "credit-card"]);
 const DEMO_RECURRING_IDS = new Set(["sunrise-apartments-monthly", "city-electric-monthly", "netflix-monthly"]);
@@ -94,6 +95,7 @@ let db = null;
 let currentUser = null;
 let mode = "signed-out";
 let pendingImport = null;
+let pendingAmazonImport = null;
 let saveTimer = null;
 let state = emptyState();
 const pendingCategoryDeletes = new Set();
@@ -518,6 +520,7 @@ async function ensureSharedWorkspace() {
 
 function renderAll(options = {}) {
   ensureDefaultCategories();
+  normalizeTransactionSplits();
   normalizeTransactionAmountSigns();
   normalizeCreditCardPaymentSigns();
   normalizeFinancialFlows();
@@ -912,6 +915,110 @@ function reportableExpenseAmount(tx) {
   return tx.flowType === "refund" ? -Math.abs(tx.amount) : Math.abs(tx.amount);
 }
 
+function normalizeTransactionSplits() {
+  state.transactions.forEach((tx) => normalizeTransactionSplitState(tx));
+}
+
+function normalizeTransactionSplitState(tx) {
+  tx.splits = Array.isArray(tx.splits) ? tx.splits.map((split) => normalizeSplitLine(split, tx)).filter((split) => Math.abs(split.amount) > 0) : [];
+  tx.splitTotal = splitTotal(tx);
+  if (!tx.splits.length) {
+    tx.splitStatus = "none";
+    tx.itemizationSource = tx.itemizationSource || "";
+    tx.itemizationMatchConfidence = Number(tx.itemizationMatchConfidence || 0);
+    return;
+  }
+  const reconciled = splitReconciles(tx);
+  if (!reconciled) tx.splitStatus = "needs_split_review";
+  else if (tx.itemizationSource && tx.itemizationSource !== "manual") tx.splitStatus = "itemized";
+  else tx.splitStatus = "split";
+  if (!reconciled) {
+    tx.needsReview = true;
+    tx.flags = Array.from(new Set([...(tx.flags || []), "split_review"]));
+  } else tx.flags = (tx.flags || []).filter((flag) => flag !== "split_review");
+}
+
+function normalizeSplitLine(split, tx) {
+  const amount = round(Number(split.amount || 0));
+  return {
+    id: split.id || uniqueId("split"),
+    date: normalizeDate(split.date || tx.date),
+    description: sanitize(split.description || tx.merchant || tx.description || "Split line"),
+    merchant: sanitize(split.merchant || tx.merchant || ""),
+    amount,
+    category: state.categories.some((cat) => cat.name === split.category) ? split.category : (split.category ? sanitize(split.category) : tx.category || "Uncategorized"),
+    quantity: Number(split.quantity || 0),
+    source: sanitize(split.source || "manual"),
+    sourceOrderId: sanitize(split.sourceOrderId || ""),
+    sourceItemId: sanitize(split.sourceItemId || ""),
+    confidence: Math.max(0, Math.min(100, Number(split.confidence || 0))),
+    needsReview: Boolean(split.needsReview)
+  };
+}
+
+function splitTotal(tx) {
+  return round((tx.splits || []).reduce((sum, split) => sum + Math.abs(Number(split.amount || 0)), 0));
+}
+
+function splitDifference(tx) {
+  return round(reportableExpenseAmount(tx) - splitTotal(tx));
+}
+
+function splitReconciles(tx) {
+  return Math.abs(splitDifference(tx)) <= SPLIT_TOLERANCE;
+}
+
+function hasValidSplits(tx) {
+  return isReportableExpense(tx) && (tx.splits || []).length > 0 && splitReconciles(tx);
+}
+
+function reportingAllocationsForTransaction(tx) {
+  if (!isReportableExpense(tx)) return [];
+  if (hasValidSplits(tx)) {
+    return tx.splits.map((split) => ({
+      id: split.id,
+      parentTransactionId: tx.id,
+      date: transactionReportingMonth(tx) ? tx.date : split.date,
+      month: transactionReportingMonth(tx),
+      merchant: split.merchant || tx.merchant,
+      description: split.description || tx.description,
+      category: split.category || "Uncategorized",
+      amount: round(Math.abs(split.amount)),
+      source: split.source || "manual",
+      transaction: tx
+    }));
+  }
+  return [{
+    id: tx.id,
+    parentTransactionId: tx.id,
+    date: tx.date,
+    month: transactionReportingMonth(tx),
+    merchant: tx.merchant,
+    description: tx.description,
+    category: tx.category || "Uncategorized",
+    amount: reportableExpenseAmount(tx),
+    source: "transaction",
+    transaction: tx
+  }];
+}
+
+function reportingAllocationsForTransactions(transactions) {
+  return transactions.flatMap((tx) => reportingAllocationsForTransaction(tx));
+}
+
+function categoryTotalsForTransactions(transactions) {
+  return reportingAllocationsForTransactions(transactions).reduce((totals, allocation) => {
+    totals[allocation.category] = round((totals[allocation.category] || 0) + allocation.amount);
+    return totals;
+  }, {});
+}
+
+function categoryMatchesTransaction(tx, categoryName) {
+  if (!categoryName) return true;
+  if (tx.category === categoryName) return true;
+  return reportingAllocationsForTransaction(tx).some((allocation) => allocation.category === categoryName);
+}
+
 function isInternalFlow(tx) {
   return tx.reportingType === "internal" || INTERNAL_FLOW_TYPES.has(tx.flowType);
 }
@@ -938,6 +1045,7 @@ function renderDashboard() {
       ${summaryCard("Projected income including potential overtime", projectedIncome(), "warn", "Potential overtime is not received income.")}
       ${summaryCard("Recurring monthly expenses", summary.recurring, "danger")}
       ${summaryCard("Transactions requiring review", summary.reviewCount, "warn", "Count")}
+      ${summaryCard("Split/itemization review", String(summary.splitReviewCount), "warn", "Count")}
     </div>
     <div class="split-panel" style="margin-top:1rem">
       <section class="panel"><h3>Monthly Spending</h3>${categoryBars(summary.byCategory)}</section>
@@ -990,6 +1098,12 @@ function csvImportPanelHtml() {
 function bindImportControls(root = document) {
   root.querySelector("#csvFile")?.addEventListener("change", handleFile);
   root.querySelector("#csvFolder")?.addEventListener("change", handleFile);
+  root.querySelector("#amazonFile")?.addEventListener("change", handleAmazonFile);
+  root.querySelector("#applyAmazonItemizationButton")?.addEventListener("click", applyAmazonItemization);
+  root.querySelector("#clearAmazonImportButton")?.addEventListener("click", () => {
+    pendingAmazonImport = null;
+    renderTransactions();
+  });
   if (pendingImport) {
     root.querySelector("#previewImportButton")?.addEventListener("click", updateImportPreview);
     root.querySelector("#importTransactionsButton")?.addEventListener("click", importTransactions);
@@ -1113,6 +1227,149 @@ function importTransactions() {
   state.selectedMonth = latestMonth(state.transactions) || state.selectedMonth;
   renderAll();
   showStatus(`${imported.length} transactions imported. Low-confidence and possible duplicate items were added to the review queue. Use Analyze Transactions to run AI.`);
+}
+
+async function handleAmazonFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) return showStatus(`${file.name} is larger than the 5 MB first-draft limit.`);
+  try {
+    const text = await file.text();
+    const items = parseAmazonPurchaseFile(text, file.name);
+    if (!items.length) return showStatus("No Amazon item rows were detected. Include item title, date, and amount/price columns.");
+    const groups = groupAmazonItems(items).map((group) => ({ ...group, match: matchAmazonGroupToTransaction(group) }));
+    pendingAmazonImport = {
+      fileName: file.name,
+      itemCount: items.length,
+      items,
+      groups,
+      matches: groups.filter((group) => group.match?.transaction)
+    };
+    renderTransactions();
+    showStatus(`Amazon preview ready: ${pendingAmazonImport.matches.length} of ${groups.length} order groups can be itemized automatically.`);
+  } catch (error) {
+    showStatus(`Amazon import failed: ${error.message}`);
+  }
+}
+
+function parseAmazonPurchaseFile(text, fileName = "amazon") {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return [];
+  if (/\.json$/i.test(fileName) || trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    const parsed = JSON.parse(trimmed);
+    const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed.orders) ? parsed.orders : Array.isArray(parsed.items) ? parsed.items : [];
+    return rows.flatMap((row) => normalizeAmazonJsonRow(row)).filter(Boolean);
+  }
+  const rows = parseCSV(trimmed).filter((row) => row.some((cell) => sanitize(cell)));
+  if (rows.length < 2) return [];
+  const headers = rows[0].map((header) => sanitize(header));
+  return rows.slice(1).map((row) => normalizeAmazonCsvRow(headers, row)).filter(Boolean);
+}
+
+function normalizeAmazonJsonRow(row) {
+  if (Array.isArray(row.items)) {
+    return row.items.map((item) => normalizeAmazonObject({ ...row, ...item, orderId: item.orderId || row.orderId || row.orderID || row.order_id })).filter(Boolean);
+  }
+  return normalizeAmazonObject(row);
+}
+
+function normalizeAmazonCsvRow(headers, row) {
+  const object = Object.fromEntries(headers.map((header, index) => [header, row[index] || ""]));
+  return normalizeAmazonObject(object);
+}
+
+function normalizeAmazonObject(object) {
+  const valueFor = (...patterns) => {
+    const key = Object.keys(object).find((name) => patterns.some((pattern) => pattern.test(name)));
+    return key ? object[key] : "";
+  };
+  const orderId = sanitize(valueFor(/order\s*id/i, /^order$/i, /amazon.*id/i) || "unknown");
+  const date = normalizeDate(valueFor(/shipment.*date/i, /order.*date/i, /purchase.*date/i, /^date$/i));
+  const title = sanitize(valueFor(/title/i, /item/i, /product/i, /description/i, /name/i));
+  const subtotal = parseMoney(valueFor(/item.*subtotal/i, /item.*total/i, /subtotal/i, /price/i, /amount/i));
+  const tax = parseMoney(valueFor(/tax/i));
+  const shipping = parseMoney(valueFor(/shipping/i));
+  const discount = Math.abs(parseMoney(valueFor(/discount/i, /promotion/i, /promo/i)));
+  const totalCharged = parseMoney(valueFor(/total.*charged/i, /charge.*amount/i, /^total$/i));
+  const amount = round(Math.abs(subtotal || totalCharged) + Math.max(0, tax) + Math.max(0, shipping) - discount);
+  if (!title || !amount) return null;
+  return {
+    id: uniqueId("amzitem"),
+    orderId,
+    date,
+    title,
+    amount,
+    category: categoryForAmazonItem(title),
+    seller: sanitize(valueFor(/seller/i, /merchant/i)),
+    paymentHint: sanitize(valueFor(/payment/i, /card/i, /last.?4/i))
+  };
+}
+
+function categoryForAmazonItem(title) {
+  const itemText = sanitize(title);
+  const rule = BUILT_IN_RULES.find((entry) => !entry.type || entry.type !== "transfer" ? entry.match.test(itemText) : false);
+  if (rule?.category && state.categories.some((cat) => cat.name === rule.category)) return rule.category;
+  if (/diaper|toy|school|kid|children|child|baby|formula/i.test(itemText) && state.categories.some((cat) => cat.name === "Kids")) return "Kids";
+  if (/paper towel|toilet paper|cleaner|soap|detergent|trash bag|laundry/i.test(itemText) && state.categories.some((cat) => cat.name === "Shopping")) return "Shopping";
+  return state.categories.some((cat) => cat.name === "Shopping") ? "Shopping" : "Uncategorized";
+}
+
+function groupAmazonItems(items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const key = `${item.orderId || "unknown"}|${item.date}`;
+    if (!groups.has(key)) groups.set(key, { id: key, orderId: item.orderId, date: item.date, items: [], total: 0 });
+    const group = groups.get(key);
+    group.items.push(item);
+    group.total = round(group.total + item.amount);
+  });
+  return Array.from(groups.values()).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function isAmazonLikeTransaction(tx) {
+  return /amazon|amzn|audible|kindle/i.test(`${tx.description || ""} ${tx.merchant || ""} ${tx.vendor || ""}`) && isReportableExpense(tx);
+}
+
+function matchAmazonGroupToTransaction(group) {
+  const candidates = state.transactions.filter((tx) => {
+    if (!isAmazonLikeTransaction(tx)) return false;
+    if (tx.splits?.length && tx.splitStatus !== "needs_split_review") return false;
+    if (Math.abs(reportableExpenseAmount(tx) - group.total) > SPLIT_TOLERANCE) return false;
+    return daysBetween(tx.date, group.date) <= 10;
+  }).map((tx) => ({ transaction: tx, score: 100 - daysBetween(tx.date, group.date) * 4 }));
+  if (candidates.length === 1) return { transaction: candidates[0].transaction, confidence: Math.max(82, Math.round(candidates[0].score)), reason: "Exact amount and nearby Amazon date match." };
+  if (candidates.length > 1) return { transaction: null, confidence: 0, reason: "Multiple same-amount Amazon transactions are nearby." };
+  return { transaction: null, confidence: 0, reason: "No Amazon transaction with the same reconciled total was found." };
+}
+
+function applyAmazonItemization() {
+  if (!pendingAmazonImport?.matches?.length) return showStatus("No Amazon groups are ready to apply.");
+  let applied = 0;
+  pendingAmazonImport.matches.forEach((group) => {
+    const tx = group.match.transaction;
+    if (!tx) return;
+    tx.splits = group.items.map((item) => normalizeSplitLine({
+      amount: item.amount,
+      category: item.category,
+      description: item.title,
+      merchant: item.seller || "Amazon",
+      source: "amazon",
+      sourceOrderId: item.orderId,
+      sourceItemId: item.id,
+      confidence: group.match.confidence,
+      needsReview: item.category === "Uncategorized"
+    }, tx));
+    tx.itemizationSource = "amazon_order_export";
+    tx.itemizationMatchConfidence = group.match.confidence;
+    tx.source = "Amazon itemization";
+    tx.reason = "Matched Amazon item export to this bank/card transaction by amount and date.";
+    tx.needsReview = tx.splits.some((split) => split.needsReview);
+    normalizeTransactionSplitState(tx);
+    applied += 1;
+  });
+  pendingAmazonImport = null;
+  renderAll();
+  showStatus(`Applied Amazon itemization to ${applied} transaction${applied === 1 ? "" : "s"}.`);
 }
 
 function createImportedAccount(name, institution = "") {
@@ -1250,6 +1507,7 @@ function renderTransactions() {
         </div>
       </div>
       ${csvImportDetailsHtml()}
+      ${amazonImportDetailsHtml()}
       ${transactionInsightsHtml(rows)}
       ${aiAnalysisPanelHtml(rows)}
       ${filtersHtml()}
@@ -1396,6 +1654,54 @@ function clearAiAnalysisStatus() {
     window.clearInterval(aiAnalysisStatusTimer);
     aiAnalysisStatusTimer = null;
   }
+}
+
+function amazonImportDetailsHtml() {
+  return `
+    <details class="import-disclosure amazon-import-disclosure" ${pendingAmazonImport ? "open" : ""}>
+      <summary>
+        <span class="import-summary-copy">
+          <span class="eyebrow">Amazon itemization</span>
+          <strong>Import Amazon purchase items</strong>
+          <small>Upload Amazon order/item CSV or JSON to match item lines to existing Amazon card transactions.</small>
+        </span>
+        <span class="chip">${pendingAmazonImport ? "Preview ready" : "Expand import"}</span>
+      </summary>
+      <div class="import-disclosure-body">
+        <div class="split-panel amazon-import-grid">
+          <section class="panel import-upload-panel">
+            <h3>Upload Amazon order data</h3>
+            <p class="status-line">This does not log into Amazon or create new bank transactions. It itemizes existing Amazon transactions when one clear amount/date match is found.</p>
+            <div class="field"><label for="amazonFile">Amazon CSV or JSON file</label><input id="amazonFile" type="file" accept=".csv,.json,text/csv,application/json"></div>
+            <div class="form-actions" style="margin-top:1rem">
+              <button id="applyAmazonItemizationButton" class="btn btn-primary" type="button" ${pendingAmazonImport?.matches?.length ? "" : "disabled"}>Apply Matched Itemization</button>
+              <button id="clearAmazonImportButton" class="btn btn-secondary" type="button" ${pendingAmazonImport ? "" : "disabled"}>Clear Preview</button>
+            </div>
+          </section>
+          <aside class="panel import-preview-panel">
+            <h3>Amazon preview</h3>
+            <div id="amazonPreview">${pendingAmazonImport ? amazonImportPreviewHtml() : `<div class="empty-state">Upload an Amazon order/item export after importing your card transactions. Exact one-to-one matches can be itemized automatically; ambiguous matches stay in review.</div>`}</div>
+          </aside>
+        </div>
+      </div>
+    </details>
+  `;
+}
+
+function amazonImportPreviewHtml() {
+  const preview = pendingAmazonImport;
+  const unmatchedCount = preview.groups.length - preview.matches.length;
+  const rows = preview.groups.slice(0, 8).map((group) => {
+    const matched = group.match?.transaction;
+    const status = matched ? `<span class="tag good">Matched ${escapeHtml(matched.date)} ${money(matched.amount)}</span>` : `<span class="tag warn">Needs review</span>`;
+    const reason = group.match?.reason || group.reason || "No single exact transaction match was found.";
+    return `<tr><td>${escapeHtml(group.orderId || "Unknown")}</td><td>${escapeHtml(group.date || "")}</td><td>${money(group.total)}</td><td>${group.items.length}</td><td>${status}<small>${escapeHtml(reason)}</small></td></tr>`;
+  }).join("");
+  return `
+    <p><strong>${preview.itemCount}</strong> item rows in <strong>${preview.groups.length}</strong> order/charge groups.</p>
+    <p>Auto-matchable groups: <strong>${preview.matches.length}</strong>. Review needed: <strong>${unmatchedCount}</strong>.</p>
+    <div class="table-wrap" style="margin-top:1rem"><table><thead><tr><th>Order</th><th>Date</th><th>Total</th><th>Items</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="5">No item groups detected.</td></tr>`}</tbody></table></div>
+  `;
 }
 
 function buildAiAnalysisPlan(rows = filteredTransactions()) {
@@ -1750,6 +2056,7 @@ function transactionRow(tx) {
   const source = tx.source || "Imported";
   const reviewTag = tx.needsReview ? `<span class="tag warn">Needs review</span>` : "";
   const flagTags = (tx.flags || []).slice(0, 3).map((flag) => `<span class="tag subtle">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join("");
+  const splitTag = splitStatusTag(tx);
   const recurringOptions = ["none", "suggested", "confirmed", "rejected"].map((status) => `<option value="${status}" ${tx.recurringStatus === status ? "selected" : ""}>${label(status)}</option>`).join("");
   const typeOptions = ["expense", "income", "transfer"].map((option) => `<option value="${option}" ${type === option ? "selected" : ""}>${label(option)}</option>`).join("");
   return `<tr data-id="${escapeAttr(tx.id)}" class="tx-row ${tx.needsReview ? "needs-review" : ""}">
@@ -1763,7 +2070,7 @@ function transactionRow(tx) {
           <p>${escapeHtml(tx.description)}</p>
         </div>
       </div>
-      <div class="tx-tag-row">${reviewTag}${flagTags}</div>
+      <div class="tx-tag-row">${reviewTag}${splitTag}${flagTags}</div>
     </td>
     <td><span class="account-pill">${escapeHtml(accountName(tx.accountId))}</span></td>
     <td class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}"><span>${money(tx.amount)}</span><small>${tx.amount >= 0 ? "Money in" : "Money out"}</small></td>
@@ -1773,8 +2080,17 @@ function transactionRow(tx) {
     <td><select class="recurring-select" data-field="recurringStatus" aria-label="Recurring status">${recurringOptions}</select></td>
     <td><select class="type-select type-${escapeAttr(type)}" data-field="type" aria-label="Transaction type">${typeOptions}</select></td>
     <td><input class="note-input" data-field="notes" aria-label="Transaction notes" value="${escapeAttr(tx.notes || "")}" placeholder="Add note"></td>
-    <td class="table-action-cell"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></td>
+    <td class="table-action-cell"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></td>
   </tr>`;
+}
+
+function splitStatusTag(tx) {
+  if (!tx.splits?.length) return "";
+  const total = money(splitTotal(tx));
+  const difference = splitDifference(tx);
+  if (tx.splitStatus === "needs_split_review") return `<span class="tag warn">Split review ${total}, off ${money(difference)}</span>`;
+  const labelText = tx.splitStatus === "itemized" ? "Itemized" : "Split";
+  return `<span class="tag good">${labelText} ${total}</span>`;
 }
 
 function flowStatusHtml(tx) {
@@ -1830,11 +2146,7 @@ function transactionInsightsHtml(rows) {
 }
 
 function topSpendingCategories(rows, limit = 5) {
-  const totals = {};
-  rows.filter(isReportableExpense).forEach((tx) => {
-    totals[tx.category || "Uncategorized"] = (totals[tx.category || "Uncategorized"] || 0) + reportableExpenseAmount(tx);
-  });
-  return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, limit);
+  return Object.entries(categoryTotalsForTransactions(rows)).sort((a, b) => b[1] - a[1]).slice(0, limit);
 }
 
 function topCategoryMiniList(entries) {
@@ -1903,6 +2215,72 @@ function bindTransactionTable(root) {
     renderAll();
     showStatus("Transaction returned to automatic flow detection.");
   }));
+  root.querySelectorAll("[data-action='split']").forEach((button) => button.addEventListener("click", () => {
+    const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
+    if (!tx) return;
+    editTransactionSplits(tx);
+  }));
+  root.querySelectorAll("[data-action='clear-split']").forEach((button) => button.addEventListener("click", () => {
+    const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
+    if (!tx?.splits?.length || !window.confirm("Clear split/itemized lines and use the parent transaction category again?")) return;
+    clearTransactionSplits(tx);
+    renderAll();
+    showStatus("Split lines cleared.");
+  }));
+}
+
+function editTransactionSplits(tx) {
+  if (!isReportableExpense(tx)) {
+    showStatus("Only external expense transactions can be split.");
+    return;
+  }
+  const existing = (tx.splits || []).length ? tx.splits : [{ amount: reportableExpenseAmount(tx), category: tx.category || "Uncategorized", description: tx.merchant || tx.description || "Split line" }];
+  const exampleCategories = state.categories.map((cat) => cat.name).slice(0, 18).join(", ");
+  const initialValue = existing.map((split) => `${round(Math.abs(split.amount))}, ${split.category || "Uncategorized"}, ${split.description || ""}`).join("\n");
+  const input = window.prompt([
+    `Split ${tx.merchant || tx.description} ${money(reportableExpenseAmount(tx))}`,
+    "Enter one line per category as: amount, category, description",
+    "Example: 50, Groceries, food",
+    `Available categories include: ${exampleCategories}`,
+    "Leave blank to cancel."
+  ].join("\n\n"), initialValue);
+  if (!input) return;
+  const lines = parseSplitLines(input, tx);
+  if (!lines.length) return showStatus("No valid split lines were entered.");
+  const total = round(lines.reduce((sum, split) => sum + Math.abs(split.amount), 0));
+  const expected = reportableExpenseAmount(tx);
+  if (Math.abs(total - expected) > SPLIT_TOLERANCE) {
+    showStatus(`Split total ${money(total)} must equal transaction amount ${money(expected)}. Difference: ${money(round(expected - total))}.`);
+    return;
+  }
+  tx.splits = lines;
+  tx.itemizationSource = "manual";
+  tx.itemizationMatchConfidence = 100;
+  tx.source = "User split";
+  tx.confidence = 100;
+  tx.needsReview = false;
+  normalizeTransactionSplitState(tx);
+  renderAll();
+  showStatus(`Transaction split into ${lines.length} category allocations.`);
+}
+
+function parseSplitLines(input, tx) {
+  return parseCSV(input).map((row) => {
+    const amount = round(Math.abs(parseMoney(row[0])));
+    const category = sanitize(row[1] || "Uncategorized");
+    const description = sanitize(row.slice(2).join(", ") || category || tx.merchant || tx.description);
+    if (!amount) return null;
+    return normalizeSplitLine({ amount, category, description, merchant: tx.merchant, source: "manual", confidence: 100 }, tx);
+  }).filter(Boolean);
+}
+
+function clearTransactionSplits(tx) {
+  tx.splits = [];
+  tx.splitTotal = 0;
+  tx.splitStatus = "none";
+  tx.itemizationSource = "";
+  tx.itemizationMatchConfidence = 0;
+  tx.flags = (tx.flags || []).filter((flag) => flag !== "split_review");
 }
 
 function markExternalFlow(tx) {
@@ -1947,9 +2325,16 @@ function renderReview() {
 function reviewCard(tx) {
   return `<article class="review-card panel" data-id="${tx.id}">
     <input type="checkbox" class="review-select" aria-label="Select transaction">
-    <div><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span></p><p>${flowStatusHtml(tx)}</p><p>${(tx.flags || []).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ")}</p><small class="muted">${escapeHtml(tx.flowReason || tx.reason || "Needs manual confirmation.")}</small></div>
-    <div class="review-actions"><select data-review-category>${categoryOptions(tx.category)}</select><label><input data-apply-rule type="checkbox"> Apply rule</label><button class="mini-btn" data-review="confirm" type="button">Confirm</button><button class="mini-btn" data-review="internal" type="button">Confirm Internal</button><button class="mini-btn" data-review="skip" type="button">Skip</button></div>
+    <div><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span> ${splitStatusTag(tx)}</p><p>${flowStatusHtml(tx)}</p>${splitReviewHtml(tx)}<p>${(tx.flags || []).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ")}</p><small class="muted">${escapeHtml(tx.flowReason || tx.reason || "Needs manual confirmation.")}</small></div>
+    <div class="review-actions"><select data-review-category>${categoryOptions(tx.category)}</select><label><input data-apply-rule type="checkbox"> Apply rule</label><button class="mini-btn" data-review="confirm" type="button">Confirm</button><button class="mini-btn" data-review="split" type="button">Split</button><button class="mini-btn" data-review="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-review="internal" type="button">Confirm Internal</button><button class="mini-btn" data-review="skip" type="button">Skip</button></div>
   </article>`;
+}
+
+function splitReviewHtml(tx) {
+  if (!tx.splits?.length) return "";
+  const rows = tx.splits.slice(0, 8).map((split) => `<li>${escapeHtml(split.category)} · ${money(split.amount)} · ${escapeHtml(split.description)}</li>`).join("");
+  const extra = tx.splits.length > 8 ? `<li>${tx.splits.length - 8} more split lines</li>` : "";
+  return `<div class="split-summary"><strong>Split total ${money(splitTotal(tx))}</strong><small>Transaction amount ${money(reportableExpenseAmount(tx))}; difference ${money(splitDifference(tx))}.</small><ul>${rows}${extra}</ul></div>`;
 }
 
 function bindReviewActions(root) {
@@ -1985,6 +2370,17 @@ function bindReviewActions(root) {
     resolveRecurringReview(tx, "confirmed");
     renderAll();
     showStatus("Internal money movement confirmed.");
+  }));
+  root.querySelectorAll("[data-review='split']").forEach((button) => button.addEventListener("click", () => {
+    const tx = state.transactions.find((item) => item.id === button.closest("article")?.dataset.id);
+    if (tx) editTransactionSplits(tx);
+  }));
+  root.querySelectorAll("[data-review='clear-split']").forEach((button) => button.addEventListener("click", () => {
+    const tx = state.transactions.find((item) => item.id === button.closest("article")?.dataset.id);
+    if (!tx?.splits?.length || !window.confirm("Clear split/itemized lines and use the parent transaction category again?")) return;
+    clearTransactionSplits(tx);
+    renderAll();
+    showStatus("Split lines cleared.");
   }));
   root.querySelectorAll("[data-review='skip']").forEach((button) => button.addEventListener("click", () => {
     const tx = state.transactions.find((item) => item.id === button.closest("article").dataset.id);
@@ -2460,7 +2856,12 @@ function makeTransaction(row, id) {
     transferStatus: "",
     flowConfidence: 0,
     flowReason: "Flow classification is pending review.",
-    flowSource: "auto"
+    flowSource: "auto",
+    splits: [],
+    splitStatus: "none",
+    splitTotal: 0,
+    itemizationSource: "",
+    itemizationMatchConfidence: 0
   };
   return tx;
 }
@@ -2632,10 +3033,10 @@ function monthlySummary(month) {
   const unmatchedRows = transferDatedTxs.filter((tx) => tx.transferStatus === "unmatched" || tx.transferStatus === "ambiguous");
   const unmatchedTransfers = { count: unmatchedRows.length, total: round(unmatchedRows.reduce((sum, tx) => sum + Math.abs(tx.amount), 0)) };
   const recurring = txs.filter((tx) => tx.recurringStatus === "confirmed" || state.recurring.some((item) => item.merchant === tx.merchant && item.status !== "rejected")).reduce((sum, tx) => isReportableExpense(tx) ? sum + reportableExpenseAmount(tx) : sum, 0);
-  const byCategory = {};
-  txs.filter(isReportableExpense).forEach((tx) => { byCategory[tx.category] = (byCategory[tx.category] || 0) + reportableExpenseAmount(tx); });
+  const byCategory = categoryTotalsForTransactions(txs);
+  const splitReviewCount = txs.filter((tx) => tx.splitStatus === "needs_split_review").length;
   const netCashFlow = round(actualIncome - spending);
-  return { actualIncome, spending, payments: creditCardPayments, netSpending: spending, netCashFlow, remaining: netCashFlow, internalTransfersIn, internalTransfersOut, internalTransferVolume, creditCardPayments, unmatchedTransfers, recurring: round(recurring), reviewCount: txs.filter((tx) => tx.needsReview).length, byCategory };
+  return { actualIncome, spending, payments: creditCardPayments, netSpending: spending, netCashFlow, remaining: netCashFlow, internalTransfersIn, internalTransfersOut, internalTransferVolume, creditCardPayments, unmatchedTransfers, recurring: round(recurring), reviewCount: txs.filter((tx) => tx.needsReview).length, splitReviewCount, byCategory };
 }
 
 function summaryCard(title, value, tone, note = "") {
@@ -2651,19 +3052,20 @@ function categoryBars(data) {
 }
 
 function quickStatus(summary) {
-  return `<p><span class="tag good">Outside income</span> ${money(summary.actualIncome)}</p><p><span class="tag danger">Outside spending</span> ${money(summary.spending)}</p><p><span class="tag warn">Internal movement</span> ${money(summary.internalTransferVolume)} ignored for income and spending.</p><p><span class="tag warn">Card timing</span> Purchases count on purchase dates; later card payments stay internal.</p><p><span class="tag warn">Review</span> ${summary.reviewCount} transactions need attention.</p>`;
+  return `<p><span class="tag good">Outside income</span> ${money(summary.actualIncome)}</p><p><span class="tag danger">Outside spending</span> ${money(summary.spending)}</p><p><span class="tag warn">Internal movement</span> ${money(summary.internalTransferVolume)} ignored for income and spending.</p><p><span class="tag warn">Split categories</span> Reconciled split/itemized purchases feed category totals.</p><p><span class="tag warn">Card timing</span> Purchases count on purchase dates; later card payments stay internal.</p><p><span class="tag warn">Review</span> ${summary.reviewCount} transactions need attention; ${summary.splitReviewCount} split/itemized items need reconciliation.</p>`;
 }
 
 function filteredTransactions() {
   return state.transactions.filter((tx) => {
     const f = state.filters;
-    const haystack = `${tx.description} ${tx.merchant} ${tx.vendor || ""}`.toLowerCase();
+    const splitText = (tx.splits || []).map((split) => `${split.description} ${split.category} ${split.merchant}`).join(" ");
+    const haystack = `${tx.description} ${tx.merchant} ${tx.vendor || ""} ${splitText}`.toLowerCase();
     if (f.search && !haystack.includes(f.search.toLowerCase())) return false;
     if (f.start && tx.date < f.start) return false;
     if (f.end && tx.date > f.end) return false;
     if (f.month && !tx.date.startsWith(f.month)) return false;
     if (f.account && tx.accountId !== f.account) return false;
-    if (f.category && tx.category !== f.category) return false;
+    if (f.category && !categoryMatchesTransaction(tx, f.category)) return false;
     if (f.merchant && !tx.merchant.toLowerCase().includes(f.merchant.toLowerCase())) return false;
     if (f.vendor && !transactionVendor(tx).toLowerCase().includes(f.vendor.toLowerCase())) return false;
     if (f.hideCredits && isAccountCredit(tx)) return false;
@@ -2681,7 +3083,7 @@ function filteredTransactions() {
 
 function reviewQueue() {
   const recurringMerchants = new Set(state.recurring.filter((item) => item.status === "suggested").map((item) => item.merchant));
-  return state.transactions.filter((tx) => tx.needsReview || tx.reportingType === "review" || tx.category === "Uncategorized" || tx.flags?.length || recurringMerchants.has(tx.merchant)).sort((a, b) => b.date.localeCompare(a.date));
+  return state.transactions.filter((tx) => tx.needsReview || tx.reportingType === "review" || tx.splitStatus === "needs_split_review" || tx.category === "Uncategorized" || tx.flags?.length || recurringMerchants.has(tx.merchant)).sort((a, b) => b.date.localeCompare(a.date));
 }
 
 function detectRecurring(transactions) {
@@ -2941,8 +3343,9 @@ function categoryAncestorMatches(category, term) {
 
 function categoryAggregate(category) {
   const names = new Set(categoryAndDescendantNames(category));
-  const rows = state.transactions.filter((tx) => names.has(tx.category) && isReportableExpense(tx));
-  return { count: rows.length, total: round(rows.reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0)) };
+  const allocations = reportingAllocationsForTransactions(state.transactions).filter((allocation) => names.has(allocation.category));
+  const transactionIds = new Set(allocations.map((allocation) => allocation.parentTransactionId));
+  return { count: transactionIds.size, total: round(allocations.reduce((sum, allocation) => sum + allocation.amount, 0)) };
 }
 
 function categorySort(a, b) {
@@ -2998,15 +3401,16 @@ function categoryBreadcrumb(category) {
 
 function categoryDrilldown(category) {
   const names = new Set(categoryAndDescendantNames(category));
-  const rows = state.transactions.filter((tx) => names.has(tx.category) && isReportableExpense(tx));
-  const total = round(rows.reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0));
+  const allocations = reportingAllocationsForTransactions(state.transactions).filter((allocation) => names.has(allocation.category));
+  const transactionIds = new Set(allocations.map((allocation) => allocation.parentTransactionId));
+  const total = round(allocations.reduce((sum, allocation) => sum + allocation.amount, 0));
   const months = monthOptions();
-  const monthly = months.map((month) => ({ month, total: round(rows.filter((tx) => transactionReportingMonth(tx) === month).reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0)) })).filter((item) => item.total > 0);
+  const monthly = months.map((month) => ({ month, total: round(allocations.filter((allocation) => allocation.month === month).reduce((sum, allocation) => sum + allocation.amount, 0)) })).filter((item) => item.total > 0);
   const childTotals = childCategories(category.id).map((child) => {
     const childNames = new Set(categoryAndDescendantNames(child));
-    return { child, total: round(rows.filter((tx) => childNames.has(tx.category)).reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0)) };
+    return { child, total: round(allocations.filter((allocation) => childNames.has(allocation.category)).reduce((sum, allocation) => sum + allocation.amount, 0)) };
   }).filter((item) => item.total > 0).sort((a, b) => b.total - a.total);
-  return `<div class="category-drilldown"><div class="summary-grid compact-summary">${summaryCard("Selected category", categoryBreadcrumb(category), "")} ${summaryCard("Overall total", total, "danger")} ${summaryCard("Transactions", rows.length, "warn", "Count")}</div>${childTotals.length ? `<h4>Nested totals</h4><div class="mini-category-list">${childTotals.map(({ child, total: childTotal }) => `<button class="mini-category-row drilldown-row" data-cat-report="${escapeAttr(child.id)}" type="button"><div><span>${escapeHtml(categoryBaseName(child))}</span><strong>${money(childTotal)}</strong></div><em><i style="width:${Math.max(7, total ? (childTotal / total) * 100 : 0)}%"></i></em></button>`).join("")}</div>` : ""}<h4>Monthly totals</h4>${monthly.length ? `<div class="table-wrap compact-table"><table><thead><tr><th>Month</th><th>Total</th></tr></thead><tbody>${monthly.map((item) => `<tr><td>${escapeHtml(item.month)}</td><td>${money(item.total)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state compact">No transactions assigned to this category or its nested categories yet.</div>`}</div>`;
+  return `<div class="category-drilldown"><div class="summary-grid compact-summary">${summaryCard("Selected category", categoryBreadcrumb(category), "")} ${summaryCard("Overall total", total, "danger")} ${summaryCard("Transactions", transactionIds.size, "warn", "Count")}</div>${childTotals.length ? `<h4>Nested totals</h4><div class="mini-category-list">${childTotals.map(({ child, total: childTotal }) => `<button class="mini-category-row drilldown-row" data-cat-report="${escapeAttr(child.id)}" type="button"><div><span>${escapeHtml(categoryBaseName(child))}</span><strong>${money(childTotal)}</strong></div><em><i style="width:${Math.max(7, total ? (childTotal / total) * 100 : 0)}%"></i></em></button>`).join("")}</div>` : ""}<h4>Monthly totals</h4>${monthly.length ? `<div class="table-wrap compact-table"><table><thead><tr><th>Month</th><th>Total</th></tr></thead><tbody>${monthly.map((item) => `<tr><td>${escapeHtml(item.month)}</td><td>${money(item.total)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state compact">No transactions assigned to this category or its nested categories yet.</div>`}</div>`;
 }
 
 function monthOptions() {
