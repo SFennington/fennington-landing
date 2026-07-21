@@ -352,18 +352,26 @@ async function loadUserState() {
 
 async function migrateLegacyUserProfile(profileRef) {
   const existingProfile = await getDoc(profileRef);
-  if (existingProfile.exists()) return;
+  if (existingProfile.exists() && existingProfile.data().migrationComplete === true) return;
   const legacyProfileRef = doc(db, "users", currentUser.uid, "financialProfiles", "default");
   const legacyProfile = await getDoc(legacyProfileRef);
   if (!legacyProfile.exists()) return;
 
-  await setDoc(profileRef, { ...legacyProfile.data(), workspaceId: sharedWorkspaceId, migratedFromUserId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(profileRef, { ...legacyProfile.data(), workspaceId: sharedWorkspaceId, migratedFromUserId: currentUser.uid, migrationComplete: false, updatedAt: serverTimestamp() }, { merge: true });
   await Promise.all(profileCollectionNames.map(async (name) => {
-    const snap = await getDocs(collection(legacyProfileRef, name));
-    await Promise.all(snap.docs.map((item) => setDoc(doc(profileRef, name, item.id), { ...item.data(), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true })));
+    const [legacySnap, sharedSnap] = await Promise.all([getDocs(collection(legacyProfileRef, name)), getDocs(collection(profileRef, name))]);
+    const sharedIds = new Set(sharedSnap.docs.map((item) => item.id));
+    await copyMissingLegacyDocs(profileRef, name, legacySnap.docs.filter((item) => !sharedIds.has(item.id)));
   }));
   const incomeSnap = await getDoc(doc(legacyProfileRef, "settings", "income"));
   if (incomeSnap.exists()) await setDoc(doc(profileRef, "settings", "income"), { ...incomeSnap.data(), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(profileRef, { migrationComplete: true, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+async function copyMissingLegacyDocs(profileRef, name, docs) {
+  for (let i = 0; i < docs.length; i += 100) {
+    await Promise.all(docs.slice(i, i + 100).map((item) => setDoc(doc(profileRef, name, item.id), { ...item.data(), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true })));
+  }
 }
 
 async function saveState() {
