@@ -3,8 +3,10 @@ import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signO
 import { getFirestore, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
 const DEFAULT_CATEGORIES = [
-  "Housing", "Utilities", "Groceries", "Restaurants", "Transportation", "Fuel", "Vehicle expenses", "Insurance", "Medical", "Shopping", "Entertainment", "Subscriptions", "Childcare", "Education", "Debt payments", "Taxes", "Transfers", "Income", "Uncategorized"
+  "Housing", "Utilities", "Groceries", "Restaurants", "Transportation", "Fuel", "Vehicle expenses", "Insurance", "Medical", "Shopping", "Entertainment", "Subscriptions", "Childcare", "Education", "Debt payments", "Taxes", "Transfers", "Credits to the Account", "Income", "Uncategorized"
 ];
+
+const ACCOUNT_CREDIT_CATEGORY = "Credits to the Account";
 
 const FEATURES = [
   "Automatic transaction categorization",
@@ -31,7 +33,8 @@ const BUILT_IN_RULES = [
   { match: /movie|theater|steam|xbox|playstation|concert|ticket/i, category: "Entertainment", confidence: 82 },
   { match: /daycare|childcare|school lunch/i, category: "Childcare", confidence: 82 },
   { match: /tuition|school|university|student loan|books/i, category: "Education", confidence: 80 },
-  { match: /credit card payment|payment thank you|online payment received|transfer|zelle|venmo|cash app|savings|refund|reimbursement/i, category: "Transfers", confidence: 78, type: "transfer" },
+  { match: /credit card payment|payment thank you|online payment received|refund|reimbursement/i, category: "Transfers", confidence: 82, type: "transfer" },
+  { match: /transfer|zelle|venmo|cash app|savings/i, category: "Transfers", confidence: 78, type: "transfer" },
   { match: /loan payment|minimum payment/i, category: "Debt payments", confidence: 80 },
   { match: /irs|tax|state revenue|withholding/i, category: "Taxes", confidence: 84 },
   { match: /payroll|direct deposit|salary|paycheck|wages/i, category: "Income", confidence: 94, type: "income" },
@@ -282,6 +285,7 @@ async function saveState() {
 }
 
 function renderAll() {
+  ensureDefaultCategories();
   normalizeCreditCardPaymentSigns();
   const previousRecurring = new Map(state.recurring.map((item) => [item.id, item]));
   state.recurring = detectRecurring(state.transactions).map((item) => ({ ...item, status: previousRecurring.get(item.id)?.status || item.status }));
@@ -296,13 +300,21 @@ function renderAll() {
   saveState();
 }
 
+function ensureDefaultCategories() {
+  DEFAULT_CATEGORIES.forEach((name) => {
+    if (!state.categories.some((cat) => cat.name.toLowerCase() === name.toLowerCase())) {
+      state.categories.push({ id: slug(name), name, system: true });
+    }
+  });
+}
+
 function normalizeCreditCardPaymentSigns() {
   const creditAccounts = new Set(state.accounts.filter((account) => account.type === "credit").map((account) => account.id));
   state.transactions.forEach((tx) => {
     const looksLikePayment = tx.category === "Transfers" || tx.type === "transfer" || /payment|autopay|thank you|payment received|online payment/i.test(`${tx.description} ${tx.merchant}`);
-    if (tx.amount < 0 && creditAccounts.has(tx.accountId) && looksLikePayment) {
-      tx.amount = Math.abs(tx.amount);
-      setCategory(tx, "Transfers", Math.max(90, tx.confidence || 0), tx.source || "Payment sign normalization", "Credit-card payments are tracked as positive credits.", "transfer");
+    if (creditAccounts.has(tx.accountId) && looksLikePayment) {
+      if (tx.amount < 0) tx.amount = Math.abs(tx.amount);
+      setCategory(tx, ACCOUNT_CREDIT_CATEGORY, Math.max(90, tx.confidence || 0), tx.source || "Payment sign normalization", "Credit-card payments are tracked as positive credits.", "transfer");
     }
   });
 }
@@ -471,7 +483,7 @@ function importTransactions() {
   });
   imported.forEach((tx) => applyCategorization(tx, state));
   imported.filter((tx) => tx.importDirection === "credit" && state.accounts.find((account) => account.id === tx.accountId)?.type === "credit").forEach((tx) => {
-    setCategory(tx, "Transfers", Math.max(90, tx.confidence || 0), "CSV credit column", "Mapped Credit column on a credit-card account was imported as a card payment or credit.", "transfer");
+    setCategory(tx, ACCOUNT_CREDIT_CATEGORY, Math.max(90, tx.confidence || 0), "CSV credit column", "Mapped Credit column on a credit-card account was imported as a card payment or credit.", "transfer");
   });
   flagDuplicates(imported, state.transactions);
   state.transactions.push(...imported);
@@ -520,6 +532,7 @@ function filtersHtml() {
       <div class="field"><label for="filterCategory">Category</label><select id="filterCategory"><option value="">All categories</option>${cats}</select></div>
       <div class="field"><label for="filterMerchant">Merchant</label><input id="filterMerchant" value="${escapeAttr(state.filters.merchant || "")}" placeholder="Merchant"></div>
       <div class="field"><label for="filterType">Type</label><select id="filterType"><option value="">Any</option>${["income", "expense", "transfer", "uncategorized", "review"].map((t) => `<option value="${t}" ${state.filters.type === t ? "selected" : ""}>${label(t)}</option>`).join("")}</select></div>
+      <label class="field checkbox-field"><span>Hide Credits from Transactions</span><input id="filterHideCredits" type="checkbox" ${state.filters.hideCredits ? "checked" : ""}></label>
     </div>
   `;
 }
@@ -533,6 +546,13 @@ function bindFilters() {
       renderTransactions();
     });
   });
+  const hideCredits = document.getElementById("filterHideCredits");
+  if (hideCredits) {
+    hideCredits.addEventListener("change", () => {
+      state.filters.hideCredits = hideCredits.checked;
+      renderTransactions();
+    });
+  }
 }
 
 function transactionTable(rows) {
@@ -561,6 +581,7 @@ function bindTransactionTable(root) {
     const tx = state.transactions.find((item) => item.id === tr.dataset.id);
     const previousCategory = tx.category;
     tr.querySelectorAll("[data-field]").forEach((input) => { tx[input.dataset.field] = sanitize(input.value); });
+    if (tx.category === "Income" || isTransferCategory(tx.category)) tx.type = typeForCategory(tx.category, tx.amount);
     tx.needsReview = false;
     tx.flags = (tx.flags || []).filter((flag) => flag !== "low_confidence" && flag !== "uncategorized");
     tx.source = tx.source === "AI" ? tx.source : "User";
@@ -599,7 +620,7 @@ function bindReviewActions(root) {
     const card = button.closest("article");
     const tx = state.transactions.find((item) => item.id === card.dataset.id);
     tx.category = card.querySelector("[data-review-category]").value;
-    tx.type = tx.category === "Income" ? "income" : tx.category === "Transfers" ? "transfer" : "expense";
+    tx.type = typeForCategory(tx.category, tx.amount);
     tx.needsReview = false;
     tx.confidence = 100;
     tx.source = "User";
@@ -619,7 +640,7 @@ function bindReviewActions(root) {
     root.querySelectorAll(".review-select:checked").forEach((checkbox) => {
       const tx = state.transactions.find((item) => item.id === checkbox.closest("article").dataset.id);
       tx.category = category;
-      tx.type = category === "Income" ? "income" : category === "Transfers" ? "transfer" : "expense";
+      tx.type = typeForCategory(category, tx.amount);
       tx.needsReview = false;
       tx.confidence = 100;
       tx.source = "Bulk review";
@@ -810,8 +831,11 @@ function applyCategorization(tx, sourceState) {
   if (mapping) return setCategory(tx, mapping.category, 96, "Confirmed merchant mapping", "Matched a previously confirmed merchant mapping.");
   const builtIn = BUILT_IN_RULES.find((rule) => rule.match.test(haystack));
   if (builtIn) setCategory(tx, builtIn.category, builtIn.confidence, "Built-in merchant keyword", "Matched built-in merchant keyword rules.", builtIn.type);
+  if (tx.amount > 0 && /credit card payment|payment thank you|online payment received|refund|reimbursement/i.test(haystack)) {
+    setCategory(tx, ACCOUNT_CREDIT_CATEGORY, Math.max(82, tx.confidence || 0), "Built-in merchant keyword", "Positive credits are tracked separately from income and spending.", "transfer");
+  }
   if (Math.abs(tx.amount) > 1000 && tx.type === "expense") tx.flags.push("unusually_high_amount");
-  if (tx.category === "Transfers" || tx.type === "transfer") tx.flags.push("possible_transfer");
+  if (isTransferCategory(tx.category) || tx.type === "transfer") tx.flags.push("possible_transfer");
   if (tx.confidence < threshold || tx.category === "Uncategorized") {
     tx.needsReview = true;
     tx.flags.push(tx.category === "Uncategorized" ? "uncategorized" : "low_confidence");
@@ -824,8 +848,22 @@ function setCategory(tx, category, confidence, source, reason, type) {
   tx.confidence = confidence;
   tx.source = source;
   tx.reason = reason;
-  tx.type = type || (category === "Income" ? "income" : category === "Transfers" ? "transfer" : "expense");
+  tx.type = type || typeForCategory(category, tx.amount);
   tx.needsReview = false;
+}
+
+function typeForCategory(category, amount = 0) {
+  if (category === "Income") return "income";
+  if (category === "Transfers" || category === ACCOUNT_CREDIT_CATEGORY) return "transfer";
+  return Number(amount || 0) >= 0 ? "income" : "expense";
+}
+
+function isTransferCategory(category) {
+  return category === "Transfers" || category === ACCOUNT_CREDIT_CATEGORY;
+}
+
+function isAccountCredit(tx) {
+  return tx.category === ACCOUNT_CREDIT_CATEGORY || (tx.amount > 0 && state.accounts.find((account) => account.id === tx.accountId)?.type === "credit");
 }
 
 async function categorizeWithServer(imported) {
@@ -845,7 +883,7 @@ async function categorizeWithServer(imported) {
       tx.confidence = Math.max(0, Math.min(100, Number(result.confidence || 0)));
       tx.reason = sanitize(result.reason || "AI categorization based on transaction description only.");
       tx.source = "AI";
-      tx.type = tx.category === "Income" ? "income" : tx.category === "Transfers" ? "transfer" : tx.amount >= 0 ? "income" : "expense";
+      tx.type = typeForCategory(tx.category, tx.amount);
       tx.needsReview = tx.confidence < Number(state.profile.confidenceThreshold || 78) || tx.category === "Uncategorized";
     });
     renderAll();
@@ -928,12 +966,12 @@ function duplicateKey(tx) {
 
 function monthlySummary(month) {
   const txs = state.transactions.filter((tx) => tx.date?.startsWith(month));
-  const actualIncome = txs.filter((tx) => tx.type === "income" && tx.category !== "Transfers").reduce((sum, tx) => sum + tx.amount, 0);
-  const spending = txs.filter((tx) => tx.type === "expense" && tx.category !== "Transfers").reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-  const payments = txs.filter((tx) => tx.amount > 0 && (tx.type === "transfer" || tx.category === "Transfers")).reduce((sum, tx) => sum + tx.amount, 0);
+  const actualIncome = txs.filter((tx) => tx.type === "income" && !isTransferCategory(tx.category)).reduce((sum, tx) => sum + tx.amount, 0);
+  const spending = txs.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const payments = txs.filter((tx) => tx.amount > 0 && (tx.type === "transfer" || isTransferCategory(tx.category))).reduce((sum, tx) => sum + tx.amount, 0);
   const recurring = txs.filter((tx) => tx.recurringStatus === "confirmed" || state.recurring.some((item) => item.merchant === tx.merchant && item.status !== "rejected")).reduce((sum, tx) => tx.type === "expense" ? sum + Math.abs(tx.amount) : sum, 0);
   const byCategory = {};
-  txs.filter((tx) => tx.type === "expense" && tx.category !== "Transfers").forEach((tx) => { byCategory[tx.category] = (byCategory[tx.category] || 0) + Math.abs(tx.amount); });
+  txs.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).forEach((tx) => { byCategory[tx.category] = (byCategory[tx.category] || 0) + Math.abs(tx.amount); });
   const netSpending = spending - payments;
   return { actualIncome, spending, payments, netSpending, remaining: actualIncome - netSpending, recurring, reviewCount: txs.filter((tx) => tx.needsReview).length, byCategory };
 }
@@ -965,6 +1003,7 @@ function filteredTransactions() {
     if (f.account && tx.accountId !== f.account) return false;
     if (f.category && tx.category !== f.category) return false;
     if (f.merchant && !tx.merchant.toLowerCase().includes(f.merchant.toLowerCase())) return false;
+    if (f.hideCredits && isAccountCredit(tx)) return false;
     if (f.type === "review" && !tx.needsReview) return false;
     if (f.type === "uncategorized" && tx.category !== "Uncategorized") return false;
     if (["income", "expense", "transfer"].includes(f.type) && tx.type !== f.type) return false;
@@ -979,7 +1018,7 @@ function reviewQueue() {
 
 function detectRecurring(transactions) {
   const groups = new Map();
-  transactions.filter((tx) => tx.type === "expense" && tx.category !== "Transfers").forEach((tx) => {
+  transactions.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).forEach((tx) => {
     const key = tx.merchant.toLowerCase();
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(tx);

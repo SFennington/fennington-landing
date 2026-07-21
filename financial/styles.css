@@ -342,6 +342,18 @@
   min-height: 72px;
 }
 
+.checkbox-field {
+  align-items: center;
+  display: flex;
+  gap: 0.65rem;
+  justify-content: space-between;
+}
+
+.checkbox-field input {
+  flex: 0 0 auto;
+  width: auto;
+}
+
 .table-wrap {
   border: 1px solid var(--financial-line);
   border-radius: 14px;
