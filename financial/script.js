@@ -544,6 +544,7 @@ function renderAll(options = {}) {
   renderReports();
   renderIncome();
   renderRecurring();
+  renderRules();
   renderCategories();
   if (options.save !== false) saveState();
 }
@@ -2173,7 +2174,8 @@ function bindTransactionTable(root) {
     if (!tx) return;
     let statusMessage = "";
     if (previousCategory !== tx.category && tx.merchant && window.confirm("Apply this category to future transactions from this merchant?")) {
-      state.rules.push({ id: uniqueId("rule"), type: "merchant", match: tx.merchant, category: tx.category, createdAt: new Date().toISOString() });
+      const updatedCount = createReviewRuleAndApplyToMatches(tx);
+      statusMessage = updatedCount > 1 ? `Rule created and ${updatedCount} matching transactions were categorized.` : "Rule created for future matching transactions.";
     }
     if (previousVendor !== tx.vendor && tx.vendor && window.confirm("Apply this vendor to matching transaction descriptions before AI analysis?")) {
       const updatedCount = createVendorRuleAndApplyToMatches(tx);
@@ -2472,17 +2474,42 @@ function resolveRecurringReview(tx, status) {
 }
 
 function createReviewRuleAndApplyToMatches(sourceTx) {
-  const match = sanitize(sourceTx.description || sourceTx.merchant);
+  const match = categoryRuleMatchText(sourceTx);
   if (!match) return 0;
-  const rule = { id: uniqueId("rule"), type: sourceTx.description ? "description" : "merchant", match, category: sourceTx.category, createdAt: new Date().toISOString() };
+  const rule = { id: uniqueId("rule"), type: "merchant", match, category: sourceTx.category, createdAt: new Date().toISOString() };
   const hasRule = state.rules.some((item) => item.type === rule.type && item.match.toLowerCase() === rule.match.toLowerCase() && item.category === rule.category);
   if (!hasRule) state.rules.push(rule);
-  const sourceDescription = normalizedRuleText(sourceTx.description);
-  const sourceMerchant = normalizedRuleText(sourceTx.merchant);
-  const matches = state.transactions.filter((tx) => sourceDescription ? normalizedRuleText(tx.description) === sourceDescription : normalizedRuleText(tx.merchant) === sourceMerchant);
+  return applyCategoryRuleToTransactions(rule, state.transactions);
+}
+
+function categoryRuleMatchText(tx) {
+  return paypalVendorToken(tx.description) || stableDescriptionRuleMatch(tx.description) || sanitize(tx.merchant || tx.vendor || tx.description);
+}
+
+function stableDescriptionRuleMatch(description) {
+  const text = sanitize(description).replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const known = text.match(/\b(AIRBNB\s+PAYMENTS|AIRBNB|PAYPAL\s+\*[A-Z0-9&.'-]+|VENMO|ZELLE)\b/i);
+  if (known) return sanitize(known[1].replace(/^PAYPAL\s+\*/i, ""));
+  const words = text.split(" ");
+  const kept = [];
+  for (const word of words) {
+    const clean = word.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, "");
+    if (!clean) continue;
+    if ((/[0-9*#]/.test(word) || /^[A-Z]{2,}[-*][A-Z0-9]/i.test(word)) && kept.length) break;
+    kept.push(clean);
+    if (kept.length >= 3) break;
+  }
+  const match = kept.join(" ");
+  return match && match.length >= 5 && normalizedRuleText(match) !== normalizedRuleText(text) ? sanitize(match) : "";
+}
+
+function applyCategoryRuleToTransactions(rule, transactions) {
+  if (!rule?.category) return 0;
+  const matches = transactions.filter((tx) => categoryRuleMatches(rule, tx));
   matches.forEach((tx) => {
-    tx.category = sourceTx.category;
-    tx.type = typeForCategory(sourceTx.category, tx.amount);
+    tx.category = rule.category;
+    tx.type = typeForCategory(rule.category, tx.amount);
     tx.needsReview = false;
     tx.confidence = 100;
     tx.source = "User rule";
@@ -2490,6 +2517,16 @@ function createReviewRuleAndApplyToMatches(sourceTx) {
     tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized"].includes(flag));
   });
   return matches.length;
+}
+
+function categoryRuleMatches(rule, tx) {
+  const match = normalizedRuleText(rule.match);
+  if (!match || rule.type === "vendor") return false;
+  const description = normalizedRuleText(tx.description);
+  const merchant = normalizedRuleText(tx.merchant);
+  const vendor = normalizedRuleText(tx.vendor);
+  if (rule.type === "merchant") return normalizedRuleText(`${tx.merchant || ""} ${tx.vendor || ""} ${tx.description || ""}`).includes(match);
+  return description.includes(match) || merchant.includes(match) || vendor.includes(match);
 }
 
 function createVendorRuleAndApplyToMatches(sourceTx) {
@@ -2537,6 +2574,7 @@ function vendorRuleMatches(rule, tx) {
 function detectVendorFromDescription(description) {
   const token = paypalVendorToken(description);
   if (token) return formatVendorToken(token);
+  if (/\bAIRBNB\s+PAYMENTS\b/i.test(description)) return "Airbnb";
   return "";
 }
 
@@ -2703,6 +2741,73 @@ function recurringPayments(item) {
   return state.transactions
     .filter((tx) => tx.merchant === item.merchant && isReportableExpense(tx))
     .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function renderRules() {
+  const tab = document.getElementById("rulesTab");
+  if (!tab) return;
+  const categoryRules = state.rules.filter((rule) => rule.type !== "vendor");
+  const vendorRules = state.rules.filter((rule) => rule.type === "vendor");
+  tab.innerHTML = `
+    <section class="panel rules-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Automation</p>
+          <h3>Categorization Rules</h3>
+          <p class="status-line">Edit saved matching criteria, rerun rules across existing transactions, or delete rules that are too broad.</p>
+        </div>
+        <button id="rerunAllRules" class="btn btn-secondary" type="button" ${categoryRules.length ? "" : "disabled"}>Rerun All Category Rules</button>
+      </div>
+      ${categoryRules.length ? rulesTable(categoryRules) : `<div class="empty-state compact">No category rules yet. Use Apply Rule from a transaction or review card to create one.</div>`}
+    </section>
+    <section class="panel rules-panel" style="margin-top:1rem">
+      <h3>Vendor Cleanup Rules</h3>
+      <p class="status-line">Vendor rules clean up noisy descriptions before categorization and AI analysis.</p>
+      ${vendorRules.length ? vendorRulesTable(vendorRules) : `<div class="empty-state compact">No vendor cleanup rules yet.</div>`}
+    </section>
+  `;
+  bindRuleControls(tab);
+}
+
+function rulesTable(rules) {
+  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable categorization rules table"><table class="rules-table"><thead><tr><th>Match Field</th><th>Criteria</th><th>Category</th><th>Matches</th><th>Created</th><th>Actions</th></tr></thead><tbody>${rules.map((rule) => `<tr data-rule-id="${escapeAttr(rule.id)}"><td><select data-rule-field="type"><option value="merchant" ${rule.type === "merchant" ? "selected" : ""}>Merchant or vendor</option><option value="description" ${rule.type === "description" ? "selected" : ""}>Description</option></select></td><td><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Rule match criteria"></td><td><select data-rule-field="category">${categoryOptions(rule.category || "")}</select></td><td>${ruleMatchCount(rule)}</td><td>${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell"><button class="mini-btn" data-rule-action="save" type="button">Save</button><button class="mini-btn" data-rule-action="rerun" type="button">Rerun</button><button class="mini-btn danger" data-rule-action="delete" type="button">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function vendorRulesTable(rules) {
+  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable vendor rules table"><table class="rules-table"><thead><tr><th>Criteria</th><th>Vendor</th><th>Matches</th><th>Created</th><th>Actions</th></tr></thead><tbody>${rules.map((rule) => `<tr data-rule-id="${escapeAttr(rule.id)}"><td><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Vendor rule match criteria"></td><td><input data-rule-field="vendor" value="${escapeAttr(rule.vendor || "")}" aria-label="Vendor name"></td><td>${vendorRuleMatchCount(rule)}</td><td>${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell"><button class="mini-btn" data-rule-action="save" type="button">Save</button><button class="mini-btn" data-rule-action="rerun" type="button">Rerun</button><button class="mini-btn danger" data-rule-action="delete" type="button">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function bindRuleControls(root) {
+  root.querySelector("#rerunAllRules")?.addEventListener("click", () => {
+    let updated = 0;
+    state.rules.filter((rule) => rule.type !== "vendor").forEach((rule) => { updated += applyCategoryRuleToTransactions(rule, state.transactions); });
+    renderAll();
+    showStatus(`Category rules rerun. ${updated} transaction matches updated.`);
+  });
+  root.querySelectorAll("[data-rule-action]").forEach((button) => button.addEventListener("click", () => {
+    const row = button.closest("[data-rule-id]");
+    const rule = state.rules.find((item) => item.id === row?.dataset.ruleId);
+    if (!rule) return;
+    if (button.dataset.ruleAction === "delete") {
+      if (!window.confirm("Delete this saved rule? Existing transaction categories will not be reverted.")) return;
+      state.rules = state.rules.filter((item) => item.id !== rule.id);
+      renderAll();
+      showStatus("Rule deleted.");
+      return;
+    }
+    row.querySelectorAll("[data-rule-field]").forEach((input) => { rule[input.dataset.ruleField] = sanitize(input.value); });
+    const updated = rule.type === "vendor" ? applyVendorRulesToTransactions(state.transactions, state) : button.dataset.ruleAction === "rerun" ? applyCategoryRuleToTransactions(rule, state.transactions) : 0;
+    renderAll();
+    showStatus(button.dataset.ruleAction === "rerun" ? `Rule rerun. ${updated} transaction matches updated.` : "Rule saved.");
+  }));
+}
+
+function ruleMatchCount(rule) {
+  return state.transactions.filter((tx) => categoryRuleMatches(rule, tx)).length;
+}
+
+function vendorRuleMatchCount(rule) {
+  return state.transactions.filter((tx) => vendorRuleMatches(rule, tx)).length;
 }
 
 function renderCategories() {
@@ -2934,11 +3039,7 @@ function applyCategorization(tx, sourceState) {
   applyVendorRules(tx, sourceState);
   tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized", "possible_transfer", "unusually_high_amount"].includes(flag));
   const haystack = `${tx.description} ${tx.merchant} ${tx.vendor || ""}`;
-  const userRule = sourceState.rules.find((rule) => {
-    if (rule.type === "vendor") return false;
-    if (rule.type === "merchant") return `${tx.merchant || ""} ${tx.vendor || ""}`.toLowerCase().includes(String(rule.match).toLowerCase());
-    return tx.description.toLowerCase().includes(String(rule.match).toLowerCase());
-  });
+  const userRule = sourceState.rules.find((rule) => categoryRuleMatches(rule, tx));
   if (userRule) return setCategory(tx, userRule.category, 100, "User rule", "Matched a user-created categorization rule.");
   const mapping = sourceState.merchantMappings.find((item) => item.merchant.toLowerCase() === tx.merchant.toLowerCase());
   if (mapping) return setCategory(tx, mapping.category, 96, "Confirmed merchant mapping", "Matched a previously confirmed merchant mapping.");
