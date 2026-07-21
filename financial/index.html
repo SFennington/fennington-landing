@@ -19,7 +19,7 @@
         <a href="#features">Features</a>
         <a href="#how-it-works">How It Works</a>
         <a href="#privacy">Privacy</a>
-        <a href="#app">Dashboard</a>
+        <a href="app.html">Dashboard</a>
       </nav>
       <div class="header-actions financial-auth-actions">
         <span id="authStatus" class="auth-status">Not signed in</span>
@@ -86,58 +86,6 @@
         </div>
       </div>
     </section>
-
-    <section id="app" class="financial-app-section">
-      <div class="container">
-        <section id="setupWarning" class="app-alert warning" hidden>
-          <strong>Firebase web config required for account storage.</strong>
-          <span>Update <code>financial/config.js</code> with this Firebase project's web app config. Demo mode works without configuration.</span>
-        </section>
-        <section id="authGate" class="auth-gate">
-          <p class="eyebrow">Account required for saved financial data</p>
-          <h2>Create or sign into a Fennington account</h2>
-          <p>Use the existing Firebase-backed Fennington account system to save financial profiles, accounts, mappings, rules, transactions, and reports.</p>
-          <div class="gate-actions">
-            <button id="gateSignInButton" class="btn btn-primary" type="button">Sign In With Google</button>
-            <button id="gateDemoButton" class="btn btn-secondary" type="button">Open Fictional Demo</button>
-          </div>
-        </section>
-
-        <section id="financialApp" class="financial-app" hidden>
-          <div class="app-topbar">
-            <div>
-              <p class="eyebrow" id="modeLabel">Demo mode</p>
-              <h2>Fennington Financial Dashboard</h2>
-              <p id="profileSummary">Fictional sample profile loaded.</p>
-            </div>
-            <div class="app-actions">
-              <button id="createProfileButton" class="btn btn-secondary" type="button">Create Financial Profile</button>
-              <button id="deleteProfileButton" class="btn danger-btn" type="button">Delete Profile Data</button>
-            </div>
-          </div>
-
-          <nav class="app-tabs" aria-label="Financial app sections">
-            <button data-tab="dashboard" class="active" type="button">Dashboard</button>
-            <button data-tab="import" type="button">CSV Import</button>
-            <button data-tab="transactions" type="button">Transactions</button>
-            <button data-tab="review" type="button">Review Queue</button>
-            <button data-tab="reports" type="button">Reports</button>
-            <button data-tab="income" type="button">Income</button>
-            <button data-tab="recurring" type="button">Recurring</button>
-            <button data-tab="categories" type="button">Categories</button>
-          </nav>
-
-          <section id="dashboardTab" class="tab-panel active"></section>
-          <section id="importTab" class="tab-panel"></section>
-          <section id="transactionsTab" class="tab-panel"></section>
-          <section id="reviewTab" class="tab-panel"></section>
-          <section id="reportsTab" class="tab-panel"></section>
-          <section id="incomeTab" class="tab-panel"></section>
-          <section id="recurringTab" class="tab-panel"></section>
-          <section id="categoriesTab" class="tab-panel"></section>
-        </section>
-      </div>
-    </section>
   </main>
 
   <footer class="footer">
@@ -145,10 +93,6 @@
       <p>&copy; 2026 Fennington Solutions. Fennington Financial is a first-draft CSV-based financial analysis tool.</p>
     </div>
   </footer>
-
-  <template id="rowActionsTemplate">
-    <button class="mini-btn" data-row-action="save" type="button">Save</button>
-  </template>
 
   <script src="config.js"></script>
   <script type="module" src="script.js"></script>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fennington Financial App | Dashboard</title>
+  <meta name="description" content="Sign in to the Fennington Financial dashboard to import CSV transactions, review spending, manage categories, and run financial reports.">
+  <link rel="icon" type="image/png" href="../assets/images/FennSol Logo.png">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="financial-app-page">
+  <header class="header" id="header">
+    <div class="container financial-header">
+      <a href="index.html" class="logo" aria-label="Fennington Financial overview">
+        <img src="../assets/images/FennSol Logo large.png" alt="Fennington Solutions" class="financial-logo">
+      </a>
+      <nav class="nav" id="mainNav">
+        <a href="index.html">Overview</a>
+        <a href="index.html#features">Features</a>
+        <a href="index.html#privacy">Privacy</a>
+        <a href="app.html" aria-current="page">Dashboard</a>
+      </nav>
+      <div class="header-actions financial-auth-actions">
+        <span id="authStatus" class="auth-status">Not signed in</span>
+        <button id="signInButton" class="btn btn-secondary" type="button">Sign In</button>
+        <button id="signOutButton" class="btn btn-secondary" type="button" hidden>Sign Out</button>
+      </div>
+      <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section id="app" class="financial-app-section">
+      <div class="container app-container">
+        <section id="setupWarning" class="app-alert warning" hidden>
+          <strong>Firebase web config required for account storage.</strong>
+          <span>Update <code>financial/config.js</code> with this Firebase project's web app config. Demo mode works without configuration.</span>
+        </section>
+        <section id="authGate" class="auth-gate">
+          <p class="eyebrow">Fennington Financial App</p>
+          <h1>Open Your Financial Dashboard</h1>
+          <p>Sign in to save financial profiles, accounts, mappings, rules, transactions, and reports. You can also open a fictional demo without signing in.</p>
+          <div class="gate-actions">
+            <button id="gateSignInButton" class="btn btn-primary btn-lg" type="button">Sign In With Google</button>
+            <button id="gateDemoButton" class="btn btn-secondary btn-lg" type="button">Open Fictional Demo</button>
+          </div>
+        </section>
+
+        <section id="financialApp" class="financial-app" hidden>
+          <div class="app-topbar">
+            <div>
+              <p class="eyebrow" id="modeLabel">Demo mode</p>
+              <h1>Fennington Financial Dashboard</h1>
+              <p id="profileSummary">Fictional sample profile loaded.</p>
+            </div>
+            <div class="app-actions">
+              <button id="createProfileButton" class="btn btn-secondary" type="button">Create Financial Profile</button>
+              <button id="deleteProfileButton" class="btn danger-btn" type="button">Delete Profile Data</button>
+            </div>
+          </div>
+
+          <nav class="app-tabs" aria-label="Financial app sections">
+            <button data-tab="dashboard" class="active" type="button">Dashboard</button>
+            <button data-tab="import" type="button">CSV Import</button>
+            <button data-tab="transactions" type="button">Transactions</button>
+            <button data-tab="review" type="button">Review Queue</button>
+            <button data-tab="reports" type="button">Reports</button>
+            <button data-tab="income" type="button">Income</button>
+            <button data-tab="recurring" type="button">Recurring</button>
+            <button data-tab="categories" type="button">Categories</button>
+          </nav>
+          <div class="field app-tab-select-field">
+            <label for="appTabSelect">Financial app section</label>
+            <select id="appTabSelect" aria-label="Financial app section">
+              <option value="dashboard">Dashboard</option>
+              <option value="import">CSV Import</option>
+              <option value="transactions">Transactions</option>
+              <option value="review">Review Queue</option>
+              <option value="reports">Reports</option>
+              <option value="income">Income</option>
+              <option value="recurring">Recurring</option>
+              <option value="categories">Categories</option>
+            </select>
+          </div>
+
+          <section id="dashboardTab" class="tab-panel active"></section>
+          <section id="importTab" class="tab-panel"></section>
+          <section id="transactionsTab" class="tab-panel"></section>
+          <section id="reviewTab" class="tab-panel"></section>
+          <section id="reportsTab" class="tab-panel"></section>
+          <section id="incomeTab" class="tab-panel"></section>
+          <section id="recurringTab" class="tab-panel"></section>
+          <section id="categoriesTab" class="tab-panel"></section>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <template id="rowActionsTemplate">
+    <button class="mini-btn" data-row-action="save" type="button">Save</button>
+  </template>
+
+  <script src="config.js"></script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>

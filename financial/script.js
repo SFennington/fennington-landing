@@ -3,7 +3,14 @@ import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signO
 import { getFirestore, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
 const DEFAULT_CATEGORIES = [
-  "Housing", "Utilities", "Groceries", "Restaurants", "Transportation", "Fuel", "Vehicle expenses", "Insurance", "Medical", "Shopping", "Entertainment", "Subscriptions", "Childcare", "Education", "Debt payments", "Taxes", "Transfers", "Credits to the Account", "Income", "Uncategorized"
+  "Housing", "Utilities", "Groceries", "Restaurants", "Transportation", "Fuel", "Vehicle expenses", "Insurance", "Medical", "Shopping", "Entertainment", "Subscriptions", "Kids", "Childcare", "Education", "Debt payments", "Taxes", "Transfers", "Credits to the Account", "Income", "Uncategorized"
+];
+
+const DEFAULT_SUBCATEGORIES = [
+  { parent: "Kids", name: "Fun & Entertainment" },
+  { parent: "Kids", name: "Sports and Activities" },
+  { parent: "Kids", name: "Food & Treats" },
+  { parent: "Kids", name: "Birthdays and Holidays" }
 ];
 
 const ACCOUNT_CREDIT_CATEGORY = "Credits to the Account";
@@ -60,6 +67,7 @@ const els = {
   createProfileButton: document.getElementById("createProfileButton"),
   deleteProfileButton: document.getElementById("deleteProfileButton")
 };
+const isAppPage = Boolean(els.app && els.authGate);
 
 let auth = null;
 let db = null;
@@ -72,7 +80,7 @@ let state = emptyState();
 renderFeatures();
 setupMobileMenu();
 setupTabs();
-setupAuth();
+if (isAppPage) setupAuth();
 bindStaticActions();
 
 function emptyState() {
@@ -81,7 +89,7 @@ function emptyState() {
     accounts: [],
     imports: [],
     mappings: [],
-    categories: DEFAULT_CATEGORIES.map((name) => ({ id: slug(name), name, system: true })),
+    categories: defaultCategories(),
     transactions: [],
     merchantMappings: [],
     rules: [],
@@ -168,6 +176,7 @@ function demoState() {
 }
 
 function renderFeatures() {
+  if (!els.featureGrid) return;
   els.featureGrid.innerHTML = FEATURES.map((feature) => `<article class="feature-card"><strong>${escapeHtml(feature)}</strong><p>Included in the first-draft workflow.</p></article>`).join("");
 }
 
@@ -179,17 +188,26 @@ function setupMobileMenu() {
     nav.classList.toggle("active");
     toggle.setAttribute("aria-expanded", String(nav.classList.contains("active")));
   });
+  nav.querySelectorAll("a").forEach((link) => {
+    link.addEventListener("click", () => {
+      nav.classList.remove("active");
+      toggle.setAttribute("aria-expanded", "false");
+    });
+  });
 }
 
 function setupTabs() {
+  const tabSelect = document.getElementById("appTabSelect");
+  const activateTab = (tabName) => {
+    document.querySelectorAll(".app-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tabName));
+    document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.remove("active"));
+    document.getElementById(`${tabName}Tab`)?.classList.add("active");
+    if (tabSelect) tabSelect.value = tabName;
+  };
   document.querySelectorAll(".app-tabs button").forEach((button) => {
-    button.addEventListener("click", () => {
-      document.querySelectorAll(".app-tabs button").forEach((b) => b.classList.remove("active"));
-      document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.remove("active"));
-      button.classList.add("active");
-      document.getElementById(`${button.dataset.tab}Tab`).classList.add("active");
-    });
+    button.addEventListener("click", () => activateTab(button.dataset.tab));
   });
+  if (tabSelect) tabSelect.addEventListener("change", (event) => activateTab(event.target.value));
 }
 
 function setupAuth() {
@@ -198,13 +216,17 @@ function setupAuth() {
     els.authStatus.textContent = "Demo available";
     els.signInButton.disabled = true;
     els.gateSignInButton.disabled = true;
+    if (shouldOpenDemo()) enterDemo();
     return;
   }
   const app = initializeApp(config);
   auth = getAuth(app);
   db = getFirestore(app);
   const provider = new GoogleAuthProvider();
-  const signIn = () => signInWithPopup(auth, provider).catch((error) => showStatus(error.message));
+  const signIn = () => {
+    scrollToApp();
+    return signInWithPopup(auth, provider).catch((error) => showStatus(error.message));
+  };
   els.signInButton.addEventListener("click", signIn);
   els.gateSignInButton.addEventListener("click", signIn);
   els.signOutButton.addEventListener("click", () => signOut(auth));
@@ -213,20 +235,38 @@ function setupAuth() {
     els.signInButton.hidden = Boolean(user);
     els.signOutButton.hidden = !user;
     els.authStatus.textContent = user?.email || "Not signed in";
-    if (user) await loadUserState();
+    if (user) {
+      await loadUserState();
+      scrollToApp();
+    }
+    else if (shouldOpenDemo()) enterDemo();
     else showGate();
   });
 }
 
 function bindStaticActions() {
-  els.demoButton.addEventListener("click", enterDemo);
-  els.gateDemoButton.addEventListener("click", enterDemo);
-  els.analyzeButton.addEventListener("click", () => {
+  if (!isAppPage) {
+    els.signInButton?.addEventListener("click", () => navigateToApp());
+    els.analyzeButton?.addEventListener("click", () => navigateToApp());
+    els.demoButton?.addEventListener("click", () => navigateToApp(true));
+    return;
+  }
+  els.demoButton?.addEventListener("click", enterDemo);
+  els.gateDemoButton?.addEventListener("click", enterDemo);
+  els.analyzeButton?.addEventListener("click", () => {
     if (currentUser) showApp("user");
-    else document.getElementById("app").scrollIntoView({ behavior: "smooth" });
+    scrollToApp();
   });
-  els.createProfileButton.addEventListener("click", createProfile);
-  els.deleteProfileButton.addEventListener("click", deleteProfileData);
+  els.createProfileButton?.addEventListener("click", createProfile);
+  els.deleteProfileButton?.addEventListener("click", deleteProfileData);
+}
+
+function navigateToApp(openDemo = false) {
+  window.location.href = openDemo ? "app.html?demo=1" : "app.html";
+}
+
+function shouldOpenDemo() {
+  return new URLSearchParams(window.location.search).get("demo") === "1";
 }
 
 function showGate() {
@@ -247,7 +287,11 @@ function showApp(nextMode) {
 function enterDemo() {
   state = demoState();
   showApp("demo");
-  document.getElementById("app").scrollIntoView({ behavior: "smooth" });
+  scrollToApp();
+}
+
+function scrollToApp() {
+  document.getElementById("app")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function loadUserState() {
@@ -263,7 +307,7 @@ async function loadUserState() {
   }));
   const incomeSnap = await getDoc(doc(profileRef, "settings", "income"));
   if (incomeSnap.exists()) state.incomeSettings = { ...state.incomeSettings, ...incomeSnap.data() };
-  if (!state.categories.length) state.categories = DEFAULT_CATEGORIES.map((name) => ({ id: slug(name), name, system: true }));
+  if (!state.categories.length) state.categories = defaultCategories();
   state.selectedMonth = latestMonth(state.transactions) || monthKey(new Date());
   showApp("user");
 }
@@ -305,6 +349,14 @@ function ensureDefaultCategories() {
     if (!state.categories.some((cat) => cat.name.toLowerCase() === name.toLowerCase())) {
       state.categories.push({ id: slug(name), name, system: true });
     }
+  });
+  DEFAULT_SUBCATEGORIES.forEach((item) => {
+    const parent = state.categories.find((cat) => cat.name.toLowerCase() === item.parent.toLowerCase() && !cat.parentId);
+    if (!parent) return;
+    const name = subcategoryName(parent.name, item.name);
+    const category = state.categories.find((cat) => cat.name.toLowerCase() === name.toLowerCase());
+    if (category) category.parentId = category.parentId || parent.id;
+    else state.categories.push({ id: slug(name), name, parentId: parent.id, system: true });
   });
 }
 
@@ -731,19 +783,27 @@ function recurringCard(item) {
 
 function renderCategories() {
   const tab = document.getElementById("categoriesTab");
+  const parentOptions = parentCategoryOptions("");
   tab.innerHTML = `
     <div class="split-panel">
-      <section class="panel"><h3>Categories</h3><div class="category-grid">${state.categories.map(categoryCard).join("")}</div></section>
-      <aside class="panel"><h3>Create or merge category</h3><div class="field"><label for="newCategory">New category</label><input id="newCategory"></div><button id="addCategory" class="btn btn-primary" type="button">Create Category</button><hr style="margin:1rem 0;border:0;border-top:1px solid var(--financial-line)"><div class="field"><label for="mergeFrom">Merge from</label><select id="mergeFrom">${categoryOptions("")}</select></div><div class="field"><label for="mergeTo">Merge to</label><select id="mergeTo">${categoryOptions("")}</select></div><button id="mergeCategory" class="btn btn-secondary" type="button">Merge Categories</button></aside>
+      <section class="panel"><h3>Categories</h3><p class="status-line">Create top-level categories or nest subcategories under a parent such as Kids.</p><div class="category-grid">${categoryTreeList().map(categoryCard).join("")}</div></section>
+      <aside class="panel"><h3>Create or merge category</h3><div class="field"><label for="newCategoryParent">Parent category</label><select id="newCategoryParent"><option value="">Top-level category</option>${parentOptions}</select></div><div class="field"><label for="newCategory">New category or subcategory</label><input id="newCategory" placeholder="Example: Sports and Activities"></div><button id="addCategory" class="btn btn-primary" type="button">Create Category</button><hr style="margin:1rem 0;border:0;border-top:1px solid var(--financial-line)"><div class="field"><label for="mergeFrom">Merge from</label><select id="mergeFrom">${categoryOptions("")}</select></div><div class="field"><label for="mergeTo">Merge to</label><select id="mergeTo">${categoryOptions("")}</select></div><button id="mergeCategory" class="btn btn-secondary" type="button">Merge Categories</button></aside>
     </div>
   `;
   tab.querySelectorAll("[data-cat-save]").forEach((button) => button.addEventListener("click", () => {
     const card = button.closest("article");
     const category = state.categories.find((item) => item.id === card.dataset.id);
-    const nextName = sanitize(card.querySelector("input").value);
+    const previousName = category.name;
+    const parentId = card.querySelector("select")?.value || "";
+    const parent = state.categories.find((item) => item.id === parentId);
+    const nextBaseName = sanitize(card.querySelector("input").value);
+    const nextName = parent ? subcategoryName(parent.name, nextBaseName) : nextBaseName;
     if (!nextName) return;
-    state.transactions.filter((tx) => tx.category === category.name).forEach((tx) => { tx.category = nextName; });
+    if (state.categories.some((cat) => cat.id !== category.id && cat.name.toLowerCase() === nextName.toLowerCase())) return showStatus("That category already exists.");
+    state.transactions.filter((tx) => tx.category === previousName).forEach((tx) => { tx.category = nextName; });
     category.name = nextName;
+    category.parentId = parentId || "";
+    updateChildCategoryNames(category, previousName);
     renderAll();
   }));
   tab.querySelectorAll("[data-cat-delete]").forEach((button) => button.addEventListener("click", () => {
@@ -755,9 +815,12 @@ function renderCategories() {
     renderAll();
   }));
   document.getElementById("addCategory").addEventListener("click", () => {
-    const name = sanitize(document.getElementById("newCategory").value);
+    const parentId = document.getElementById("newCategoryParent").value;
+    const parent = state.categories.find((cat) => cat.id === parentId);
+    const baseName = sanitize(document.getElementById("newCategory").value);
+    const name = parent ? subcategoryName(parent.name, baseName) : baseName;
     if (!name || state.categories.some((cat) => cat.name.toLowerCase() === name.toLowerCase())) return;
-    state.categories.push({ id: uniqueId("cat"), name, system: false });
+    state.categories.push({ id: uniqueId("cat"), name, parentId: parentId || "", system: false });
     renderAll();
   });
   document.getElementById("mergeCategory").addEventListener("click", () => {
@@ -771,7 +834,9 @@ function renderCategories() {
 }
 
 function categoryCard(category) {
-  return `<article class="category-card" data-id="${category.id}"><div class="field"><label>${category.system ? "Default category" : "Custom category"}</label><input value="${escapeAttr(category.name)}"></div><div class="form-actions"><button class="mini-btn" data-cat-save type="button">Rename</button><button class="mini-btn danger" data-cat-delete type="button">Delete</button></div></article>`;
+  const parent = parentCategory(category);
+  const childCount = state.categories.filter((item) => item.parentId === category.id).length;
+  return `<article class="category-card ${parent ? "subcategory-card" : ""}" data-id="${category.id}"><div class="category-card-heading"><span class="tag ${parent ? "" : "good"}">${parent ? "Subcategory" : category.system ? "Default category" : "Custom category"}</span>${parent ? `<small>${escapeHtml(parent.name)}</small>` : childCount ? `<small>${childCount} subcategories</small>` : ""}</div><div class="field"><label>Category name</label><input value="${escapeAttr(categoryBaseName(category))}"></div><div class="field"><label>Parent category</label><select ${childCount ? "disabled" : ""}><option value="">Top-level category</option>${parentCategoryOptions(category.parentId || "", category.id)}</select></div><div class="form-actions"><button class="mini-btn" data-cat-save type="button">Save</button><button class="mini-btn danger" data-cat-delete type="button">Delete</button></div></article>`;
 }
 
 function createProfile() {
@@ -1091,7 +1156,75 @@ function overtimeIncome() {
 }
 
 function categoryOptions(selected) {
-  return state.categories.map((cat) => `<option value="${escapeAttr(cat.name)}" ${cat.name === selected ? "selected" : ""}>${escapeHtml(cat.name)}</option>`).join("");
+  const groups = groupedCategories();
+  return groups.map((cat) => {
+    const children = state.categories.filter((item) => item.parentId === cat.id).sort(categorySort);
+    const parentOption = `<option value="${escapeAttr(cat.name)}" ${cat.name === selected ? "selected" : ""}>${escapeHtml(cat.name)}</option>`;
+    if (!children.length) return parentOption;
+    return `<optgroup label="${escapeAttr(cat.name)}">${parentOption}${children.map((child) => `<option value="${escapeAttr(child.name)}" ${child.name === selected ? "selected" : ""}>${escapeHtml(categoryBaseName(child))}</option>`).join("")}</optgroup>`;
+  }).join("");
+}
+
+function parentCategoryOptions(selected, excludeId = "") {
+  return groupedCategories()
+    .filter((cat) => cat.id !== excludeId)
+    .map((cat) => `<option value="${escapeAttr(cat.id)}" ${cat.id === selected ? "selected" : ""}>${escapeHtml(cat.name)}</option>`)
+    .join("");
+}
+
+function defaultCategories() {
+  const categories = DEFAULT_CATEGORIES.map((name) => ({ id: slug(name), name, parentId: "", system: true }));
+  DEFAULT_SUBCATEGORIES.forEach((item) => {
+    const parent = categories.find((cat) => cat.name === item.parent);
+    if (parent) categories.push({ id: slug(`${parent.name}-${item.name}`), name: subcategoryName(parent.name, item.name), parentId: parent.id, system: true });
+  });
+  return categories;
+}
+
+function groupedCategories() {
+  repairCategoryParents();
+  return state.categories.filter((cat) => !cat.parentId).sort(categorySort);
+}
+
+function categoryTreeList() {
+  return groupedCategories().flatMap((parent) => [parent, ...state.categories.filter((cat) => cat.parentId === parent.id).sort(categorySort)]);
+}
+
+function parentCategory(category) {
+  return category?.parentId ? state.categories.find((cat) => cat.id === category.parentId) : null;
+}
+
+function categoryBaseName(category) {
+  const parent = parentCategory(category);
+  if (!parent) return category.name;
+  const prefix = `${parent.name}: `;
+  return category.name.startsWith(prefix) ? category.name.slice(prefix.length) : category.name;
+}
+
+function subcategoryName(parentName, name) {
+  const base = sanitize(name).replace(/^.+:\s*/, "");
+  return `${sanitize(parentName)}: ${base}`;
+}
+
+function categorySort(a, b) {
+  if (a.name === "Uncategorized") return 1;
+  if (b.name === "Uncategorized") return -1;
+  return a.name.localeCompare(b.name);
+}
+
+function repairCategoryParents() {
+  state.categories.forEach((category) => {
+    if (category.parentId && !state.categories.some((parent) => parent.id === category.parentId)) category.parentId = "";
+  });
+}
+
+function updateChildCategoryNames(parentCategoryItem, previousParentName) {
+  state.categories.filter((cat) => cat.parentId === parentCategoryItem.id).forEach((child) => {
+    const previousName = child.name;
+    const childBaseName = previousName.startsWith(`${previousParentName}: `) ? previousName.slice(previousParentName.length + 2) : categoryBaseName(child);
+    child.name = subcategoryName(parentCategoryItem.name, childBaseName);
+    state.transactions.filter((tx) => tx.category === previousName).forEach((tx) => { tx.category = child.name; });
+  });
 }
 
 function monthOptions() {

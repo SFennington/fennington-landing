@@ -1,9 +1,18 @@
 :root {
   --financial-line: #e5e7eb;
   --financial-soft: #eef6ff;
+  --financial-ink: #0f172a;
+  --financial-panel: rgba(255, 255, 255, 0.86);
+  --financial-ring: rgba(37, 99, 235, 0.24);
   --financial-good: #047857;
   --financial-warn: #b45309;
   --financial-danger: #b91c1c;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(6, 182, 212, 0.16), transparent 34rem),
+    linear-gradient(180deg, #f8fbff 0%, #ffffff 42%, #f6f9ff 100%);
 }
 
 .financial-logo {
@@ -14,6 +23,85 @@
   padding: 0.55rem 0.9rem;
 }
 
+.financial-header {
+  gap: 1rem;
+}
+
+.financial-header .nav a {
+  border-radius: 999px;
+  padding: 0.45rem 0.7rem;
+}
+
+.financial-header .nav a:hover {
+  background: #eff6ff;
+}
+
+.financial-auth-actions {
+  gap: 0.65rem;
+}
+
+.financial-header .btn,
+.financial-hero .btn,
+.financial-app-section .btn,
+.financial-app-section button,
+.financial-section .btn {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 42px;
+}
+
+.financial-header .btn,
+.financial-hero .btn,
+.financial-app-section .btn,
+.financial-section .btn,
+.mini-btn {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.financial-header .btn-primary,
+.financial-hero .btn-primary,
+.financial-app-section .btn-primary,
+.financial-section .btn-primary {
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
+  border-color: transparent;
+  color: #fff;
+}
+
+.financial-header .btn-primary:hover,
+.financial-hero .btn-primary:hover,
+.financial-app-section .btn-primary:hover,
+.financial-section .btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8, #0891b2);
+  transform: translateY(-1px);
+}
+
+.financial-header .btn-secondary,
+.financial-hero .btn-secondary,
+.financial-app-section .btn-secondary,
+.financial-section .btn-secondary {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(37, 99, 235, 0.18);
+  color: var(--brand-dark);
+}
+
+.financial-header .btn-secondary:hover,
+.financial-hero .btn-secondary:hover,
+.financial-app-section .btn-secondary:hover,
+.financial-section .btn-secondary:hover {
+  background: #eff6ff;
+  color: var(--brand-dark);
+  transform: translateY(-1px);
+}
+
+.financial-header .btn:disabled,
+.financial-app-section .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
 .auth-status {
   color: var(--muted);
   font-size: 0.9rem;
@@ -21,9 +109,14 @@
 }
 
 .financial-hero {
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 72%, #0f172a 100%);
+  background:
+    radial-gradient(circle at 82% 18%, rgba(6, 182, 212, 0.52), transparent 17rem),
+    radial-gradient(circle at 18% 12%, rgba(96, 165, 250, 0.36), transparent 18rem),
+    linear-gradient(135deg, #0f172a 0%, #1e3a8a 54%, #164e63 100%);
   color: #fff;
-  padding: 82px 0;
+  overflow: hidden;
+  padding: 74px 0 52px;
+  position: relative;
 }
 
 .financial-hero-grid {
@@ -37,6 +130,11 @@
   font-size: clamp(2.4rem, 5vw, 4.25rem);
   letter-spacing: -0.04em;
   max-width: 850px;
+}
+
+.financial-hero-copy {
+  position: relative;
+  z-index: 1;
 }
 
 .financial-hero .hero-subtitle {
@@ -68,17 +166,21 @@
 }
 
 .hero-panel {
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: 22px;
-  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(18px);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: 28px;
+  box-shadow: 0 28px 70px rgba(2, 6, 23, 0.28);
   color: var(--text);
   padding: 1.4rem;
+  position: relative;
+  z-index: 1;
 }
 
 .preview-card {
-  background: var(--financial-soft);
+  background: linear-gradient(135deg, #eff6ff, #ecfeff);
   border: 1px solid #bfdbfe;
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 1.2rem;
 }
 
@@ -129,12 +231,12 @@
 
 .financial-section,
 .financial-app-section {
-  padding: 72px 0;
+  padding: 64px 0;
 }
 
 .financial-section.alt,
 .financial-app-section {
-  background: var(--card);
+  background: transparent;
 }
 
 .feature-grid,
@@ -157,10 +259,10 @@
 .chart-card,
 .recurring-card,
 .category-card {
-  background: #fff;
-  border: 1px solid var(--financial-line);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
+  background: var(--financial-panel);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
   padding: 1.1rem;
 }
 
@@ -168,6 +270,24 @@
 .summary-card strong {
   display: block;
   font-size: 1.05rem;
+}
+
+.category-card-heading {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.category-card-heading small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.subcategory-card {
+  border-left: 4px solid #93c5fd;
+  margin-left: 0.75rem;
 }
 
 .feature-card p,
@@ -199,11 +319,12 @@
 .app-alert,
 .auth-gate,
 .financial-app {
-  background: #fff;
-  border: 1px solid var(--financial-line);
-  border-radius: 18px;
-  box-shadow: var(--shadow-lg);
-  padding: 1.5rem;
+  backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 28px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+  padding: clamp(1rem, 3vw, 1.6rem);
 }
 
 .app-alert {
@@ -217,7 +338,14 @@
 }
 
 .auth-gate {
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(236, 254, 255, 0.9)),
+    #fff;
   text-align: center;
+}
+
+.auth-gate h2 {
+  letter-spacing: -0.03em;
 }
 
 .gate-actions,
@@ -241,13 +369,20 @@
   justify-content: space-between;
 }
 
+.app-topbar h2 {
+  letter-spacing: -0.03em;
+}
+
 .app-tabs {
-  border-bottom: 1px solid var(--financial-line);
+  background: #eef6ff;
+  border: 1px solid rgba(191, 219, 254, 0.82);
+  border-radius: 999px;
   display: flex;
   gap: 0.4rem;
   margin: 1.5rem 0;
   overflow-x: auto;
-  padding-bottom: 0.5rem;
+  padding: 0.35rem;
+  scrollbar-width: thin;
 }
 
 .app-tabs button,
@@ -259,18 +394,45 @@
 }
 
 .app-tabs button {
-  background: #fff;
-  border: 1px solid var(--financial-line);
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--muted);
   cursor: pointer;
-  padding: 0.65rem 0.9rem;
+  padding: 0.65rem 0.95rem;
   white-space: nowrap;
 }
 
 .app-tabs button.active {
-  background: var(--brand);
-  border-color: var(--brand);
-  color: #fff;
+  background: #fff;
+  border-color: rgba(37, 99, 235, 0.16);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.14);
+  color: var(--brand-dark);
+}
+
+.app-tab-select-field {
+  display: none;
+  margin: 1rem 0;
+}
+
+.app-tabs button:hover {
+  color: var(--brand-dark);
+}
+
+.app-tabs button:focus-visible,
+.mini-btn:focus-visible,
+.financial-app-section button:focus-visible,
+.financial-header button:focus-visible,
+.financial-hero button:focus-visible,
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  box-shadow: 0 0 0 4px var(--financial-ring);
+  outline: none;
+}
+
+.app-tabs button:focus-visible {
+  background: #fff;
+  color: var(--brand-dark);
 }
 
 .tab-panel {
@@ -331,11 +493,35 @@
 .field input,
 .field select,
 .field textarea {
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
+  background-color: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
   font: inherit;
-  padding: 0.65rem 0.75rem;
+  min-height: 44px;
+  padding: 0.72rem 0.85rem;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
   width: 100%;
+}
+
+.field select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #2563eb 50%),
+    linear-gradient(135deg, #2563eb 50%, transparent 50%),
+    linear-gradient(to right, #dbeafe, #dbeafe);
+  background-position:
+    calc(100% - 20px) 50%,
+    calc(100% - 15px) 50%,
+    calc(100% - 2.55rem) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px, 1px 1.6rem;
+  padding-right: 3.2rem;
+}
+
+.field input:hover,
+.field select:hover,
+.field textarea:hover {
+  border-color: #93c5fd;
 }
 
 .field textarea {
@@ -355,8 +541,8 @@
 }
 
 .table-wrap {
-  border: 1px solid var(--financial-line);
-  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 18px;
   overflow: auto;
 }
 
@@ -375,8 +561,8 @@ td {
 }
 
 th {
-  background: #f9fafb;
-  color: #374151;
+  background: #f8fafc;
+  color: #334155;
   font-size: 0.8rem;
   text-transform: uppercase;
   white-space: nowrap;
@@ -394,10 +580,14 @@ td select {
 
 .mini-btn {
   background: #fff;
-  border: 1px solid var(--financial-line);
+  border: 1px solid rgba(37, 99, 235, 0.18);
   color: var(--brand);
   cursor: pointer;
   padding: 0.4rem 0.65rem;
+}
+
+.mini-btn:hover {
+  background: #eff6ff;
 }
 
 .danger-btn,
@@ -463,7 +653,7 @@ td select {
 }
 
 .empty-state {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.72);
   border: 1px dashed #cbd5e1;
   border-radius: 14px;
   color: var(--muted);
@@ -531,5 +721,121 @@ td select {
 
   .financial-auth-actions .auth-status {
     display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .financial-header {
+    gap: 0.55rem;
+  }
+
+  .financial-logo {
+    height: 34px;
+  }
+
+  .financial-auth-actions {
+    display: flex;
+    margin-left: auto;
+  }
+
+  .financial-auth-actions .btn {
+    min-height: 38px;
+    padding: 0.45rem 0.7rem;
+  }
+
+  .financial-header .nav.active {
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 0 0 22px 22px;
+    gap: 0.35rem;
+  }
+
+  .financial-hero {
+    padding: 48px 0 36px;
+  }
+
+  .financial-hero-grid {
+    gap: 1.4rem;
+  }
+
+  .financial-cta,
+  .gate-actions,
+  .form-actions,
+  .bulk-actions,
+  .app-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .financial-cta .btn,
+  .gate-actions .btn,
+  .form-actions .btn,
+  .bulk-actions .btn,
+  .app-actions .btn {
+    width: 100%;
+  }
+
+  .privacy-notice {
+    font-size: 0.9rem;
+  }
+
+  .app-tabs {
+    display: none;
+  }
+
+  .app-tab-select-field {
+    display: block;
+  }
+
+  .financial-section,
+  .financial-app-section {
+    padding: 42px 0;
+  }
+
+  .summary-grid,
+  .report-grid,
+  .income-grid,
+  .recurring-grid,
+  .category-grid,
+  .feature-grid,
+  .steps-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .table-wrap {
+    margin-left: -0.35rem;
+    margin-right: -0.35rem;
+  }
+}
+
+@media (max-width: 440px) {
+  .container {
+    padding: 0 14px;
+  }
+
+  .financial-header .btn {
+    font-size: 0.85rem;
+    padding-inline: 0.6rem;
+  }
+
+  .financial-logo {
+    height: 30px;
+  }
+
+  .auth-gate,
+  .financial-app,
+  .app-alert {
+    border-radius: 22px;
+  }
+
+  .hero-panel,
+  .feature-card,
+  .steps-grid article,
+  .summary-card,
+  .panel,
+  .privacy-card,
+  .chart-card,
+  .recurring-card,
+  .category-card {
+    border-radius: 18px;
   }
 }
