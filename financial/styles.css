@@ -2178,3 +2178,222 @@ summary.category-tree-summary::-webkit-details-marker {
   background: rgba(37, 99, 235, 0.2);
   color: #bfdbfe;
 }
+
+
+/* Dark-mode contrast audit overrides */
+.financial-dark,
+.financial-dark .financial-app,
+.financial-dark .financial-app-section,
+.financial-dark .financial-app-section h1,
+.financial-dark .financial-app-section h2,
+.financial-dark .financial-app-section h3,
+.financial-dark .financial-app-section h4,
+.financial-dark .financial-app-section strong,
+.financial-dark .financial-section h1,
+.financial-dark .financial-section h2,
+.financial-dark .financial-section h3,
+.financial-dark .financial-section h4,
+.financial-dark .financial-section strong {
+  color: #e5eefb;
+}
+
+.financial-dark .financial-app-section p,
+.financial-dark .financial-app-section small,
+.financial-dark .financial-app-section label,
+.financial-dark .financial-app-section dt,
+.financial-dark .financial-app-section .eyebrow,
+.financial-dark .financial-app-section .status-line,
+.financial-dark .financial-app-section .muted {
+  color: #b6c3d8;
+}
+
+.financial-dark .transaction-table thead th {
+  background: linear-gradient(180deg, #111827 0%, #0f1b33 100%);
+  border-bottom-color: rgba(148, 163, 184, 0.28);
+  color: #cbd5e1;
+}
+
+.financial-dark .transaction-table tbody tr,
+.financial-dark .transaction-table tbody tr:nth-child(odd) {
+  background: rgba(15, 23, 42, 0.92);
+  color: #e5eefb;
+}
+
+.financial-dark .transaction-table tbody tr:nth-child(even) {
+  background: rgba(17, 24, 39, 0.96);
+}
+
+.financial-dark .transaction-table tbody tr:hover {
+  background: rgba(30, 64, 175, 0.22);
+  box-shadow: inset 4px 0 0 rgba(96, 165, 250, 0.78);
+}
+
+.financial-dark .transaction-table th,
+.financial-dark .transaction-table td {
+  border-bottom-color: rgba(148, 163, 184, 0.16);
+  color: #e5eefb;
+}
+
+.financial-dark .transaction-table td input,
+.financial-dark .transaction-table td select,
+.financial-dark .merchant-copy input,
+.financial-dark .date-input,
+.financial-dark .note-input,
+.financial-dark .category-select,
+.financial-dark .recurring-select,
+.financial-dark .type-select {
+  background: rgba(2, 6, 23, 0.86) !important;
+  border-color: rgba(148, 163, 184, 0.38) !important;
+  box-shadow: none;
+  color: #f8fafc !important;
+}
+
+.financial-dark .transaction-table td input:focus,
+.financial-dark .transaction-table td select:focus,
+.financial-dark .merchant-copy input:focus,
+.financial-dark .date-input:focus,
+.financial-dark .note-input:focus,
+.financial-dark .category-select:focus,
+.financial-dark .recurring-select:focus,
+.financial-dark .type-select:focus {
+  background: rgba(15, 23, 42, 0.98) !important;
+  border-color: rgba(96, 165, 250, 0.82) !important;
+  outline: 3px solid rgba(96, 165, 250, 0.22);
+}
+
+.financial-dark .transaction-table td input::placeholder,
+.financial-dark .note-input::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+
+.financial-dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.5);
+  opacity: 0.85;
+}
+
+.financial-dark select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.financial-dark .merchant-copy p,
+.financial-dark .amount-cell small,
+.financial-dark .confidence-meta small,
+.financial-dark .transaction-table-header p,
+.financial-dark .transaction-table-header .eyebrow {
+  color: #b6c3d8;
+}
+
+.financial-dark .confidence-meta strong,
+.financial-dark .amount-cell span,
+.financial-dark .bar-label,
+.financial-dark .mini-category-row span,
+.financial-dark .mini-category-row strong,
+.financial-dark .recurring-summary dd,
+.financial-dark .compact-summary .summary-card strong {
+  color: #f8fafc;
+}
+
+.financial-dark .amount-cell.negative span {
+  color: #fca5a5 !important;
+}
+
+.financial-dark .amount-cell.positive span {
+  color: #86efac !important;
+}
+
+.financial-dark .confidence-meter {
+  background: rgba(51, 65, 85, 0.95);
+}
+
+.financial-dark .table-action-cell {
+  background: inherit;
+  box-shadow: -18px 0 24px rgba(2, 6, 23, 0.86);
+}
+
+.financial-dark .transaction-table th:last-child {
+  box-shadow: -18px 0 24px rgba(2, 6, 23, 0.9);
+}
+
+.financial-dark .tag.subtle,
+.financial-dark .filters-card .chip {
+  background: rgba(37, 99, 235, 0.2);
+  color: #dbeafe;
+}
+
+.financial-dark .checkbox-field {
+  background: rgba(15, 23, 42, 0.82);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+.financial-dark .checkbox-field span {
+  color: #dbeafe;
+}
+
+.financial-dark .chart-card,
+.financial-dark .summary-card,
+.financial-dark .insight-card {
+  background:
+    linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(17, 24, 39, 0.9)),
+    radial-gradient(circle at 100% 0, rgba(37, 99, 235, 0.12), transparent 12rem);
+}
+
+.financial-dark .summary-card.good,
+.financial-dark .summary-card.warn,
+.financial-dark .summary-card.danger {
+  background:
+    linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(17, 24, 39, 0.9)),
+    radial-gradient(circle at 100% 0, rgba(37, 99, 235, 0.12), transparent 12rem);
+}
+
+.financial-dark .insight-card span:first-child,
+.financial-dark .filters-header .eyebrow,
+.financial-dark .transaction-table-header .eyebrow,
+.financial-dark .chart-card h3,
+.financial-dark .summary-card span,
+.financial-dark .summary-card small {
+  color: #cbd5e1;
+}
+
+.financial-dark .insight-card p,
+.financial-dark .chart-card p,
+.financial-dark .summary-card p {
+  color: #b6c3d8;
+}
+
+.financial-dark .donut-stat {
+  background: conic-gradient(#fb4444 0 var(--expense-share), #334155 var(--expense-share) 100%);
+}
+
+.financial-dark .donut-stat::after {
+  background: #0f172a;
+}
+
+.financial-dark .donut-stat strong {
+  color: #e5eefb;
+}
+
+.financial-dark .bar-row {
+  background: rgba(2, 6, 23, 0.48);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.financial-dark .bar-track {
+  background: rgba(51, 65, 85, 0.95);
+}
+
+.financial-dark .recurring-summary dt {
+  color: #b6c3d8;
+}
+
+.financial-dark .tree-count,
+.financial-dark .tree-parent,
+.financial-dark .category-parent-select {
+  color: #cbd5e1 !important;
+}
+
+.financial-dark .app-alert,
+.financial-dark .app-alert code {
+  color: #fef3c7;
+}
