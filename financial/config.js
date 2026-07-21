@@ -8,6 +8,7 @@ window.FENNINGTON_FIREBASE_CONFIG = window.FENNINGTON_FIREBASE_CONFIG || {
   sharedWorkspace: {
     id: "fennington-household",
     name: "Fennington Household",
+    autoMigrateLegacy: false,
     memberEmails: [
       "ADD_YOUR_WIFE_EMAIL_HERE"
     ]

@@ -52,6 +52,7 @@ const config = window.FENNINGTON_FIREBASE_CONFIG || {};
 const hasConfig = config.apiKey && !String(config.apiKey).startsWith("REPLACE_");
 const sharedWorkspaceConfig = config.sharedWorkspace || {};
 const sharedWorkspaceId = sanitizeDocId(sharedWorkspaceConfig.id || config.financialWorkspaceId || "fennington-household");
+const shouldAutoMigrateLegacyProfile = sharedWorkspaceConfig.autoMigrateLegacy === true;
 const profileCollectionNames = ["accounts", "imports", "mappings", "categories", "transactions", "merchantMappings", "rules", "recurring", "overtimeScenarios", "monthlySummaries"];
 const FIRESTORE_BATCH_WRITE_LIMIT = 450;
 const els = {
@@ -309,13 +310,13 @@ function showGate() {
   els.app.hidden = true;
 }
 
-function showApp(nextMode) {
+function showApp(nextMode, options = {}) {
   mode = nextMode;
   els.authGate.hidden = true;
   els.app.hidden = false;
   els.modeLabel.textContent = mode === "demo" ? "Demo mode: fictional data" : "Authenticated profile";
   els.profileSummary.textContent = mode === "demo" ? "All data shown here is fictional demo data." : `${state.profile.name || "Financial Profile"} for ${currentUser?.email || "signed-in user"}.`;
-  renderAll();
+  renderAll(options);
 }
 
 function enterDemo() {
@@ -333,7 +334,7 @@ async function loadUserState() {
   state = emptyState();
   await ensureSharedWorkspace();
   const profileRef = sharedProfileRef();
-  await migrateLegacyUserProfile(profileRef);
+  if (shouldAutoMigrateLegacyProfile) await migrateLegacyUserProfile(profileRef);
   const profileSnap = await getDoc(profileRef);
   if (profileSnap.exists()) state.profile = { id: "default", ...profileSnap.data() };
   else await setDoc(profileRef, { ...state.profile, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp(), createdAt: serverTimestamp() }, { merge: true });
@@ -347,7 +348,7 @@ async function loadUserState() {
   if (!state.categories.length) state.categories = defaultCategories();
   state.selectedMonth = latestMonth(state.transactions) || monthKey(new Date());
   resetCategoryExpansion();
-  showApp("user");
+  showApp("user", { save: false });
 }
 
 async function migrateLegacyUserProfile(profileRef) {
@@ -385,10 +386,6 @@ async function saveState() {
       await setDoc(profileRef, { ...stripId(state.profile), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
       await setDoc(doc(profileRef, "settings", "income"), { ...state.incomeSettings, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
       const currentCategoryIds = new Set(state.categories.map((category) => category.id));
-      const categorySnap = await getDocs(collection(profileRef, "categories"));
-      categorySnap.docs.forEach((item) => {
-        if (!currentCategoryIds.has(item.id)) pendingCategoryDeletes.add(item.id);
-      });
       const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !currentCategoryIds.has(id));
       await commitProfileCollectionWrites(profileRef, deletedCategoryIds);
       deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
