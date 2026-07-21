@@ -78,6 +78,7 @@ let saveTimer = null;
 let state = emptyState();
 const categoryExpandedIds = new Set();
 let categoryExpansionInitialized = false;
+let selectedCategoryReportId = "";
 
 renderFeatures();
 setupMobileMenu();
@@ -816,8 +817,10 @@ function bindReviewActions(root) {
 function renderReports() {
   const tab = document.getElementById("reportsTab");
   const summary = monthlySummary(state.selectedMonth);
+  const selectedCategory = reportCategory();
   tab.innerHTML = `
     <div class="report-grid">
+      <section class="chart-card report-card-wide"><h3>Category drilldown</h3><p class="status-line">Pick any category level, such as Side Businesses or Cuyle's Customs, to include transactions assigned to that category and every nested child category.</p><div class="field"><label for="reportCategory">Category or vendor bucket</label><select id="reportCategory"><option value="">Choose category</option>${categoryIdOptions(selectedCategory?.id || "")}</select></div>${selectedCategory ? categoryDrilldown(selectedCategory) : `<div class="empty-state compact">Create nested categories, assign transactions, then select a category here to see monthly and overall totals.</div>`}</section>
       <section class="chart-card"><h3>Spending by category</h3>${categoryBars(summary.byCategory)}</section>
       <section class="chart-card"><h3>Monthly spending totals</h3>${monthlyBars("spending")}</section>
       <section class="chart-card"><h3>Income versus expenses</h3>${incomeExpenseBars()}</section>
@@ -828,6 +831,14 @@ function renderReports() {
       <section class="chart-card"><h3>Largest month-over-month increases</h3>${monthIncreaseList()}</section>
     </div>
   `;
+  document.getElementById("reportCategory")?.addEventListener("change", (event) => {
+    selectedCategoryReportId = event.target.value;
+    renderReports();
+  });
+  tab.querySelectorAll("[data-cat-report]").forEach((button) => button.addEventListener("click", () => {
+    selectedCategoryReportId = button.dataset.catReport;
+    renderReports();
+  }));
 }
 
 function renderIncome() {
@@ -899,7 +910,7 @@ function renderCategories() {
   seedExpandedCategories();
   tab.innerHTML = `
     <div class="split-panel">
-      <section class="panel"><h3>Categories</h3><p class="status-line">Categories are grouped like folders. Expand a parent to see the subcategories nested underneath it.</p>${categoryTreeView()}</section>
+      <section class="panel"><h3>Categories</h3><p class="status-line">Categories are grouped like folders and can be nested multiple levels deep, such as Side Businesses → Cuyle's Customs → Apparel Expense.</p>${categoryTreeView()}${reportCategory() ? categoryDrilldown(reportCategory()) : ""}</section>
       <aside class="panel"><h3>Create or merge category</h3><div class="field"><label for="newCategoryParent">Parent category</label><select id="newCategoryParent"><option value="">Top-level category</option>${parentOptions}</select></div><div class="field"><label for="newCategory">New category or subcategory</label><input id="newCategory" placeholder="Example: Sports and Activities"></div><button id="addCategory" class="btn btn-primary" type="button">Create Category</button><hr style="margin:1rem 0;border:0;border-top:1px solid var(--financial-line)"><div class="field"><label for="mergeFrom">Merge from</label><select id="mergeFrom">${categoryOptions("")}</select></div><div class="field"><label for="mergeTo">Merge to</label><select id="mergeTo">${categoryOptions("")}</select></div><button id="mergeCategory" class="btn btn-secondary" type="button">Merge Categories</button></aside>
     </div>
   `;
@@ -907,6 +918,15 @@ function renderCategories() {
     if (branch.open) categoryExpandedIds.add(branch.dataset.categoryId);
     else categoryExpandedIds.delete(branch.dataset.categoryId);
   }));
+  tab.querySelectorAll("[data-cat-report]").forEach((button) => button.addEventListener("click", () => {
+    selectedCategoryReportId = button.dataset.catReport;
+    categoryExpandedIds.add(selectedCategoryReportId);
+    renderCategories();
+  }));
+  tab.querySelectorAll(".compact-category-row input, .compact-category-row select, .compact-category-row button").forEach((control) => {
+    control.addEventListener("click", (event) => event.stopPropagation());
+    control.addEventListener("keydown", (event) => event.stopPropagation());
+  });
   tab.querySelectorAll("[data-cat-save]").forEach((button) => button.addEventListener("click", () => {
     const node = button.closest("[data-category-id]");
     const category = state.categories.find((item) => item.id === node.dataset.categoryId);
@@ -915,13 +935,13 @@ function renderCategories() {
     const parentId = node.querySelector("[data-cat-parent]")?.value || "";
     const parent = state.categories.find((item) => item.id === parentId);
     const nextBaseName = sanitize(node.querySelector("[data-cat-name]").value);
-    const nextName = parent ? subcategoryName(parent.name, nextBaseName) : nextBaseName;
+    const nextName = categoryPathName(parent, nextBaseName);
     if (!nextName) return;
     if (state.categories.some((cat) => cat.id !== category.id && cat.name.toLowerCase() === nextName.toLowerCase())) return showStatus("That category already exists.");
     state.transactions.filter((tx) => tx.category === previousName).forEach((tx) => { tx.category = nextName; });
     category.name = nextName;
     category.parentId = parentId || "";
-    updateChildCategoryNames(category, previousName);
+    updateChildCategoryNames(category);
     renderAll();
   }));
   tab.querySelectorAll("[data-cat-delete]").forEach((button) => button.addEventListener("click", () => {
@@ -929,6 +949,7 @@ function renderCategories() {
     const category = state.categories.find((item) => item.id === node.dataset.categoryId);
     if (!category) return;
     if (category.system) return showStatus("Default categories can be renamed or merged but not deleted in this first draft.");
+    if (childCategories(category.id).length) return showStatus("Move or delete nested categories before deleting this parent category.");
     if (!window.confirm(`Delete ${category.name}? Transactions will become Uncategorized.`)) return;
     state.transactions.filter((tx) => tx.category === category.name).forEach((tx) => { tx.category = "Uncategorized"; tx.needsReview = true; });
     state.categories = state.categories.filter((item) => item.id !== category.id);
@@ -939,9 +960,11 @@ function renderCategories() {
     const parentId = document.getElementById("newCategoryParent").value;
     const parent = state.categories.find((cat) => cat.id === parentId);
     const baseName = sanitize(document.getElementById("newCategory").value);
-    const name = parent ? subcategoryName(parent.name, baseName) : baseName;
+    const name = categoryPathName(parent, baseName);
     if (!name || state.categories.some((cat) => cat.name.toLowerCase() === name.toLowerCase())) return;
-    state.categories.push({ id: uniqueId("cat"), name, parentId: parentId || "", system: false });
+    const newCategory = { id: uniqueId("cat"), name, parentId: parentId || "", system: false };
+    state.categories.push(newCategory);
+    selectedCategoryReportId = newCategory.id;
     if (parentId) categoryExpandedIds.add(parentId);
     renderAll();
   });
@@ -966,30 +989,31 @@ function seedExpandedCategories() {
 function resetCategoryExpansion() {
   categoryExpandedIds.clear();
   categoryExpansionInitialized = false;
+  selectedCategoryReportId = "";
 }
 
 function categoryTreeView() {
   const parents = groupedCategories();
   if (!parents.length) return `<div class="empty-state">No categories yet.</div>`;
-  return `<div class="category-tree" aria-label="Category hierarchy">${parents.map(categoryTreeBranch).join("")}</div>`;
+  return `<div class="category-tree" aria-label="Category hierarchy">${parents.map((category) => categoryTreeBranch(category, 0)).join("")}</div>`;
 }
 
-function categoryTreeBranch(category) {
-  const children = state.categories.filter((item) => item.parentId === category.id).sort(categorySort);
-  if (!children.length) return categoryTreeLeaf(category, false);
+function categoryTreeBranch(category, depth = 0) {
+  const children = childCategories(category.id);
+  if (!children.length) return categoryTreeLeaf(category, depth);
   const isOpen = categoryExpandedIds.has(category.id);
-  return `<details class="category-tree-branch" data-category-id="${escapeAttr(category.id)}" ${isOpen ? "open" : ""}><summary class="category-tree-summary"><span class="tree-icon" aria-hidden="true"></span><strong>${escapeHtml(category.name)}</strong><span class="tree-count">${children.length} ${children.length === 1 ? "subcategory" : "subcategories"}</span><span class="tag ${category.system ? "good" : ""}">${category.system ? "Default" : "Custom"}</span></summary><div class="category-tree-controls">${categoryEditControls(category, children.length)}</div><div class="category-tree-children">${children.map((child) => categoryTreeLeaf(child, true)).join("")}</div></details>`;
+  return `<details class="category-tree-branch depth-${Math.min(depth, 5)}" data-category-id="${escapeAttr(category.id)}" ${isOpen ? "open" : ""}><summary class="category-tree-summary compact-category-row"><span class="tree-icon" aria-hidden="true"></span>${categoryInlineControls(category, children.length)}</summary><div class="category-tree-children">${children.map((child) => categoryTreeBranch(child, depth + 1)).join("")}</div></details>`;
 }
 
-function categoryTreeLeaf(category, isChild) {
+function categoryTreeLeaf(category, depth = 0) {
   const parent = parentCategory(category);
-  const childCount = state.categories.filter((item) => item.parentId === category.id).length;
-  return `<div class="category-tree-leaf ${isChild ? "is-child" : "is-parent"}" data-category-id="${escapeAttr(category.id)}"><div class="category-tree-summary"><span class="tree-file" aria-hidden="true"></span><strong>${escapeHtml(categoryBaseName(category))}</strong>${parent ? `<span class="tree-parent">${escapeHtml(parent.name)}</span>` : childCount ? `<span class="tree-count">${childCount} nested</span>` : ""}<span class="tag ${!parent && category.system ? "good" : ""}">${parent ? "Subcategory" : category.system ? "Default" : "Custom"}</span></div>${categoryEditControls(category, childCount)}</div>`;
+  return `<div class="category-tree-leaf ${parent ? "is-child" : "is-parent"} depth-${Math.min(depth, 5)}" data-category-id="${escapeAttr(category.id)}"><div class="category-tree-summary compact-category-row"><span class="tree-file" aria-hidden="true"></span>${categoryInlineControls(category, 0)}</div></div>`;
 }
 
-function categoryEditControls(category, childCount = 0) {
-  const disableParent = childCount ? "disabled" : "";
-  return `<div class="category-edit-grid"><div class="field"><label>Category name</label><input data-cat-name value="${escapeAttr(categoryBaseName(category))}"></div><div class="field"><label>Parent category</label><select data-cat-parent ${disableParent}><option value="">Top-level category</option>${parentCategoryOptions(category.parentId || "", category.id)}</select></div><div class="form-actions category-row-actions"><button class="mini-btn" data-cat-save type="button">Save</button><button class="mini-btn danger" data-cat-delete type="button">Delete</button></div></div>`;
+function categoryInlineControls(category, childCount = 0) {
+  const parent = parentCategory(category);
+  const meta = childCount ? `${childCount} ${childCount === 1 ? "child" : "children"}` : parent ? categoryBreadcrumb(parent) : category.system ? "Default" : "Top level";
+  return `<input class="category-inline-input" data-cat-name aria-label="Category" value="${escapeAttr(categoryBaseName(category))}" title="${escapeAttr(category.name)}"><select class="category-parent-select" data-cat-parent aria-label="Parent category"><option value="">Top-level category</option>${parentCategoryOptions(category.parentId || "", category.id)}</select><span class="tree-count">${escapeHtml(meta)}</span><button class="mini-btn" data-cat-save type="button">Save</button><button class="mini-btn" data-cat-report="${escapeAttr(category.id)}" type="button">Totals</button><button class="mini-btn danger" data-cat-delete type="button">Delete</button>`;
 }
 
 function createProfile() {
@@ -1393,20 +1417,28 @@ function overtimeIncome() {
 }
 
 function categoryOptions(selected) {
-  const groups = groupedCategories();
-  return groups.map((cat) => {
-    const children = state.categories.filter((item) => item.parentId === cat.id).sort(categorySort);
-    const parentOption = `<option value="${escapeAttr(cat.name)}" ${cat.name === selected ? "selected" : ""}>${escapeHtml(cat.name)}</option>`;
-    if (!children.length) return parentOption;
-    return `<optgroup label="${escapeAttr(cat.name)}">${parentOption}${children.map((child) => `<option value="${escapeAttr(child.name)}" ${child.name === selected ? "selected" : ""}>${escapeHtml(categoryBaseName(child))}</option>`).join("")}</optgroup>`;
-  }).join("");
+  return categoryOptionRows().map(({ category, depth }) => `<option value="${escapeAttr(category.name)}" ${category.name === selected ? "selected" : ""}>${escapeHtml(`${categoryIndent(depth)}${categoryBaseName(category)}`)}</option>`).join("");
+}
+
+function categoryIdOptions(selected, excludeId = "") {
+  return categoryOptionRows(excludeId).map(({ category, depth }) => `<option value="${escapeAttr(category.id)}" ${category.id === selected ? "selected" : ""}>${escapeHtml(`${categoryIndent(depth)}${categoryBaseName(category)}`)}</option>`).join("");
 }
 
 function parentCategoryOptions(selected, excludeId = "") {
-  return groupedCategories()
-    .filter((cat) => cat.id !== excludeId)
-    .map((cat) => `<option value="${escapeAttr(cat.id)}" ${cat.id === selected ? "selected" : ""}>${escapeHtml(cat.name)}</option>`)
-    .join("");
+  return categoryIdOptions(selected, excludeId);
+}
+
+function categoryOptionRows(excludeId = "") {
+  const excluded = new Set([excludeId, ...categoryDescendantIds(excludeId)]);
+  const walk = (parents, depth = 0) => parents.flatMap((category) => {
+    if (excluded.has(category.id)) return [];
+    return [{ category, depth }, ...walk(childCategories(category.id), depth + 1)];
+  });
+  return walk(groupedCategories());
+}
+
+function categoryIndent(depth) {
+  return depth ? `${"— ".repeat(depth)}` : "";
 }
 
 function defaultCategories() {
@@ -1423,8 +1455,13 @@ function groupedCategories() {
   return state.categories.filter((cat) => !cat.parentId).sort(categorySort);
 }
 
+function childCategories(parentId) {
+  return state.categories.filter((cat) => cat.parentId === parentId).sort(categorySort);
+}
+
 function categoryTreeList() {
-  return groupedCategories().flatMap((parent) => [parent, ...state.categories.filter((cat) => cat.parentId === parent.id).sort(categorySort)]);
+  const walk = (parents) => parents.flatMap((parent) => [parent, ...walk(childCategories(parent.id))]);
+  return walk(groupedCategories());
 }
 
 function parentCategory(category) {
@@ -1435,7 +1472,7 @@ function categoryBaseName(category) {
   const parent = parentCategory(category);
   if (!parent) return category.name;
   const prefix = `${parent.name}: `;
-  return category.name.startsWith(prefix) ? category.name.slice(prefix.length) : category.name;
+  return category.name.startsWith(prefix) ? category.name.slice(prefix.length) : category.name.split(":").pop().trim();
 }
 
 function subcategoryName(parentName, name) {
@@ -1443,25 +1480,69 @@ function subcategoryName(parentName, name) {
   return `${sanitize(parentName)}: ${base}`;
 }
 
+function categoryPathName(parent, baseName) {
+  return parent ? subcategoryName(parent.name, baseName) : sanitize(baseName);
+}
+
 function categorySort(a, b) {
   if (a.name === "Uncategorized") return 1;
   if (b.name === "Uncategorized") return -1;
-  return a.name.localeCompare(b.name);
+  return categoryBaseName(a).localeCompare(categoryBaseName(b));
 }
 
 function repairCategoryParents() {
   state.categories.forEach((category) => {
-    if (category.parentId && !state.categories.some((parent) => parent.id === category.parentId)) category.parentId = "";
+    if (category.parentId === category.id || (category.parentId && !state.categories.some((parent) => parent.id === category.parentId))) category.parentId = "";
   });
 }
 
-function updateChildCategoryNames(parentCategoryItem, previousParentName) {
-  state.categories.filter((cat) => cat.parentId === parentCategoryItem.id).forEach((child) => {
+function updateChildCategoryNames(parentCategoryItem) {
+  childCategories(parentCategoryItem.id).forEach((child) => {
     const previousName = child.name;
-    const childBaseName = previousName.startsWith(`${previousParentName}: `) ? previousName.slice(previousParentName.length + 2) : categoryBaseName(child);
-    child.name = subcategoryName(parentCategoryItem.name, childBaseName);
+    child.name = subcategoryName(parentCategoryItem.name, categoryBaseName(child));
     state.transactions.filter((tx) => tx.category === previousName).forEach((tx) => { tx.category = child.name; });
+    updateChildCategoryNames(child);
   });
+}
+
+function categoryDescendantIds(categoryId) {
+  if (!categoryId) return [];
+  const direct = state.categories.filter((cat) => cat.parentId === categoryId);
+  return direct.flatMap((cat) => [cat.id, ...categoryDescendantIds(cat.id)]);
+}
+
+function categoryAndDescendantNames(category) {
+  if (!category) return [];
+  const ids = new Set([category.id, ...categoryDescendantIds(category.id)]);
+  return state.categories.filter((cat) => ids.has(cat.id)).map((cat) => cat.name);
+}
+
+function reportCategory() {
+  if (selectedCategoryReportId) return state.categories.find((cat) => cat.id === selectedCategoryReportId) || null;
+  return null;
+}
+
+function categoryBreadcrumb(category) {
+  const path = [];
+  let current = category;
+  while (current) {
+    path.unshift(categoryBaseName(current));
+    current = parentCategory(current);
+  }
+  return path.join(" → ");
+}
+
+function categoryDrilldown(category) {
+  const names = new Set(categoryAndDescendantNames(category));
+  const rows = state.transactions.filter((tx) => names.has(tx.category) && tx.type === "expense" && !isTransferCategory(tx.category));
+  const total = round(rows.reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
+  const months = monthOptions();
+  const monthly = months.map((month) => ({ month, total: round(rows.filter((tx) => tx.date?.startsWith(month)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0)) })).filter((item) => item.total > 0);
+  const childTotals = childCategories(category.id).map((child) => {
+    const childNames = new Set(categoryAndDescendantNames(child));
+    return { child, total: round(rows.filter((tx) => childNames.has(tx.category)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0)) };
+  }).filter((item) => item.total > 0).sort((a, b) => b.total - a.total);
+  return `<div class="category-drilldown"><div class="summary-grid compact-summary">${summaryCard("Selected category", categoryBreadcrumb(category), "")} ${summaryCard("Overall total", total, "danger")} ${summaryCard("Transactions", rows.length, "warn", "Count")}</div>${childTotals.length ? `<h4>Nested totals</h4><div class="mini-category-list">${childTotals.map(({ child, total: childTotal }) => `<button class="mini-category-row drilldown-row" data-cat-report="${escapeAttr(child.id)}" type="button"><div><span>${escapeHtml(categoryBaseName(child))}</span><strong>${money(childTotal)}</strong></div><em><i style="width:${Math.max(7, total ? (childTotal / total) * 100 : 0)}%"></i></em></button>`).join("")}</div>` : ""}<h4>Monthly totals</h4>${monthly.length ? `<div class="table-wrap compact-table"><table><thead><tr><th>Month</th><th>Total</th></tr></thead><tbody>${monthly.map((item) => `<tr><td>${escapeHtml(item.month)}</td><td>${money(item.total)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state compact">No transactions assigned to this category or its nested categories yet.</div>`}</div>`;
 }
 
 function monthOptions() {
