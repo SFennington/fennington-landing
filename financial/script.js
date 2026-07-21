@@ -418,6 +418,57 @@ async function commitProfileCollectionWrites(profileRef, deletedCategoryIds) {
   await Promise.all(commits);
 }
 
+async function saveCategoryState(affectedTransactions = []) {
+  if (mode !== "user" || !currentUser || !db) return;
+  clearTimeout(saveTimer);
+  try {
+    await ensureSharedWorkspace();
+    const profileRef = sharedProfileRef();
+    await setDoc(profileRef, { ...stripId(state.profile), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
+    const batchWrites = [];
+    state.categories.forEach((item) => {
+      batchWrites.push((batch) => batch.set(doc(profileRef, "categories", item.id), { ...item, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true }));
+    });
+    const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !state.categories.some((category) => category.id === id));
+    deletedCategoryIds.forEach((id) => {
+      batchWrites.push((batch) => batch.delete(doc(profileRef, "categories", id)));
+    });
+    affectedTransactions.forEach((tx) => {
+      batchWrites.push((batch) => batch.set(doc(profileRef, "transactions", tx.id), { ...tx, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true }));
+    });
+    await commitBatchWrites(batchWrites);
+    deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
+    showStatus("Categories saved.");
+  } catch (error) {
+    showStatus(`Category save failed: ${error.message}`);
+  }
+}
+
+async function commitBatchWrites(batchWrites) {
+  for (let i = 0; i < batchWrites.length; i += FIRESTORE_BATCH_WRITE_LIMIT) {
+    const batch = writeBatch(db);
+    batchWrites.slice(i, i + FIRESTORE_BATCH_WRITE_LIMIT).forEach((write) => write(batch));
+    await batch.commit();
+  }
+}
+
+function transactionSnapshot() {
+  return new Map(state.transactions.map((tx) => [tx.id, { category: tx.category, needsReview: tx.needsReview }]));
+}
+
+function changedTransactionsSince(snapshot) {
+  return state.transactions.filter((tx) => {
+    const before = snapshot.get(tx.id);
+    return before && (before.category !== tx.category || before.needsReview !== tx.needsReview);
+  });
+}
+
+function renderAndSaveCategories(snapshot) {
+  const affectedTransactions = snapshot ? changedTransactionsSince(snapshot) : [];
+  renderAll({ save: false });
+  saveCategoryState(affectedTransactions);
+}
+
 function sanitizeDocId(value) {
   return String(value || "")
     .trim()
@@ -459,7 +510,7 @@ async function ensureSharedWorkspace() {
   }, { merge: true });
 }
 
-function renderAll() {
+function renderAll(options = {}) {
   ensureDefaultCategories();
   normalizeCreditCardPaymentSigns();
   const previousRecurring = new Map(state.recurring.map((item) => [item.id, item]));
@@ -472,7 +523,7 @@ function renderAll() {
   renderIncome();
   renderRecurring();
   renderCategories();
-  saveState();
+  if (options.save !== false) saveState();
 }
 
 function ensureDefaultCategories() {
@@ -1078,6 +1129,7 @@ function renderCategories() {
     const node = button.closest("[data-category-id]");
     const category = state.categories.find((item) => item.id === node.dataset.categoryId);
     if (!category) return;
+    const snapshot = transactionSnapshot();
     const previousName = category.name;
     const parentId = node.querySelector("[data-cat-parent]")?.value || "";
     const parent = state.categories.find((item) => item.id === parentId);
@@ -1089,7 +1141,7 @@ function renderCategories() {
     category.name = nextName;
     category.parentId = parentId || "";
     updateChildCategoryNames(category);
-    renderAll();
+    renderAndSaveCategories(snapshot);
   }));
   tab.querySelectorAll("[data-cat-delete]").forEach((button) => button.addEventListener("click", () => {
     const node = button.closest("[data-category-id]");
@@ -1097,6 +1149,7 @@ function renderCategories() {
     if (!category) return;
     if (childCategories(category.id).length) return showStatus("Move or delete nested categories before deleting this parent category.");
     if (!window.confirm(`Delete ${category.name}? Transactions will become Uncategorized.`)) return;
+    const snapshot = transactionSnapshot();
     state.transactions.filter((tx) => tx.category === category.name).forEach((tx) => { tx.category = "Uncategorized"; tx.needsReview = true; });
     if (category.system) {
       state.profile.deletedDefaultCategories = Array.from(new Set([...(state.profile.deletedDefaultCategories || []), category.name]));
@@ -1105,7 +1158,7 @@ function renderCategories() {
     pendingCategoryDeletes.add(category.id);
     state.categories = state.categories.filter((item) => item.id !== category.id);
     categoryExpandedIds.delete(category.id);
-    renderAll();
+    renderAndSaveCategories(snapshot);
   }));
   tab.querySelectorAll("[data-cat-add-child]").forEach((button) => button.addEventListener("click", () => {
     const parentId = button.closest("[data-category-id]")?.dataset.categoryId;
@@ -1119,7 +1172,7 @@ function renderCategories() {
     state.categories.push(newCategory);
     selectedCategoryReportId = newCategory.id;
     categoryExpandedIds.add(parentId);
-    renderAll();
+    renderAndSaveCategories();
   }));
   document.getElementById("addCategory").addEventListener("click", () => {
     const parentId = document.getElementById("newCategoryParent").value;
@@ -1131,16 +1184,17 @@ function renderCategories() {
     state.categories.push(newCategory);
     selectedCategoryReportId = newCategory.id;
     if (parentId) categoryExpandedIds.add(parentId);
-    renderAll();
+    renderAndSaveCategories();
   });
   document.getElementById("mergeCategory").addEventListener("click", () => {
     const from = document.getElementById("mergeFrom").value;
     const to = document.getElementById("mergeTo").value;
     if (!from || !to || from === to) return;
+    const snapshot = transactionSnapshot();
     state.transactions.filter((tx) => tx.category === from).forEach((tx) => { tx.category = to; });
     state.categories.filter((cat) => cat.name === from && !cat.system).forEach((cat) => pendingCategoryDeletes.add(cat.id));
     state.categories = state.categories.filter((cat) => cat.name !== from || cat.system);
-    renderAll();
+    renderAndSaveCategories(snapshot);
   });
 }
 
