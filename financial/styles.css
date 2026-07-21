@@ -1532,6 +1532,12 @@ td select {
   width: 100%;
 }
 
+.merchant-copy .vendor-input {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-top: 0.35rem;
+}
+
 .merchant-copy p {
   color: #64748b;
   font-size: 0.88rem;

@@ -620,6 +620,8 @@ async function requireUser(req: express.Request): Promise<DecodedIdToken> {
 }
 
 function normalizeFinancialMerchant(description: string): string {
+  const processorVendor = processorVendorFromDescription(description);
+  if (processorVendor) return processorVendor;
   const merchant = safeString(description, "Unknown Merchant")
     .replace(/^SQ \*/i, "")
     .replace(/\b\d{4,}\b/g, "")
@@ -629,6 +631,14 @@ function normalizeFinancialMerchant(description: string): string {
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
   return merchant || "Unknown Merchant";
+}
+
+function processorVendorFromDescription(description: string): string {
+  const paypal = safeString(description).match(/\bPAYPAL\s+\*([A-Z0-9][A-Z0-9&.'-]{1,})/i);
+  if (!paypal?.[1]) return "";
+  const compact = safeString(paypal[1]).replace(/(LIMITED|LIMIT|LLC|INC|CORP)$/i, "").trim();
+  if (/^[A-Z]{2,6}LABS$/i.test(compact)) return compact.replace(/LABS$/i, "Labs");
+  return compact.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function estimateFinancialCost(inputTokens: number, outputTokens: number, webSearchCalls = 0) {
@@ -704,7 +714,8 @@ async function aiFinancialCategorize(transactions: any[], categories: string[], 
   const minimalTransactions = transactions.slice(0, FINANCIAL_AI_MAX_TRANSACTIONS).map((item) => ({
     id: safeString(item?.id),
     description: safeString(item?.description),
-    currentMerchant: safeString(item?.merchant || item?.vendor),
+    currentMerchant: safeString(item?.merchant),
+    currentVendor: safeString(item?.vendor || item?.merchant),
     amount: Number(item?.amount || 0),
     date: safeString(item?.date),
     matchCount: Math.max(1, Math.min(999, Number(item?.matchCount || 1)))
@@ -756,7 +767,7 @@ async function aiFinancialCategorize(transactions: any[], categories: string[], 
       input: [
         {
           role: "system",
-          content: "You clean and categorize personal finance transactions. Return only JSON that matches the schema. For each transaction, create a short recognizable displayName, detect the real vendor, choose exactly one allowed category, and explain the decision. Use description, current merchant, amount, date, and duplicate count. Use Transfers for account movements and credit-card payments. Use Credits to the Account for credit-card credits/payments. Use Uncategorized when uncertain. Do not invent product details. If web search is available, use it only for low-confidence purchases with enough vendor/description context; never search by price alone."
+          content: "You clean and categorize personal finance transactions. Return only JSON that matches the schema. For each transaction, create a short recognizable displayName, detect the real vendor, choose exactly one allowed category, and explain the decision. Use description, currentMerchant, currentVendor, amount, date, and duplicate count. Treat payment processors such as PayPal, Venmo, Cash App, Square, Stripe, Apple Pay, and Google Pay as processors, not vendors, when the description contains a more specific seller token or name. In PayPal descriptions like PAYPAL *SELLER 4029357733, the real vendor is the token after PAYPAL *. Use Transfers for account movements and credit-card payments. Use Credits to the Account for credit-card credits/payments. Use Uncategorized when uncertain. Do not invent product details. If web search is available, use it only for low-confidence purchases with enough vendor/description context; never search by price alone."
         },
         {
           role: "user",

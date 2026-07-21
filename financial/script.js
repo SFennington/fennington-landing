@@ -1123,7 +1123,7 @@ function aiRequestTransaction(group) {
     id: tx.id,
     description: tx.description,
     merchant: tx.merchant || "",
-    vendor: tx.vendor || tx.merchant || "",
+    vendor: transactionVendor(tx),
     amount: tx.amount,
     date: tx.date,
     matchCount: group.transactions.length
@@ -1149,8 +1149,27 @@ function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function plural(count, singular, pluralLabel = `${singular}s`) {
+  return `${Number(count || 0).toLocaleString()} ${Number(count || 0) === 1 ? singular : pluralLabel}`;
+}
+
+function aiAnalysisSummaryText(summary, actualCost) {
+  return [
+    `AI analysis complete: ${plural(summary.searchedCount, "record")} searched`,
+    `${plural(summary.uniqueRequestCount, "AI request")} sent`,
+    `${plural(summary.matchedRecordCount, "record")} matched to AI results`,
+    `${plural(summary.categoryUpdatedCount, "category", "categories")} updated`,
+    `${plural(summary.vendorUpdatedCount, "vendor")} updated`,
+    `${plural(summary.merchantUpdatedCount, "merchant name")} updated`,
+    `${plural(summary.descriptionUpdatedCount, "description")} updated`,
+    `${plural(summary.reviewStatusUpdatedCount, "review status", "review statuses")} changed`,
+    `cost ${actualCost}.`
+  ].join("; ");
+}
+
 async function runAiAnalyzeTransactions(root) {
   if (aiAnalysisRunning) return;
+  const vendorRuleUpdates = applyVendorRulesToTransactions(state.transactions, state);
   const plan = buildAiAnalysisPlan(filteredTransactions());
   if (!plan.groups.length) return showStatus("No transactions match the selected AI analysis scope.");
   const confirmation = [
@@ -1200,20 +1219,41 @@ async function runAiAnalyzeTransactions(root) {
     if (!response.ok) throw new Error(body.error || "AI analysis failed.");
     setAiAnalysisStatus("Applying AI results", "Updating matching transactions in this workspace.");
     const groupsById = new Map(plan.groups.map((group) => [group.representative.id, group]));
-    let updatedCount = 0;
+    const summary = {
+      searchedCount: plan.selectedTransactionCount,
+      uniqueRequestCount: plan.groups.length,
+      matchedRecordCount: 0,
+      categoryUpdatedCount: 0,
+      vendorUpdatedCount: vendorRuleUpdates,
+      merchantUpdatedCount: 0,
+      descriptionUpdatedCount: 0,
+      reviewStatusUpdatedCount: 0
+    };
     (body.results || []).forEach((result) => {
       const group = groupsById.get(result.id);
       if (!group) return;
       group.transactions.forEach((tx) => {
+        const before = {
+          category: tx.category || "",
+          vendor: tx.vendor || "",
+          merchant: tx.merchant || "",
+          description: tx.description || "",
+          needsReview: Boolean(tx.needsReview)
+        };
         applyAiAnalysisToTransaction(tx, result);
-        updatedCount += 1;
+        summary.matchedRecordCount += 1;
+        if ((tx.category || "") !== before.category) summary.categoryUpdatedCount += 1;
+        if ((tx.vendor || "") !== before.vendor) summary.vendorUpdatedCount += 1;
+        if ((tx.merchant || "") !== before.merchant) summary.merchantUpdatedCount += 1;
+        if ((tx.description || "") !== before.description) summary.descriptionUpdatedCount += 1;
+        if (Boolean(tx.needsReview) !== before.needsReview) summary.reviewStatusUpdatedCount += 1;
       });
     });
     const actualCost = body.cost?.totalCost ? formatUsd(body.cost.totalCost) : formatUsd(plan.estimatedCost);
     clearAiAnalysisStatus();
     renderAll();
     uiRestored = true;
-    finalStatusMessage = `AI analyzed ${updatedCount} transactions using ${body.model || AI_ANALYSIS_MODEL}. Estimated/actual cost: ${actualCost}.`;
+    finalStatusMessage = `${aiAnalysisSummaryText(summary, actualCost)} Model: ${body.model || AI_ANALYSIS_MODEL}.`;
   } catch (error) {
     finalStatusMessage = `AI analysis failed: ${error.message}`;
   } finally {
@@ -1244,10 +1284,18 @@ function applyAiAnalysisToTransaction(tx, result) {
   tx.flags = Array.from(new Set(tx.flags || []));
 }
 
+function transactionVendor(tx) {
+  const detected = detectVendorFromDescription(tx.description);
+  const current = sanitize(tx.vendor || "");
+  const defaultVendor = sanitize(tx.merchant || normalizeMerchant(tx.description));
+  if (detected && (!current || current === defaultVendor)) return detected;
+  return sanitize(current || detected || defaultVendor);
+}
+
 function filtersHtml() {
   const cats = categoryOptions(state.filters.category || "");
   const accounts = [`<option value="">All accounts</option>`, ...state.accounts.map((a) => `<option value="${a.id}" ${state.filters.account === a.id ? "selected" : ""}>${escapeHtml(a.name)}</option>`)].join("");
-  const activeFilterCount = ["search", "start", "end", "month", "account", "category", "merchant", "type"].filter((key) => Boolean(state.filters[key])).length + (state.filters.hideCredits ? 1 : 0);
+  const activeFilterCount = ["search", "start", "end", "month", "account", "category", "merchant", "vendor", "type"].filter((key) => Boolean(state.filters[key])).length + (state.filters.hideCredits ? 1 : 0);
   return `
     <div class="filters-card">
       <div class="filters-header">
@@ -1258,13 +1306,14 @@ function filtersHtml() {
         <span class="chip">${activeFilterCount || "No"} active ${activeFilterCount === 1 ? "filter" : "filters"}</span>
       </div>
       <div class="filters">
-        <div class="field search-field"><label for="filterSearch">Search</label><input id="filterSearch" value="${escapeAttr(state.filters.search || "")}" placeholder="Merchant or description"></div>
+        <div class="field search-field"><label for="filterSearch">Search</label><input id="filterSearch" value="${escapeAttr(state.filters.search || "")}" placeholder="Merchant, vendor, or description"></div>
         <div class="field"><label for="filterStart">Date range start</label><input id="filterStart" type="date" value="${escapeAttr(state.filters.start || "")}"></div>
         <div class="field"><label for="filterEnd">Date range end</label><input id="filterEnd" type="date" value="${escapeAttr(state.filters.end || "")}"></div>
         <div class="field"><label for="filterMonth">Month</label><select id="filterMonth"><option value="">All months</option>${monthOptions().map((m) => `<option value="${m}" ${state.filters.month === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
         <div class="field"><label for="filterAccount">Account</label><select id="filterAccount">${accounts}</select></div>
         <div class="field"><label for="filterCategory">Category</label><select id="filterCategory"><option value="">All categories</option>${cats}</select></div>
         <div class="field"><label for="filterMerchant">Merchant</label><input id="filterMerchant" value="${escapeAttr(state.filters.merchant || "")}" placeholder="Merchant"></div>
+        <div class="field"><label for="filterVendor">Vendor</label><input id="filterVendor" value="${escapeAttr(state.filters.vendor || "")}" placeholder="Vendor"></div>
         <div class="field"><label for="filterType">Type</label><select id="filterType"><option value="">Any</option>${["income", "expense", "transfer", "uncategorized", "review"].map((t) => `<option value="${t}" ${state.filters.type === t ? "selected" : ""}>${label(t)}</option>`).join("")}</select></div>
         <label class="field checkbox-field"><span>Hide Credits from Transactions</span><input id="filterHideCredits" type="checkbox" ${state.filters.hideCredits ? "checked" : ""}></label>
       </div>
@@ -1273,7 +1322,7 @@ function filtersHtml() {
 }
 
 function bindFilters() {
-  ["Search", "Start", "End", "Month", "Account", "Category", "Merchant", "Type"].forEach((name) => {
+  ["Search", "Start", "End", "Month", "Account", "Category", "Merchant", "Vendor", "Type"].forEach((name) => {
     const el = document.getElementById(`filter${name}`);
     if (!el) return;
     el.addEventListener("input", () => {
@@ -1291,7 +1340,7 @@ function bindFilters() {
 }
 
 function transactionTable(rows) {
-  return `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Match</th><th>Recurring</th><th>Type</th><th>Notes</th><th>Action</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant, vendor & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Match</th><th>Recurring</th><th>Type</th><th>Notes</th><th>Action</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
 }
 
 function transactionRow(tx) {
@@ -1309,7 +1358,8 @@ function transactionRow(tx) {
       <div class="merchant-control">
         <span class="merchant-avatar" aria-hidden="true">${initial}</span>
         <div class="merchant-copy">
-          <input data-field="merchant" aria-label="Normalized merchant" value="${escapeAttr(tx.merchant)}">
+          <input data-field="merchant" aria-label="Normalized merchant" value="${escapeAttr(tx.merchant)}" placeholder="Merchant display name">
+          <input class="vendor-input" data-field="vendor" aria-label="Detected vendor" value="${escapeAttr(transactionVendor(tx))}" placeholder="Vendor">
           <p>${escapeHtml(tx.description)}</p>
         </div>
       </div>
@@ -1389,9 +1439,10 @@ function bindTransactionTable(root) {
     const tr = button.closest("tr");
     const tx = state.transactions.find((item) => item.id === tr.dataset.id);
     const previousCategory = tx.category;
+    const previousVendor = transactionVendor(tx);
     const selectedType = tr.querySelector("[data-field='type']")?.value || "";
     tr.querySelectorAll("[data-field]").forEach((input) => { tx[input.dataset.field] = sanitize(input.value); });
-    tx.vendor = sanitize(tx.vendor || tx.merchant);
+    tx.vendor = transactionVendor(tx);
     if (tx.category === "Income" || isTransferCategory(tx.category)) tx.type = typeForCategory(tx.category, tx.amount);
     if (selectedType === "income" || selectedType === "expense") tx.importDirection = "";
     normalizeTransactionAmountSign(tx);
@@ -1399,10 +1450,16 @@ function bindTransactionTable(root) {
     tx.flags = (tx.flags || []).filter((flag) => flag !== "low_confidence" && flag !== "uncategorized");
     tx.source = tx.source === "AI" ? tx.source : "User";
     tx.confidence = 100;
+    let statusMessage = "";
     if (previousCategory !== tx.category && tx.merchant && window.confirm("Apply this category to future transactions from this merchant?")) {
       state.rules.push({ id: uniqueId("rule"), type: "merchant", match: tx.merchant, category: tx.category, createdAt: new Date().toISOString() });
     }
+    if (previousVendor !== tx.vendor && tx.vendor && window.confirm("Apply this vendor to matching transaction descriptions before AI analysis?")) {
+      const updatedCount = createVendorRuleAndApplyToMatches(tx);
+      statusMessage = updatedCount > 1 ? `Vendor rule created and ${updatedCount} matching transactions were updated.` : "Vendor rule created for future matching transactions.";
+    }
     renderAll();
+    if (statusMessage) showStatus(statusMessage);
   }));
 }
 
@@ -1423,7 +1480,7 @@ function renderReview() {
 function reviewCard(tx) {
   return `<article class="review-card panel" data-id="${tx.id}">
     <input type="checkbox" class="review-select" aria-label="Select transaction">
-    <div><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p>${(tx.flags || []).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ")}</p><small class="muted">${escapeHtml(tx.reason || "Needs manual confirmation.")}</small></div>
+    <div><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span></p><p>${(tx.flags || []).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ")}</p><small class="muted">${escapeHtml(tx.reason || "Needs manual confirmation.")}</small></div>
     <div class="review-actions"><select data-review-category>${categoryOptions(tx.category)}</select><label><input data-apply-rule type="checkbox"> Apply rule</label><button class="mini-btn" data-review="confirm" type="button">Confirm</button><button class="mini-btn" data-review="skip" type="button">Skip</button></div>
   </article>`;
 }
@@ -1486,6 +1543,65 @@ function createReviewRuleAndApplyToMatches(sourceTx) {
     tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized"].includes(flag));
   });
   return matches.length;
+}
+
+function createVendorRuleAndApplyToMatches(sourceTx) {
+  const match = vendorRuleMatch(sourceTx);
+  if (!match || !sourceTx.vendor) return 0;
+  const rule = { id: uniqueId("rule"), type: "vendor", match, vendor: sourceTx.vendor, createdAt: new Date().toISOString() };
+  const hasRule = state.rules.some((item) => item.type === rule.type && item.match.toLowerCase() === rule.match.toLowerCase() && String(item.vendor || "").toLowerCase() === rule.vendor.toLowerCase());
+  if (!hasRule) state.rules.push(rule);
+  return applyVendorRulesToTransactions(state.transactions, state);
+}
+
+function vendorRuleMatch(tx) {
+  return paypalVendorToken(tx.description) || sanitize(tx.description || tx.merchant || tx.vendor);
+}
+
+function applyVendorRulesToTransactions(transactions, sourceState) {
+  let updatedCount = 0;
+  transactions.forEach((tx) => {
+    const before = tx.vendor || "";
+    applyVendorRules(tx, sourceState);
+    if ((tx.vendor || "") !== before) updatedCount += 1;
+  });
+  return updatedCount;
+}
+
+function applyVendorRules(tx, sourceState) {
+  const userRule = sourceState.rules.find((rule) => rule.type === "vendor" && vendorRuleMatches(rule, tx));
+  if (userRule?.vendor) {
+    tx.vendor = sanitize(userRule.vendor);
+    return;
+  }
+  const detected = detectVendorFromDescription(tx.description);
+  const defaultVendor = sanitize(tx.merchant || normalizeMerchant(tx.description));
+  if (detected && (!tx.vendor || tx.vendor === defaultVendor)) tx.vendor = detected;
+}
+
+function vendorRuleMatches(rule, tx) {
+  const match = normalizedRuleText(rule.match);
+  if (!match) return false;
+  const paypalToken = normalizedRuleText(paypalVendorToken(tx.description));
+  if (paypalToken && paypalToken === match) return true;
+  return normalizedRuleText(`${tx.description || ""} ${tx.merchant || ""} ${tx.vendor || ""}`).includes(match);
+}
+
+function detectVendorFromDescription(description) {
+  const token = paypalVendorToken(description);
+  if (token) return formatVendorToken(token);
+  return "";
+}
+
+function paypalVendorToken(description) {
+  const match = String(description || "").match(/\bPAYPAL\s+\*([A-Z0-9][A-Z0-9&.'-]{1,})/i);
+  return sanitize(match?.[1] || "");
+}
+
+function formatVendorToken(value) {
+  const compact = sanitize(value).replace(/(LIMITED|LIMIT|LLC|INC|CORP)$/i, "").trim();
+  if (/^[A-Z]{2,6}LABS$/i.test(compact)) return compact.replace(/LABS$/i, "Labs");
+  return compact.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function normalizedRuleText(value) {
@@ -1788,12 +1904,14 @@ async function deleteProfileData() {
 }
 
 function makeTransaction(row, id) {
+  const description = sanitize(row.description);
+  const merchant = sanitize(row.merchant || normalizeMerchant(description));
   const tx = {
     id,
     date: normalizeDate(row.date),
-    description: sanitize(row.description),
-    merchant: sanitize(row.merchant || normalizeMerchant(row.description)),
-    vendor: sanitize(row.vendor || row.merchant || normalizeMerchant(row.description)),
+    description,
+    merchant,
+    vendor: sanitize(row.vendor || detectVendorFromDescription(description) || merchant),
     accountId: row.accountId,
     amount: round(Number(row.amount || 0)),
     category: "Uncategorized",
@@ -1813,8 +1931,13 @@ function makeTransaction(row, id) {
 
 function applyCategorization(tx, sourceState) {
   const threshold = Number(sourceState.profile.confidenceThreshold || 78);
-  const haystack = `${tx.description} ${tx.merchant}`;
-  const userRule = sourceState.rules.find((rule) => rule.type === "merchant" ? tx.merchant.toLowerCase().includes(String(rule.match).toLowerCase()) : tx.description.toLowerCase().includes(String(rule.match).toLowerCase()));
+  applyVendorRules(tx, sourceState);
+  const haystack = `${tx.description} ${tx.merchant} ${tx.vendor || ""}`;
+  const userRule = sourceState.rules.find((rule) => {
+    if (rule.type === "vendor") return false;
+    if (rule.type === "merchant") return `${tx.merchant || ""} ${tx.vendor || ""}`.toLowerCase().includes(String(rule.match).toLowerCase());
+    return tx.description.toLowerCase().includes(String(rule.match).toLowerCase());
+  });
   if (userRule) return setCategory(tx, userRule.category, 100, "User rule", "Matched a user-created categorization rule.");
   const mapping = sourceState.merchantMappings.find((item) => item.merchant.toLowerCase() === tx.merchant.toLowerCase());
   if (mapping) return setCategory(tx, mapping.category, 96, "Confirmed merchant mapping", "Matched a previously confirmed merchant mapping.");
@@ -1857,7 +1980,8 @@ function isAccountCredit(tx) {
 
 async function categorizeWithServer(imported) {
   if (!currentUser || mode !== "user") return;
-  const candidates = imported.filter((tx) => tx.needsReview).slice(0, 20).map((tx) => ({ id: tx.id, description: tx.description, amount: tx.amount }));
+  applyVendorRulesToTransactions(imported, state);
+  const candidates = imported.filter((tx) => tx.needsReview).slice(0, 20).map((tx) => ({ id: tx.id, description: tx.description, merchant: tx.merchant, vendor: transactionVendor(tx), amount: tx.amount }));
   if (!candidates.length) return;
   try {
     const token = await currentUser.getIdToken();
@@ -1867,6 +1991,7 @@ async function categorizeWithServer(imported) {
     (body.results || []).forEach((result) => {
       const tx = state.transactions.find((item) => item.id === result.id);
       if (!tx || Number(result.confidence || 0) < tx.confidence) return;
+      tx.vendor = sanitize(result.vendor || tx.vendor || tx.merchant);
       tx.merchant = sanitize(result.merchant || tx.merchant);
       tx.category = state.categories.some((cat) => cat.name === result.category) ? result.category : "Uncategorized";
       tx.confidence = Math.max(0, Math.min(100, Number(result.confidence || 0)));
@@ -1986,7 +2111,7 @@ function quickStatus(summary) {
 function filteredTransactions() {
   return state.transactions.filter((tx) => {
     const f = state.filters;
-    const haystack = `${tx.description} ${tx.merchant}`.toLowerCase();
+    const haystack = `${tx.description} ${tx.merchant} ${tx.vendor || ""}`.toLowerCase();
     if (f.search && !haystack.includes(f.search.toLowerCase())) return false;
     if (f.start && tx.date < f.start) return false;
     if (f.end && tx.date > f.end) return false;
@@ -1994,6 +2119,7 @@ function filteredTransactions() {
     if (f.account && tx.accountId !== f.account) return false;
     if (f.category && tx.category !== f.category) return false;
     if (f.merchant && !tx.merchant.toLowerCase().includes(f.merchant.toLowerCase())) return false;
+    if (f.vendor && !transactionVendor(tx).toLowerCase().includes(f.vendor.toLowerCase())) return false;
     if (f.hideCredits && isAccountCredit(tx)) return false;
     if (f.type === "review" && !tx.needsReview) return false;
     if (f.type === "uncategorized" && tx.category !== "Uncategorized") return false;
