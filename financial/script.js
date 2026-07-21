@@ -403,22 +403,38 @@ async function saveState() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
-      await ensureSharedWorkspace();
-      const profileRef = sharedProfileRef();
-      await setDoc(doc(db, "users", currentUser.uid), { email: currentUser.email || "", householdId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
-      await setDoc(profileRef, { ...stripId(state.profile), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
-      await setDoc(doc(profileRef, "settings", "income"), { ...state.incomeSettings, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
-      const currentCategoryIds = new Set(state.categories.map((category) => category.id));
-      const currentRuleIds = new Set(state.rules.map((rule) => rule.id));
-      const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !currentCategoryIds.has(id));
-      const deletedRuleIds = Array.from(pendingRuleDeletes).filter((id) => !currentRuleIds.has(id));
-      await commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds);
-      deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
-      deletedRuleIds.forEach((id) => pendingRuleDeletes.delete(id));
+      await persistStateNow();
     } catch (error) {
       showStatus(`Save failed: ${error.message}`);
     }
   }, 450);
+}
+
+async function saveStateImmediately() {
+  if (mode !== "user" || !currentUser || !db) return false;
+  clearTimeout(saveTimer);
+  try {
+    await persistStateNow();
+    return true;
+  } catch (error) {
+    showStatus(`Save failed: ${error.message}`);
+    return false;
+  }
+}
+
+async function persistStateNow() {
+  await ensureSharedWorkspace();
+  const profileRef = sharedProfileRef();
+  await setDoc(doc(db, "users", currentUser.uid), { email: currentUser.email || "", householdId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(profileRef, { ...stripId(state.profile), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(doc(profileRef, "settings", "income"), { ...state.incomeSettings, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
+  const currentCategoryIds = new Set(state.categories.map((category) => category.id));
+  const currentRuleIds = new Set(state.rules.map((rule) => rule.id));
+  const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !currentCategoryIds.has(id));
+  const deletedRuleIds = Array.from(pendingRuleDeletes).filter((id) => !currentRuleIds.has(id));
+  await commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds);
+  deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
+  deletedRuleIds.forEach((id) => pendingRuleDeletes.delete(id));
 }
 
 async function commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds = []) {
@@ -2956,13 +2972,14 @@ function updateRuleFromRow(row) {
 }
 
 function bindRuleControls(root) {
-  root.querySelector("#rerunAllRules")?.addEventListener("click", () => {
+  root.querySelector("#rerunAllRules")?.addEventListener("click", async () => {
     let updated = 0;
     state.rules.filter((rule) => rule.type !== "vendor").forEach((rule) => { updated += applyCategoryRuleToTransactions(rule, state.transactions); });
-    renderAll();
+    renderAll({ save: false });
+    if (!await saveStateImmediately()) return;
     showStatus(`Category rules rerun. ${updated} transaction matches updated.`);
   });
-  root.querySelectorAll("[data-rule-action]").forEach((button) => button.addEventListener("click", () => {
+  root.querySelectorAll("[data-rule-action]").forEach((button) => button.addEventListener("click", async () => {
     const row = button.closest("[data-rule-id]");
     const rule = state.rules.find((item) => item.id === row?.dataset.ruleId);
     if (!rule) return;
@@ -2970,13 +2987,15 @@ function bindRuleControls(root) {
       if (!window.confirm("Delete this saved rule? Existing transaction categories will not be reverted.")) return;
       pendingRuleDeletes.add(rule.id);
       state.rules = state.rules.filter((item) => item.id !== rule.id);
-      renderAll();
+      renderAll({ save: false });
+      if (!await saveStateImmediately()) return;
       showStatus("Rule deleted.");
       return;
     }
     updateRuleFromRow(row);
     const updated = rule.type === "vendor" ? applyVendorRulesToTransactions(state.transactions, state) : button.dataset.ruleAction === "rerun" ? applyCategoryRuleToTransactions(rule, state.transactions) : 0;
-    renderAll();
+    renderAll({ save: false });
+    if (!await saveStateImmediately()) return;
     showStatus(button.dataset.ruleAction === "rerun" ? `Rule rerun. ${updated} transaction matches updated.` : "Rule saved.");
   }));
   root.querySelectorAll("[data-rule-sort-key]").forEach((button) => button.addEventListener("click", () => {
