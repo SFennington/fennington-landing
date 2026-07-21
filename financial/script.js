@@ -984,7 +984,10 @@ function aiAnalysisPanelHtml(rows) {
           <strong>Analyze Transactions</strong>
           <p>Runs only after confirmation. Duplicate transaction patterns are grouped to reduce AI usage.</p>
         </div>
-        <button id="aiAnalyzeButton" class="btn btn-primary" type="button" ${!plan.groups.length || aiAnalysisRunning ? "disabled" : ""}>${aiAnalysisRunning ? "Analyzing..." : "Analyze Transactions"}</button>
+        <div class="form-actions">
+          <button id="rerunRulesButton" class="btn btn-secondary" type="button" ${!plan.eligibleCount || aiAnalysisRunning ? "disabled" : ""}>Re Run Rules</button>
+          <button id="aiAnalyzeButton" class="btn btn-primary" type="button" ${!plan.groups.length || aiAnalysisRunning ? "disabled" : ""}>${aiAnalysisRunning ? "Analyzing..." : "Analyze Transactions"}</button>
+        </div>
       </div>
       <div class="ai-analysis-controls">
         <div class="field"><label for="aiAnalyzeScope">Transactions to analyze</label><select id="aiAnalyzeScope"><option value="review" ${scope === "review" ? "selected" : ""}>Needs review only</option><option value="filtered" ${scope === "filtered" ? "selected" : ""}>Current filtered view</option><option value="uncategorized" ${scope === "uncategorized" ? "selected" : ""}>Uncategorized only</option></select></div>
@@ -1009,10 +1012,13 @@ function bindAiAnalysisControls(root) {
     if (estimate) estimate.innerHTML = aiAnalysisEstimateHtml(buildAiAnalysisPlan(filteredTransactions()));
     const button = root.querySelector("#aiAnalyzeButton");
     if (button) button.disabled = !buildAiAnalysisPlan(filteredTransactions()).groups.length || aiAnalysisRunning;
+    const rerunButton = root.querySelector("#rerunRulesButton");
+    if (rerunButton) rerunButton.disabled = !buildAiAnalysisPlan(filteredTransactions()).eligibleCount || aiAnalysisRunning;
   };
   scope?.addEventListener("change", updateEstimate);
   limit?.addEventListener("input", updateEstimate);
   webLookup?.addEventListener("change", updateEstimate);
+  root.querySelector("#rerunRulesButton")?.addEventListener("click", () => rerunRulesForTransactions());
   root.querySelector("#aiAnalyzeButton")?.addEventListener("click", () => runAiAnalyzeTransactions(root));
 }
 
@@ -1165,6 +1171,70 @@ function aiAnalysisSummaryText(summary, actualCost) {
     `${plural(summary.reviewStatusUpdatedCount, "review status", "review statuses")} changed`,
     `cost ${actualCost}.`
   ].join("; ");
+}
+
+function rerunRulesSummaryText(summary) {
+  return [
+    `Rules rerun: ${plural(summary.searchedCount, "transaction")} checked`,
+    `${plural(summary.changedCount, "transaction")} changed`,
+    `${plural(summary.categoryUpdatedCount, "category", "categories")} updated`,
+    `${plural(summary.vendorUpdatedCount, "vendor")} updated`,
+    `${plural(summary.merchantUpdatedCount, "merchant name")} updated`,
+    `${plural(summary.reviewStatusUpdatedCount, "review status", "review statuses")} changed`,
+    `${plural(summary.flagUpdatedCount, "flag set")} changed.`
+  ].join("; ");
+}
+
+function rerunRulesForTransactions() {
+  const plan = buildAiAnalysisPlan(filteredTransactions());
+  const rows = aiEligibleTransactions(filteredTransactions(), plan.scope);
+  if (!rows.length) return showStatus("No transactions match the selected rule rerun scope.");
+  const confirmation = [
+    "Re Run Rules?",
+    "",
+    `Transactions selected: ${rows.length}`,
+    "This uses saved rules, merchant mappings, vendor cleanup, and built-in keyword rules without AI.",
+    "Existing matching fields in the selected transactions may be updated.",
+    "",
+    "Continue?"
+  ].join("\n");
+  if (!window.confirm(confirmation)) return;
+  const summary = {
+    searchedCount: rows.length,
+    changedCount: 0,
+    categoryUpdatedCount: 0,
+    vendorUpdatedCount: 0,
+    merchantUpdatedCount: 0,
+    reviewStatusUpdatedCount: 0,
+    flagUpdatedCount: 0
+  };
+  rows.forEach((tx) => {
+    const before = ruleRerunSnapshot(tx);
+    applyCategorization(tx, state);
+    const after = ruleRerunSnapshot(tx);
+    if (after.category !== before.category) summary.categoryUpdatedCount += 1;
+    if (after.vendor !== before.vendor) summary.vendorUpdatedCount += 1;
+    if (after.merchant !== before.merchant) summary.merchantUpdatedCount += 1;
+    if (after.needsReview !== before.needsReview) summary.reviewStatusUpdatedCount += 1;
+    if (after.flags !== before.flags) summary.flagUpdatedCount += 1;
+    if (JSON.stringify(after) !== JSON.stringify(before)) summary.changedCount += 1;
+  });
+  renderAll();
+  showStatus(rerunRulesSummaryText(summary));
+}
+
+function ruleRerunSnapshot(tx) {
+  return {
+    category: tx.category || "",
+    vendor: tx.vendor || "",
+    merchant: tx.merchant || "",
+    confidence: Number(tx.confidence || 0),
+    source: tx.source || "",
+    reason: tx.reason || "",
+    type: tx.type || "",
+    needsReview: Boolean(tx.needsReview),
+    flags: (tx.flags || []).slice().sort().join("|")
+  };
 }
 
 async function runAiAnalyzeTransactions(root) {
@@ -1932,6 +2002,7 @@ function makeTransaction(row, id) {
 function applyCategorization(tx, sourceState) {
   const threshold = Number(sourceState.profile.confidenceThreshold || 78);
   applyVendorRules(tx, sourceState);
+  tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized", "possible_transfer", "unusually_high_amount"].includes(flag));
   const haystack = `${tx.description} ${tx.merchant} ${tx.vendor || ""}`;
   const userRule = sourceState.rules.find((rule) => {
     if (rule.type === "vendor") return false;
@@ -1942,7 +2013,10 @@ function applyCategorization(tx, sourceState) {
   const mapping = sourceState.merchantMappings.find((item) => item.merchant.toLowerCase() === tx.merchant.toLowerCase());
   if (mapping) return setCategory(tx, mapping.category, 96, "Confirmed merchant mapping", "Matched a previously confirmed merchant mapping.");
   const builtIn = BUILT_IN_RULES.find((rule) => rule.match.test(haystack));
-  if (builtIn) setCategory(tx, builtIn.category, builtIn.confidence, "Built-in merchant keyword", "Matched built-in merchant keyword rules.", builtIn.type);
+  if (builtIn) {
+    if (builtIn.merchant) tx.merchant = builtIn.merchant;
+    setCategory(tx, builtIn.category, builtIn.confidence, "Built-in merchant keyword", "Matched built-in merchant keyword rules.", builtIn.type);
+  }
   if (tx.amount > 0 && /credit card payment|payment thank you|online payment received|refund|reimbursement/i.test(haystack)) {
     setCategory(tx, ACCOUNT_CREDIT_CATEGORY, Math.max(82, tx.confidence || 0), "Built-in merchant keyword", "Positive credits are tracked separately from income and spending.", "transfer");
   }
