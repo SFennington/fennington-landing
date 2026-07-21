@@ -1589,6 +1589,20 @@ td select {
   min-width: 196px !important;
 }
 
+.flow-status {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 180px;
+}
+
+.flow-status small {
+  color: #64748b;
+  display: block;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  max-width: 220px;
+}
+
 .recurring-select,
 .type-select {
   min-width: 132px !important;
@@ -2280,6 +2294,16 @@ summary.category-tree-summary::-webkit-details-marker {
   color: var(--muted);
   font-size: 0.9rem;
   margin: 0.25rem 0 0;
+}
+
+.compact-account-config {
+  gap: 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+.compact-account-config .mini-btn {
+  align-self: end;
 }
 
 .account-metrics {

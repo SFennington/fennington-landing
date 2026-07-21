@@ -14,6 +14,13 @@ const DEFAULT_SUBCATEGORIES = [
 ];
 
 const ACCOUNT_CREDIT_CATEGORY = "Credits to the Account";
+const TRANSFER_CATEGORY = "Transfers";
+const ACCOUNT_FLOW_ROLES = ["clearing", "spending", "credit_card", "savings", "other"];
+const FLOW_TYPES = ["external_income", "external_expense", "internal_transfer", "credit_card_payment", "credit_card_credit", "refund", "uncategorized"];
+const INTERNAL_FLOW_TYPES = new Set(["internal_transfer", "credit_card_payment", "credit_card_credit"]);
+const TRANSFER_MATCH_WINDOW_DAYS = 3;
+const TRANSFER_MATCH_THRESHOLD = 80;
+const TRANSFER_AMBIGUITY_GAP = 8;
 const DEMO_IMPORT_ID = "demo-import";
 const DEMO_ACCOUNT_IDS = new Set(["checking-main", "checking-side", "credit-card"]);
 const DEMO_RECURRING_IDS = new Set(["sunrise-apartments-monthly", "city-electric-monthly", "netflix-monthly"]);
@@ -513,6 +520,7 @@ function renderAll(options = {}) {
   ensureDefaultCategories();
   normalizeTransactionAmountSigns();
   normalizeCreditCardPaymentSigns();
+  normalizeFinancialFlows();
   const previousRecurring = new Map(state.recurring.map((item) => [item.id, item]));
   state.recurring = detectRecurring(state.transactions).map((item) => ({ ...item, status: previousRecurring.get(item.id)?.status || item.status }));
   renderDashboard();
@@ -600,7 +608,7 @@ function rememberRenamedDefaultCategory(previousName, previousBaseName) {
 function normalizeCreditCardPaymentSigns() {
   const creditAccounts = new Set(state.accounts.filter((account) => account.type === "credit").map((account) => account.id));
   state.transactions.forEach((tx) => {
-    const looksLikePayment = tx.category === "Transfers" || tx.type === "transfer" || /payment|autopay|thank you|payment received|online payment/i.test(`${tx.description} ${tx.merchant}`);
+    const looksLikePayment = tx.category === TRANSFER_CATEGORY || tx.type === "transfer" || /payment|autopay|thank you|payment received|online payment/i.test(`${tx.description} ${tx.merchant}`);
     if (creditAccounts.has(tx.accountId) && looksLikePayment) {
       if (tx.amount < 0) tx.amount = Math.abs(tx.amount);
       setCategory(tx, ACCOUNT_CREDIT_CATEGORY, Math.max(90, tx.confidence || 0), tx.source || "Payment sign normalization", "Credit-card payments are tracked as positive credits.", "transfer");
@@ -629,6 +637,289 @@ function normalizeTransactionAmountSign(tx) {
   if (tx.type === "expense") tx.amount = -Math.abs(amount);
 }
 
+function normalizeFinancialFlows() {
+  normalizeAccountConfigs();
+  state.transactions.forEach((tx) => normalizeTransactionFlow(tx));
+  reconcileTransfers(state.transactions, state.accounts);
+}
+
+function normalizeAccountConfigs() {
+  state.accounts.forEach((account) => {
+    account.type = account.type || (/card|credit|visa|mastercard|amex|discover/i.test(`${account.name || ""} ${account.institution || ""}`) ? "credit" : "checking");
+    account.flowRole = ACCOUNT_FLOW_ROLES.includes(account.flowRole) ? account.flowRole : inferAccountFlowRole(account);
+    if (typeof account.includeInMoneyFlow !== "boolean") account.includeInMoneyFlow = true;
+    if (typeof account.transferMatchingEnabled !== "boolean") account.transferMatchingEnabled = true;
+  });
+}
+
+function inferAccountFlowRole(account) {
+  const text = `${account.name || ""} ${account.institution || ""}`.toLowerCase();
+  if (account.type === "credit") return "credit_card";
+  if (/clearing|income|payroll|holding/.test(text)) return "clearing";
+  if (/saving|reserve/.test(text)) return "savings";
+  if (/checking|spend|bill|budget|main/.test(text)) return "spending";
+  return "other";
+}
+
+function normalizeTransactionFlow(tx) {
+  tx.flags = cleanFlowFlags(tx.flags || []);
+  if (!FLOW_TYPES.includes(tx.flowType) || tx.flowSource !== "user") {
+    tx.flowType = deriveTransactionFlowType(tx);
+    tx.flowSource = tx.flowSource === "user" ? "user" : "auto";
+    tx.flowConfidence = flowConfidenceFor(tx);
+    tx.flowReason = flowReasonFor(tx);
+  }
+  applyReportingType(tx);
+}
+
+function cleanFlowFlags(flags = []) {
+  return flags.filter((flag) => !["possible_transfer", "unmatched_transfer", "ambiguous_transfer"].includes(flag));
+}
+
+function deriveTransactionFlowType(tx) {
+  const account = accountById(tx.accountId);
+  if (isRefundLike(tx)) return "refund";
+  if (account?.type === "credit" && tx.amount > 0 && (isPaymentLike(tx) || tx.category === ACCOUNT_CREDIT_CATEGORY)) return "credit_card_payment";
+  if (isTransferLike(tx)) return "uncategorized";
+  if (tx.category === "Income" || (tx.type === "income" && tx.amount > 0)) return "external_income";
+  if (tx.amount < 0 || tx.type === "expense") return "external_expense";
+  if (tx.amount > 0) return "external_income";
+  return "uncategorized";
+}
+
+function flowConfidenceFor(tx) {
+  if (tx.flowType === "uncategorized" && isTransferLike(tx)) return 60;
+  if (tx.flowType === "credit_card_payment") return 88;
+  if (tx.flowType === "external_income" || tx.flowType === "external_expense") return Math.max(70, Number(tx.confidence || 0));
+  return Math.max(50, Number(tx.confidence || 0));
+}
+
+function flowReasonFor(tx) {
+  if (tx.flowType === "credit_card_payment") return "Credit-card payment or credit is internal movement when the card account is tracked.";
+  if (tx.flowType === "uncategorized" && isTransferLike(tx)) return "Transfer-like transaction needs a tracked counterparty before it is hidden from income and spending.";
+  if (tx.flowType === "external_income") return "Income from outside the tracked account system.";
+  if (tx.flowType === "external_expense") return "Expense to an outside vendor.";
+  if (tx.flowType === "refund") return "Refund or reimbursement reduces reportable spending instead of becoming an internal transfer.";
+  return "Flow classification is pending review.";
+}
+
+function applyReportingType(tx) {
+  if (INTERNAL_FLOW_TYPES.has(tx.flowType)) tx.reportingType = "internal";
+  else if (tx.flowType === "external_income") tx.reportingType = "income";
+  else if (tx.flowType === "external_expense" || tx.flowType === "refund") tx.reportingType = "expense";
+  else tx.reportingType = "review";
+}
+
+function reconcileTransfers(transactions, accounts) {
+  const accountMap = new Map(accounts.map((account) => [account.id, account]));
+  transactions.forEach((tx) => {
+    if (tx.flowSource === "user") {
+      applyReportingType(tx);
+      return;
+    }
+    clearTransferLink(tx);
+    if (tx.flowType === "credit_card_payment") markSingleSidedInternal(tx, tx.counterpartyAccountId || "", "Credit-card payment is internal to a tracked card account.");
+  });
+
+  const outCandidates = transactions.filter((tx) => tx.flowSource !== "user" && tx.amount < 0 && isTransferCandidate(tx));
+  const inCandidates = transactions.filter((tx) => tx.flowSource !== "user" && tx.amount > 0 && isTransferCandidate(tx));
+  const matchedIds = new Set();
+
+  outCandidates.forEach((outTx) => {
+    if (matchedIds.has(outTx.id)) return;
+    const scored = inCandidates
+      .filter((inTx) => !matchedIds.has(inTx.id) && outTx.accountId !== inTx.accountId && amountsClose(Math.abs(outTx.amount), Math.abs(inTx.amount)))
+      .map((inTx) => ({ inTx, score: transferCandidateScore(outTx, inTx, accountMap) }))
+      .filter((item) => item.score >= TRANSFER_MATCH_THRESHOLD)
+      .sort((a, b) => b.score - a.score);
+    if (!scored.length) return;
+    const [best, second] = scored;
+    if (second && best.score - second.score < TRANSFER_AMBIGUITY_GAP) {
+      markAmbiguousTransfer(outTx, best.score, "Multiple possible transfer matches were found.");
+      markAmbiguousTransfer(best.inTx, best.score, "Multiple possible transfer matches were found.");
+      return;
+    }
+    linkTransferPair(outTx, best.inTx, best.score, accountMap);
+    matchedIds.add(outTx.id);
+    matchedIds.add(best.inTx.id);
+  });
+
+  outCandidates.concat(inCandidates).forEach((tx) => {
+    if (matchedIds.has(tx.id) || tx.transferStatus) return;
+    const counterparty = tx.amount < 0 ? inferSingleSidedCounterparty(tx, accountMap) : null;
+    if (counterparty) markSingleSidedInternal(tx, counterparty.id, `Payment appears to go to tracked account ${counterparty.name}.`);
+    else markUnmatchedTransfer(tx);
+  });
+}
+
+function clearTransferLink(tx) {
+  tx.transferGroupId = "";
+  tx.transferPeerTransactionId = "";
+  tx.counterpartyAccountId = "";
+  tx.transferDirection = "";
+  tx.transferStatus = "";
+  tx.flags = cleanFlowFlags(tx.flags || []);
+  if (INTERNAL_FLOW_TYPES.has(tx.flowType) && tx.flowType !== "credit_card_payment") tx.flowType = deriveTransactionFlowType(tx);
+  applyReportingType(tx);
+}
+
+function isTransferCandidate(tx) {
+  if (!accountById(tx.accountId)?.transferMatchingEnabled) return false;
+  if (isLikelyExternalIncomeText(tx)) return false;
+  return isTransferLike(tx) || tx.flowType === "credit_card_payment" || tx.flowType === "internal_transfer";
+}
+
+function transferCandidateScore(outTx, inTx, accountMap) {
+  let score = 50;
+  const dayGap = daysBetween(outTx.date, inTx.date);
+  if (dayGap <= 1) score += 20;
+  else if (dayGap <= TRANSFER_MATCH_WINDOW_DAYS) score += 14;
+  else return 0;
+
+  if (isTransferLike(outTx) || isTransferLike(inTx)) score += 12;
+  if (isPaymentLike(outTx) || isPaymentLike(inTx)) score += 10;
+
+  const from = accountMap.get(outTx.accountId);
+  const to = accountMap.get(inTx.accountId);
+  if (!from || !to || from.includeInMoneyFlow === false || to.includeInMoneyFlow === false) return 0;
+  if (from.flowRole === "clearing" && to.flowRole === "spending") score += 18;
+  if (from.flowRole === "spending" && to.flowRole === "clearing") score += 10;
+  if (to.flowRole === "credit_card" && isPaymentLike(outTx)) score += 24;
+  if (to.type === "credit" && inTx.amount > 0) score += 16;
+  if (from.type !== "credit" && to.type !== "credit" && (from.type === "checking" || to.type === "checking")) score += 10;
+  if (isRefundLike(outTx) || isRefundLike(inTx)) score -= 40;
+  return score;
+}
+
+function linkTransferPair(outTx, inTx, score, accountMap) {
+  const groupId = `transfer-${outTx.id}-${inTx.id}`;
+  const toAccount = accountMap.get(inTx.accountId);
+  const isCardPayment = toAccount?.flowRole === "credit_card" || toAccount?.type === "credit";
+  const flowType = isCardPayment ? "credit_card_payment" : "internal_transfer";
+  Object.assign(outTx, {
+    flowType,
+    reportingType: "internal",
+    flowSource: "auto",
+    transferGroupId: groupId,
+    transferPeerTransactionId: inTx.id,
+    counterpartyAccountId: inTx.accountId,
+    transferDirection: "out",
+    transferStatus: "matched",
+    flowConfidence: score,
+    flowReason: `Matched to transfer into ${accountName(inTx.accountId)}.`
+  });
+  Object.assign(inTx, {
+    flowType,
+    reportingType: "internal",
+    flowSource: "auto",
+    transferGroupId: groupId,
+    transferPeerTransactionId: outTx.id,
+    counterpartyAccountId: outTx.accountId,
+    transferDirection: "in",
+    transferStatus: "matched",
+    flowConfidence: score,
+    flowReason: `Matched to transfer out of ${accountName(outTx.accountId)}.`
+  });
+  outTx.needsReview = false;
+  inTx.needsReview = false;
+  outTx.flags = cleanFlowFlags(outTx.flags || []);
+  inTx.flags = cleanFlowFlags(inTx.flags || []);
+}
+
+function inferSingleSidedCounterparty(tx, accountMap) {
+  if (!isPaymentLike(tx)) return null;
+  const source = accountMap.get(tx.accountId);
+  if (!source || source.type === "credit") return null;
+  const creditAccounts = Array.from(accountMap.values()).filter((account) => account.id !== tx.accountId && account.transferMatchingEnabled && account.includeInMoneyFlow !== false && (account.flowRole === "credit_card" || account.type === "credit"));
+  if (!creditAccounts.length) return null;
+  const haystack = normalizedFlowText(`${tx.description || ""} ${tx.merchant || ""} ${tx.vendor || ""}`);
+  const named = creditAccounts.find((account) => accountNameTokens(account).some((token) => token.length >= 4 && haystack.includes(token)));
+  if (named) return named;
+  return creditAccounts.length === 1 ? creditAccounts[0] : null;
+}
+
+function accountNameTokens(account) {
+  return normalizedFlowText(`${account.name || ""} ${account.institution || ""}`).split(" ").filter((token) => !["credit", "card", "bank", "account", "checking"].includes(token));
+}
+
+function markSingleSidedInternal(tx, counterpartyAccountId, reason) {
+  tx.flowType = accountById(counterpartyAccountId)?.type === "credit" || accountById(counterpartyAccountId)?.flowRole === "credit_card" || tx.flowType === "credit_card_payment" ? "credit_card_payment" : "internal_transfer";
+  tx.reportingType = "internal";
+  tx.transferGroupId = tx.transferGroupId || `transfer-single-${tx.id}`;
+  tx.counterpartyAccountId = counterpartyAccountId || "";
+  tx.transferDirection = tx.amount < 0 ? "out" : "in";
+  tx.transferStatus = "single_sided";
+  tx.flowConfidence = Math.max(82, Number(tx.flowConfidence || 0));
+  tx.flowReason = reason;
+  tx.needsReview = false;
+  tx.flags = cleanFlowFlags(tx.flags || []);
+}
+
+function markAmbiguousTransfer(tx, score, reason) {
+  tx.flowType = "uncategorized";
+  tx.reportingType = "review";
+  tx.transferStatus = "ambiguous";
+  tx.flowConfidence = score;
+  tx.flowReason = reason;
+  tx.needsReview = true;
+  tx.flags = Array.from(new Set([...(cleanFlowFlags(tx.flags || [])), "ambiguous_transfer"]));
+}
+
+function markUnmatchedTransfer(tx) {
+  tx.flowType = "uncategorized";
+  tx.reportingType = "review";
+  tx.transferStatus = "unmatched";
+  tx.flowConfidence = Math.max(55, Number(tx.flowConfidence || 0));
+  tx.flowReason = "Transfer-like transaction has no tracked counterparty match yet.";
+  tx.needsReview = true;
+  tx.flags = Array.from(new Set([...(cleanFlowFlags(tx.flags || [])), "unmatched_transfer"]));
+}
+
+function isTransferLike(tx) {
+  const text = `${tx.description || ""} ${tx.merchant || ""} ${tx.vendor || ""}`;
+  return tx.category === TRANSFER_CATEGORY || tx.category === ACCOUNT_CREDIT_CATEGORY || tx.type === "transfer" || /transfer|online transfer|zelle|venmo|cash app|savings|autopay|payment thank you|payment received|credit card payment|card payment/i.test(text);
+}
+
+function isPaymentLike(tx) {
+  return /payment|autopay|thank you|cardmember|credit card|online pmt|online payment/i.test(`${tx.description || ""} ${tx.merchant || ""} ${tx.vendor || ""}`) || tx.category === ACCOUNT_CREDIT_CATEGORY;
+}
+
+function isRefundLike(tx) {
+  return /refund|reversal|return|reimbursement|credit memo/i.test(`${tx.description || ""} ${tx.merchant || ""} ${tx.vendor || ""}`) && !isPaymentLike(tx);
+}
+
+function isLikelyExternalIncomeText(tx) {
+  return /payroll|direct deposit|salary|paycheck|wages|airbnb|air bnb|payout|deposit from/i.test(`${tx.description || ""} ${tx.merchant || ""} ${tx.vendor || ""}`);
+}
+
+function normalizedFlowText(value) {
+  return sanitize(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function transactionReportingMonth(tx) {
+  return tx.recognizedMonth || tx.date?.slice(0, 7) || "";
+}
+
+function isReportableIncome(tx) {
+  return tx.reportingType === "income";
+}
+
+function isReportableExpense(tx) {
+  return tx.reportingType === "expense";
+}
+
+function reportableExpenseAmount(tx) {
+  return tx.flowType === "refund" ? -Math.abs(tx.amount) : Math.abs(tx.amount);
+}
+
+function isInternalFlow(tx) {
+  return tx.reportingType === "internal" || INTERNAL_FLOW_TYPES.has(tx.flowType);
+}
+
+function accountById(id) {
+  return state.accounts.find((account) => account.id === id) || null;
+}
+
 function renderDashboard() {
   const tab = document.getElementById("dashboardTab");
   const months = monthOptions();
@@ -638,11 +929,12 @@ function renderDashboard() {
       <div class="field"><label for="dashboardMonth">Dashboard month</label><select id="dashboardMonth">${months.map((m) => `<option value="${m}" ${m === state.selectedMonth ? "selected" : ""}>${m}</option>`).join("")}</select></div>
     </div>
     <div class="summary-grid">
-      ${summaryCard("Actual income received this month", summary.actualIncome, "good")}
-      ${summaryCard("Total spending this month", summary.spending, "danger")}
-      ${summaryCard("Payments and credits this month", summary.payments, "good")}
-      ${summaryCard("Net spending after payments", summary.netSpending, summary.netSpending <= 0 ? "good" : "danger")}
-      ${summaryCard("Remaining income", summary.remaining, summary.remaining >= 0 ? "good" : "danger")}
+      ${summaryCard("Income from outside", summary.actualIncome, "good")}
+      ${summaryCard("Spending to outside vendors", summary.spending, "danger")}
+      ${summaryCard("Net external cash flow", summary.netCashFlow, summary.netCashFlow >= 0 ? "good" : "danger")}
+      ${summaryCard("Internal transfer volume", summary.internalTransferVolume, "warn", "Not counted as income or spending.")}
+      ${summaryCard("Credit-card payments", summary.creditCardPayments, "warn", "Internal movement when cards are tracked.")}
+      ${summaryCard("Transfers needing review", String(summary.unmatchedTransfers.count), "warn", "Count")}
       ${summaryCard("Projected income including potential overtime", projectedIncome(), "warn", "Potential overtime is not received income.")}
       ${summaryCard("Recurring monthly expenses", summary.recurring, "danger")}
       ${summaryCard("Transactions requiring review", summary.reviewCount, "warn", "Count")}
@@ -805,7 +1097,7 @@ function importTransactions() {
   const imported = preview.rows.map((row) => {
     let account = state.accounts.find((item) => item.name.toLowerCase() === row.accountName.toLowerCase());
     if (!account) {
-      account = { id: uniqueId("acct"), name: row.accountName, institution: pendingImport.institution, type: /card|credit|citi|visa|mastercard|amex|discover|capital one|chase/i.test(row.accountName) ? "credit" : "checking" };
+      account = createImportedAccount(row.accountName, pendingImport.institution);
       state.accounts.push(account);
     }
     return makeTransaction({ ...row, accountId: account.id, importId }, uniqueId("tx"));
@@ -821,6 +1113,14 @@ function importTransactions() {
   state.selectedMonth = latestMonth(state.transactions) || state.selectedMonth;
   renderAll();
   showStatus(`${imported.length} transactions imported. Low-confidence and possible duplicate items were added to the review queue. Use Analyze Transactions to run AI.`);
+}
+
+function createImportedAccount(name, institution = "") {
+  const account = { id: uniqueId("acct"), name, institution, type: /card|credit|citi|visa|mastercard|amex|discover|capital one|chase/i.test(`${name} ${institution}`) ? "credit" : "checking" };
+  account.flowRole = inferAccountFlowRole(account);
+  account.includeInMoneyFlow = true;
+  account.transferMatchingEnabled = true;
+  return account;
 }
 
 function saveMappingTemplate() {
@@ -858,33 +1158,47 @@ function renderAccounts() {
       ${rows.length ? `<div class="accounts-grid">${rows.map(accountCard).join("")}</div>${accountsTable(rows)}` : `<div class="empty-state">No accounts yet. Expand CSV import at the top of Transactions and import a CSV to create accounts automatically.</div>`}
     </section>
   `;
+  bindAccountControls(tab);
 }
 
 function accountActivityStats(accountId) {
   const transactions = state.transactions.filter((tx) => tx.accountId === accountId);
-  const moneyIn = round(transactions.filter((tx) => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0));
-  const moneyOut = round(transactions.filter((tx) => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
+  const externalIn = round(transactions.filter(isReportableIncome).reduce((sum, tx) => sum + tx.amount, 0));
+  const externalOut = round(transactions.filter(isReportableExpense).reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0));
+  const internalIn = round(transactions.filter((tx) => isInternalFlow(tx) && tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0));
+  const internalOut = round(transactions.filter((tx) => isInternalFlow(tx) && tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
+  const unmatchedTransfers = transactions.filter((tx) => tx.transferStatus === "unmatched" || tx.transferStatus === "ambiguous").length;
   const reviewCount = transactions.filter((tx) => tx.needsReview || tx.category === "Uncategorized").length;
   const latestDate = transactions.map((tx) => tx.date).filter(Boolean).sort().pop() || "";
-  return { transactionCount: transactions.length, moneyIn, moneyOut, reviewCount, latestDate };
+  return { transactionCount: transactions.length, externalIn, externalOut, internalIn, internalOut, unmatchedTransfers, reviewCount, latestDate };
 }
 
 function accountCard(row) {
-  const { account, transactionCount, moneyIn, moneyOut, reviewCount, latestDate } = row;
+  const { account, transactionCount, externalIn, externalOut, internalIn, internalOut, unmatchedTransfers, reviewCount, latestDate } = row;
   return `
-    <article class="account-card">
+    <article class="account-card" data-account-id="${escapeAttr(account.id)}">
       <div class="account-card-heading">
         <div>
-          <span class="eyebrow">${escapeHtml(label(account.type || "account"))}</span>
+          <span class="eyebrow">${escapeHtml(label(account.flowRole || account.type || "account"))}</span>
           <h4>${escapeHtml(account.name || "Unnamed account")}</h4>
           <p>${escapeHtml(account.institution || "Institution not set")}</p>
         </div>
         <span class="tag ${account.type === "credit" ? "warn" : "good"}">${escapeHtml(label(account.type || "account"))}</span>
       </div>
+      <div class="settings-grid compact-account-config">
+        <div class="field"><label>Type</label><select data-account-field="type"><option value="checking" ${account.type === "checking" ? "selected" : ""}>Checking</option><option value="credit" ${account.type === "credit" ? "selected" : ""}>Credit card</option></select></div>
+        <div class="field"><label>Money-flow role</label><select data-account-field="flowRole">${ACCOUNT_FLOW_ROLES.map((role) => `<option value="${role}" ${account.flowRole === role ? "selected" : ""}>${escapeHtml(label(role.replace(/_/g, " ")))}</option>`).join("")}</select></div>
+        <label class="field checkbox-field"><span>Include in flow</span><input data-account-field="includeInMoneyFlow" type="checkbox" ${account.includeInMoneyFlow !== false ? "checked" : ""}></label>
+        <label class="field checkbox-field"><span>Match transfers</span><input data-account-field="transferMatchingEnabled" type="checkbox" ${account.transferMatchingEnabled !== false ? "checked" : ""}></label>
+        <button class="mini-btn" data-account-save type="button">Save Account</button>
+      </div>
       <dl class="account-metrics">
         <div><dt>Transactions</dt><dd>${transactionCount}</dd></div>
-        <div><dt>Money in</dt><dd class="positive">${money(moneyIn)}</dd></div>
-        <div><dt>Money out</dt><dd class="negative">${money(moneyOut)}</dd></div>
+        <div><dt>External in</dt><dd class="positive">${money(externalIn)}</dd></div>
+        <div><dt>External out</dt><dd class="negative">${money(externalOut)}</dd></div>
+        <div><dt>Internal in</dt><dd class="positive">${money(internalIn)}</dd></div>
+        <div><dt>Internal out</dt><dd class="negative">${money(internalOut)}</dd></div>
+        <div><dt>Transfer review</dt><dd>${unmatchedTransfers}</dd></div>
         <div><dt>Needs review</dt><dd>${reviewCount}</dd></div>
       </dl>
       <p class="status-line">Latest activity: <strong>${escapeHtml(latestDate || "No activity")}</strong></p>
@@ -896,11 +1210,26 @@ function accountsTable(rows) {
   return `
     <div class="table-wrap accounts-table-wrap" tabindex="0" aria-label="Scrollable accounts table">
       <table class="accounts-table">
-        <thead><tr><th>Account</th><th>Institution</th><th>Type</th><th>Transactions</th><th>Money in</th><th>Money out</th><th>Needs review</th><th>Latest activity</th></tr></thead>
-        <tbody>${rows.map(({ account, transactionCount, moneyIn, moneyOut, reviewCount, latestDate }) => `<tr><td><strong>${escapeHtml(account.name || "Unnamed account")}</strong></td><td>${escapeHtml(account.institution || "—")}</td><td>${escapeHtml(label(account.type || "account"))}</td><td>${transactionCount}</td><td class="positive">${money(moneyIn)}</td><td class="negative">${money(moneyOut)}</td><td>${reviewCount}</td><td>${escapeHtml(latestDate || "No activity")}</td></tr>`).join("")}</tbody>
+        <thead><tr><th>Account</th><th>Institution</th><th>Type</th><th>Role</th><th>Transactions</th><th>External in</th><th>External out</th><th>Internal in</th><th>Internal out</th><th>Transfer review</th><th>Needs review</th><th>Latest activity</th></tr></thead>
+        <tbody>${rows.map(({ account, transactionCount, externalIn, externalOut, internalIn, internalOut, unmatchedTransfers, reviewCount, latestDate }) => `<tr><td><strong>${escapeHtml(account.name || "Unnamed account")}</strong></td><td>${escapeHtml(account.institution || "—")}</td><td>${escapeHtml(label(account.type || "account"))}</td><td>${escapeHtml(label((account.flowRole || "other").replace(/_/g, " ")))}</td><td>${transactionCount}</td><td class="positive">${money(externalIn)}</td><td class="negative">${money(externalOut)}</td><td class="positive">${money(internalIn)}</td><td class="negative">${money(internalOut)}</td><td>${unmatchedTransfers}</td><td>${reviewCount}</td><td>${escapeHtml(latestDate || "No activity")}</td></tr>`).join("")}</tbody>
       </table>
     </div>
   `;
+}
+
+function bindAccountControls(root) {
+  root.querySelectorAll("[data-account-save]").forEach((button) => button.addEventListener("click", () => {
+    const card = button.closest("[data-account-id]");
+    const account = state.accounts.find((item) => item.id === card?.dataset.accountId);
+    if (!account) return;
+    card.querySelectorAll("[data-account-field]").forEach((control) => {
+      const field = control.dataset.accountField;
+      account[field] = control.type === "checkbox" ? control.checked : sanitize(control.value);
+    });
+    if (account.type === "credit" && account.flowRole !== "credit_card") account.flowRole = "credit_card";
+    renderAll();
+    showStatus("Account money-flow settings saved.");
+  }));
 }
 
 function renderTransactions() {
@@ -1365,7 +1694,7 @@ function transactionVendor(tx) {
 function filtersHtml() {
   const cats = categoryOptions(state.filters.category || "");
   const accounts = [`<option value="">All accounts</option>`, ...state.accounts.map((a) => `<option value="${a.id}" ${state.filters.account === a.id ? "selected" : ""}>${escapeHtml(a.name)}</option>`)].join("");
-  const activeFilterCount = ["search", "start", "end", "month", "account", "category", "merchant", "vendor", "type"].filter((key) => Boolean(state.filters[key])).length + (state.filters.hideCredits ? 1 : 0);
+  const activeFilterCount = ["search", "start", "end", "month", "account", "category", "merchant", "vendor", "type", "flow"].filter((key) => Boolean(state.filters[key])).length + (state.filters.hideCredits ? 1 : 0);
   return `
     <div class="filters-card">
       <div class="filters-header">
@@ -1385,6 +1714,7 @@ function filtersHtml() {
         <div class="field"><label for="filterMerchant">Merchant</label><input id="filterMerchant" value="${escapeAttr(state.filters.merchant || "")}" placeholder="Merchant"></div>
         <div class="field"><label for="filterVendor">Vendor</label><input id="filterVendor" value="${escapeAttr(state.filters.vendor || "")}" placeholder="Vendor"></div>
         <div class="field"><label for="filterType">Type</label><select id="filterType"><option value="">Any</option>${["income", "expense", "transfer", "uncategorized", "review"].map((t) => `<option value="${t}" ${state.filters.type === t ? "selected" : ""}>${label(t)}</option>`).join("")}</select></div>
+        <div class="field"><label for="filterFlow">Flow</label><select id="filterFlow"><option value="">Any flow</option>${["external_income", "external_expense", "internal", "credit_card_payment", "unmatched", "ambiguous", "review"].map((t) => `<option value="${t}" ${state.filters.flow === t ? "selected" : ""}>${escapeHtml(label(t.replace(/_/g, " ")))}</option>`).join("")}</select></div>
         <label class="field checkbox-field"><span>Hide Credits from Transactions</span><input id="filterHideCredits" type="checkbox" ${state.filters.hideCredits ? "checked" : ""}></label>
       </div>
     </div>
@@ -1392,7 +1722,7 @@ function filtersHtml() {
 }
 
 function bindFilters() {
-  ["Search", "Start", "End", "Month", "Account", "Category", "Merchant", "Vendor", "Type"].forEach((name) => {
+  ["Search", "Start", "End", "Month", "Account", "Category", "Merchant", "Vendor", "Type", "Flow"].forEach((name) => {
     const el = document.getElementById(`filter${name}`);
     if (!el) return;
     el.addEventListener("input", () => {
@@ -1410,7 +1740,7 @@ function bindFilters() {
 }
 
 function transactionTable(rows) {
-  return `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant, vendor & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Match</th><th>Recurring</th><th>Type</th><th>Notes</th><th>Action</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant, vendor & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Flow</th><th>Match</th><th>Recurring</th><th>Type</th><th>Notes</th><th>Action</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
 }
 
 function transactionRow(tx) {
@@ -1438,19 +1768,28 @@ function transactionRow(tx) {
     <td><span class="account-pill">${escapeHtml(accountName(tx.accountId))}</span></td>
     <td class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}"><span>${money(tx.amount)}</span><small>${tx.amount >= 0 ? "Money in" : "Money out"}</small></td>
     <td><select class="category-select" data-field="category" aria-label="Transaction category">${categoryOptions(tx.category)}</select></td>
+    <td>${flowStatusHtml(tx)}</td>
     <td class="confidence-cell"><div class="confidence-meter" aria-label="${confidence} percent confidence"><span style="width:${confidence}%"></span></div><div class="confidence-meta"><strong>${confidence}%</strong><small>${escapeHtml(source)}</small></div></td>
     <td><select class="recurring-select" data-field="recurringStatus" aria-label="Recurring status">${recurringOptions}</select></td>
     <td><select class="type-select type-${escapeAttr(type)}" data-field="type" aria-label="Transaction type">${typeOptions}</select></td>
     <td><input class="note-input" data-field="notes" aria-label="Transaction notes" value="${escapeAttr(tx.notes || "")}" placeholder="Add note"></td>
-    <td class="table-action-cell"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button></td>
+    <td class="table-action-cell"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></td>
   </tr>`;
 }
 
+function flowStatusHtml(tx) {
+  const flowLabel = label(String(tx.flowType || "uncategorized").replace(/_/g, " "));
+  const status = tx.transferStatus ? ` · ${label(tx.transferStatus.replace(/_/g, " "))}` : "";
+  const peer = tx.counterpartyAccountId ? `<small>${escapeHtml(tx.transferDirection === "out" ? "To" : "From")} ${escapeHtml(accountName(tx.counterpartyAccountId))}</small>` : "";
+  const tone = tx.reportingType === "internal" ? "good" : tx.reportingType === "review" ? "warn" : tx.reportingType === "expense" ? "danger" : "good";
+  return `<div class="flow-status"><span class="tag ${tone}">${escapeHtml(flowLabel)}${escapeHtml(status)}</span>${peer}<small>${escapeHtml(tx.flowReason || "")}</small></div>`;
+}
+
 function transactionInsightsHtml(rows) {
-  const expenses = rows.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-  const income = rows.filter((tx) => tx.type === "income" && !isTransferCategory(tx.category)).reduce((sum, tx) => sum + Math.max(0, tx.amount), 0);
-  const transfers = rows.filter((tx) => tx.type === "transfer" || isTransferCategory(tx.category) || isAccountCredit(tx)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-  const expenseCount = rows.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).length;
+  const expenses = rows.filter(isReportableExpense).reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0);
+  const income = rows.filter(isReportableIncome).reduce((sum, tx) => sum + Math.max(0, tx.amount), 0);
+  const transfers = rows.filter(isInternalFlow).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const expenseCount = rows.filter(isReportableExpense).length;
   const reviewCount = rows.filter((tx) => tx.needsReview || tx.category === "Uncategorized").length;
   const net = income - expenses;
   const averageExpense = expenseCount ? expenses / expenseCount : 0;
@@ -1484,7 +1823,7 @@ function transactionInsightsHtml(rows) {
       <article class="insight-card category-snapshot">
         <span>Top categories</span>
         ${topCategoryMiniList(topCategories)}
-        <p class="muted">Transfers in this view total ${money(transfers)}.</p>
+        <p class="muted">Internal movement in this view totals ${money(transfers)}.</p>
       </article>
     </div>
   `;
@@ -1492,8 +1831,8 @@ function transactionInsightsHtml(rows) {
 
 function topSpendingCategories(rows, limit = 5) {
   const totals = {};
-  rows.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).forEach((tx) => {
-    totals[tx.category || "Uncategorized"] = (totals[tx.category || "Uncategorized"] || 0) + Math.abs(tx.amount);
+  rows.filter(isReportableExpense).forEach((tx) => {
+    totals[tx.category || "Uncategorized"] = (totals[tx.category || "Uncategorized"] || 0) + reportableExpenseAmount(tx);
   });
   return Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, limit);
 }
@@ -1516,6 +1855,10 @@ function bindTransactionTable(root) {
     if (tx.category === "Income" || isTransferCategory(tx.category)) tx.type = typeForCategory(tx.category, tx.amount);
     if (selectedType === "income" || selectedType === "expense") tx.importDirection = "";
     normalizeTransactionAmountSign(tx);
+    if (previousCategory !== tx.category && tx.flowSource !== "user") {
+      tx.flowType = deriveTransactionFlowType(tx);
+      tx.flowReason = flowReasonFor(tx);
+    }
     tx.needsReview = false;
     tx.flags = (tx.flags || []).filter((flag) => flag !== "low_confidence" && flag !== "uncategorized");
     tx.source = tx.source === "AI" ? tx.source : "User";
@@ -1531,6 +1874,60 @@ function bindTransactionTable(root) {
     renderAll();
     if (statusMessage) showStatus(statusMessage);
   }));
+  root.querySelectorAll("[data-action='mark-internal']").forEach((button) => button.addEventListener("click", () => {
+    const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
+    if (!tx) return;
+    const counterparty = promptForCounterpartyAccount(tx);
+    tx.flowSource = "user";
+    tx.flowType = counterparty && (accountById(counterparty)?.type === "credit" || accountById(counterparty)?.flowRole === "credit_card") ? "credit_card_payment" : "internal_transfer";
+    markSingleSidedInternal(tx, counterparty, counterparty ? `Manually marked as internal transfer with ${accountName(counterparty)}.` : "Manually marked as internal account movement.");
+    tx.confidence = Math.max(90, Number(tx.confidence || 0));
+    tx.source = "User flow";
+    renderAll();
+    showStatus("Transaction marked as internal money movement.");
+  }));
+  root.querySelectorAll("[data-action='mark-external']").forEach((button) => button.addEventListener("click", () => {
+    const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
+    if (!tx) return;
+    markExternalFlow(tx);
+    renderAll();
+    showStatus("Transaction marked as external income or spending.");
+  }));
+  root.querySelectorAll("[data-action='auto-flow']").forEach((button) => button.addEventListener("click", () => {
+    const tx = state.transactions.find((item) => item.id === button.closest("tr")?.dataset.id);
+    if (!tx) return;
+    tx.flowSource = "auto";
+    tx.flowType = deriveTransactionFlowType(tx);
+    tx.flowReason = flowReasonFor(tx);
+    clearTransferLink(tx);
+    renderAll();
+    showStatus("Transaction returned to automatic flow detection.");
+  }));
+}
+
+function markExternalFlow(tx) {
+  tx.flowSource = "user";
+  tx.flowType = tx.category === "Income" || tx.amount > 0 && tx.type === "income" ? "external_income" : "external_expense";
+  tx.reportingType = tx.flowType === "external_income" ? "income" : "expense";
+  tx.transferGroupId = "";
+  tx.transferPeerTransactionId = "";
+  tx.counterpartyAccountId = "";
+  tx.transferDirection = "";
+  tx.transferStatus = "";
+  tx.flowConfidence = 100;
+  tx.flowReason = tx.flowType === "external_income" ? "Manually confirmed as outside income." : "Manually confirmed as outside spending.";
+  tx.needsReview = false;
+  tx.flags = cleanFlowFlags(tx.flags || []);
+  tx.source = "User flow";
+}
+
+function promptForCounterpartyAccount(tx) {
+  const options = state.accounts.filter((account) => account.id !== tx.accountId);
+  if (!options.length) return "";
+  const listing = options.map((account, index) => `${index + 1}. ${account.name} (${label((account.flowRole || account.type || "account").replace(/_/g, " "))})`).join("\n");
+  const value = window.prompt(`Counterparty account for this internal movement (optional):\n${listing}\n\nEnter number or leave blank:`, "");
+  const index = Math.round(Number(value || 0)) - 1;
+  return options[index]?.id || "";
 }
 
 function renderReview() {
@@ -1550,8 +1947,8 @@ function renderReview() {
 function reviewCard(tx) {
   return `<article class="review-card panel" data-id="${tx.id}">
     <input type="checkbox" class="review-select" aria-label="Select transaction">
-    <div><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span></p><p>${(tx.flags || []).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ")}</p><small class="muted">${escapeHtml(tx.reason || "Needs manual confirmation.")}</small></div>
-    <div class="review-actions"><select data-review-category>${categoryOptions(tx.category)}</select><label><input data-apply-rule type="checkbox"> Apply rule</label><button class="mini-btn" data-review="confirm" type="button">Confirm</button><button class="mini-btn" data-review="skip" type="button">Skip</button></div>
+    <div><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span></p><p>${flowStatusHtml(tx)}</p><p>${(tx.flags || []).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ")}</p><small class="muted">${escapeHtml(tx.flowReason || tx.reason || "Needs manual confirmation.")}</small></div>
+    <div class="review-actions"><select data-review-category>${categoryOptions(tx.category)}</select><label><input data-apply-rule type="checkbox"> Apply rule</label><button class="mini-btn" data-review="confirm" type="button">Confirm</button><button class="mini-btn" data-review="internal" type="button">Confirm Internal</button><button class="mini-btn" data-review="skip" type="button">Skip</button></div>
   </article>`;
 }
 
@@ -1561,6 +1958,7 @@ function bindReviewActions(root) {
     const tx = state.transactions.find((item) => item.id === card.dataset.id);
     tx.category = card.querySelector("[data-review-category]").value;
     tx.type = typeForCategory(tx.category, tx.amount);
+    if (!isTransferCategory(tx.category)) markExternalFlow(tx);
     tx.needsReview = false;
     tx.confidence = 100;
     tx.source = "User";
@@ -1571,6 +1969,20 @@ function bindReviewActions(root) {
       else showStatus("Rule created for future matching transactions.");
     }
     renderAll();
+  }));
+  root.querySelectorAll("[data-review='internal']").forEach((button) => button.addEventListener("click", () => {
+    const tx = state.transactions.find((item) => item.id === button.closest("article").dataset.id);
+    if (!tx) return;
+    const counterparty = promptForCounterpartyAccount(tx);
+    tx.flowSource = "user";
+    tx.flowType = counterparty && (accountById(counterparty)?.type === "credit" || accountById(counterparty)?.flowRole === "credit_card") ? "credit_card_payment" : "internal_transfer";
+    markSingleSidedInternal(tx, counterparty, counterparty ? `Manually confirmed internal movement with ${accountName(counterparty)}.` : "Manually confirmed internal account movement.");
+    tx.category = tx.category === "Uncategorized" ? TRANSFER_CATEGORY : tx.category;
+    tx.type = "transfer";
+    tx.source = "User flow";
+    tx.confidence = 100;
+    renderAll();
+    showStatus("Internal money movement confirmed.");
   }));
   root.querySelectorAll("[data-review='skip']").forEach((button) => button.addEventListener("click", () => {
     const tx = state.transactions.find((item) => item.id === button.closest("article").dataset.id);
@@ -1585,6 +1997,7 @@ function bindReviewActions(root) {
       const tx = state.transactions.find((item) => item.id === checkbox.closest("article").dataset.id);
       tx.category = category;
       tx.type = typeForCategory(category, tx.amount);
+      if (!isTransferCategory(category)) markExternalFlow(tx);
       tx.needsReview = false;
       tx.confidence = 100;
       tx.source = "Bulk review";
@@ -1684,6 +2097,7 @@ function renderReports() {
   const selectedCategory = reportCategory();
   tab.innerHTML = `
     <div class="report-grid">
+      <section class="chart-card report-card-wide"><h3>Money flow</h3><p class="status-line">Credit-card purchases count on purchase dates. Later card payments are internal movement and do not shift category spending into the payment month.</p>${moneyFlowReport(summary)}</section>
       <section class="chart-card report-card-wide"><h3>Category drilldown</h3><p class="status-line">Pick any category level, such as Side Businesses or Cuyle's Customs, to include transactions assigned to that category and every nested child category.</p><div class="field"><label for="reportCategory">Category or vendor bucket</label><select id="reportCategory"><option value="">Choose category</option>${categoryIdOptions(selectedCategory?.id || "")}</select></div>${selectedCategory ? categoryDrilldown(selectedCategory) : `<div class="empty-state compact">Create nested categories, assign transactions, then select a category here to see monthly and overall totals.</div>`}</section>
       <section class="chart-card"><h3>Spending by category</h3>${categoryBars(summary.byCategory)}</section>
       <section class="chart-card"><h3>Monthly spending totals</h3>${monthlyBars("spending")}</section>
@@ -1770,6 +2184,36 @@ function renderRecurring() {
   }));
 }
 
+function moneyFlowReport(summary) {
+  const pairs = internalFlowPairs(state.selectedMonth);
+  return `
+    <div class="summary-grid compact-summary">
+      ${summaryCard("Outside income", summary.actualIncome, "good")}
+      ${summaryCard("Outside spending", summary.spending, "danger")}
+      ${summaryCard("Net external flow", summary.netCashFlow, summary.netCashFlow >= 0 ? "good" : "danger")}
+      ${summaryCard("Internal transfer volume", summary.internalTransferVolume, "warn")}
+      ${summaryCard("Transfer review", String(summary.unmatchedTransfers.count), "warn", "Count")}
+    </div>
+    <div class="table-wrap compact-table" style="margin-top:1rem"><table><thead><tr><th>Account flow</th><th>Out</th><th>In</th><th>Transactions</th></tr></thead><tbody>${pairs.length ? pairs.map((item) => `<tr><td>${escapeHtml(item.label)}</td><td class="negative">${money(item.out)}</td><td class="positive">${money(item.in)}</td><td>${item.count}</td></tr>`).join("") : `<tr><td colspan="4">No matched internal account movement this month.</td></tr>`}</tbody></table></div>
+  `;
+}
+
+function internalFlowPairs(month) {
+  const rows = state.transactions.filter((tx) => tx.date?.startsWith(month) && isInternalFlow(tx));
+  const pairs = new Map();
+  rows.forEach((tx) => {
+    const from = tx.transferDirection === "out" ? accountName(tx.accountId) : accountName(tx.counterpartyAccountId);
+    const to = tx.transferDirection === "out" ? accountName(tx.counterpartyAccountId) : accountName(tx.accountId);
+    const labelText = `${from || "Unknown"} -> ${to || "Unknown"}`;
+    if (!pairs.has(labelText)) pairs.set(labelText, { label: labelText, out: 0, in: 0, count: 0 });
+    const pair = pairs.get(labelText);
+    if (tx.amount < 0) pair.out += Math.abs(tx.amount);
+    else pair.in += tx.amount;
+    pair.count += 1;
+  });
+  return Array.from(pairs.values()).map((item) => ({ ...item, out: round(item.out), in: round(item.in) })).sort((a, b) => (b.out + b.in) - (a.out + a.in));
+}
+
 function recurringCard(item) {
   const flags = item.flags?.length ? `<div class="recurring-flags">${item.flags.map((flag) => `<span class="tag warn">${escapeHtml(flag)}</span>`).join(" ")}</div>` : "";
   const isExpanded = recurringTransactionExpandedIds.has(item.id);
@@ -1786,7 +2230,7 @@ function recurringTransactionsHtml(item) {
 
 function recurringPayments(item) {
   return state.transactions
-    .filter((tx) => tx.merchant === item.merchant && tx.type === "expense" && !isTransferCategory(tx.category))
+    .filter((tx) => tx.merchant === item.merchant && isReportableExpense(tx))
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
@@ -1994,7 +2438,17 @@ function makeTransaction(row, id) {
     needsReview: true,
     flags: [],
     importDirection: row.importDirection || "",
-    importId: row.importId || "manual"
+    importId: row.importId || "manual",
+    flowType: "uncategorized",
+    reportingType: "review",
+    transferGroupId: "",
+    transferPeerTransactionId: "",
+    counterpartyAccountId: "",
+    transferDirection: "",
+    transferStatus: "",
+    flowConfidence: 0,
+    flowReason: "Flow classification is pending review.",
+    flowSource: "auto"
   };
   return tx;
 }
@@ -2040,12 +2494,12 @@ function setCategory(tx, category, confidence, source, reason, type) {
 
 function typeForCategory(category, amount = 0) {
   if (category === "Income") return "income";
-  if (category === "Transfers" || category === ACCOUNT_CREDIT_CATEGORY) return "transfer";
+  if (category === TRANSFER_CATEGORY || category === ACCOUNT_CREDIT_CATEGORY) return "transfer";
   return Number(amount || 0) >= 0 ? "income" : "expense";
 }
 
 function isTransferCategory(category) {
-  return category === "Transfers" || category === ACCOUNT_CREDIT_CATEGORY;
+  return category === TRANSFER_CATEGORY || category === ACCOUNT_CREDIT_CATEGORY;
 }
 
 function isAccountCredit(tx) {
@@ -2155,15 +2609,21 @@ function duplicateKey(tx) {
 }
 
 function monthlySummary(month) {
-  const txs = state.transactions.filter((tx) => tx.date?.startsWith(month));
-  const actualIncome = txs.filter((tx) => tx.type === "income" && !isTransferCategory(tx.category)).reduce((sum, tx) => sum + tx.amount, 0);
-  const spending = txs.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-  const payments = txs.filter((tx) => tx.amount > 0 && (tx.type === "transfer" || isTransferCategory(tx.category))).reduce((sum, tx) => sum + tx.amount, 0);
-  const recurring = txs.filter((tx) => tx.recurringStatus === "confirmed" || state.recurring.some((item) => item.merchant === tx.merchant && item.status !== "rejected")).reduce((sum, tx) => tx.type === "expense" ? sum + Math.abs(tx.amount) : sum, 0);
+  const txs = state.transactions.filter((tx) => transactionReportingMonth(tx) === month);
+  const transferDatedTxs = state.transactions.filter((tx) => tx.date?.startsWith(month));
+  const actualIncome = round(txs.filter(isReportableIncome).reduce((sum, tx) => sum + tx.amount, 0));
+  const spending = round(txs.filter(isReportableExpense).reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0));
+  const internalTransfersIn = round(transferDatedTxs.filter((tx) => isInternalFlow(tx) && tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0));
+  const internalTransfersOut = round(transferDatedTxs.filter((tx) => isInternalFlow(tx) && tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
+  const internalTransferVolume = round(Math.max(internalTransfersIn, internalTransfersOut));
+  const creditCardPayments = round(transferDatedTxs.filter((tx) => tx.flowType === "credit_card_payment" && tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
+  const unmatchedRows = transferDatedTxs.filter((tx) => tx.transferStatus === "unmatched" || tx.transferStatus === "ambiguous");
+  const unmatchedTransfers = { count: unmatchedRows.length, total: round(unmatchedRows.reduce((sum, tx) => sum + Math.abs(tx.amount), 0)) };
+  const recurring = txs.filter((tx) => tx.recurringStatus === "confirmed" || state.recurring.some((item) => item.merchant === tx.merchant && item.status !== "rejected")).reduce((sum, tx) => isReportableExpense(tx) ? sum + reportableExpenseAmount(tx) : sum, 0);
   const byCategory = {};
-  txs.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category)).forEach((tx) => { byCategory[tx.category] = (byCategory[tx.category] || 0) + Math.abs(tx.amount); });
-  const netSpending = spending - payments;
-  return { actualIncome, spending, payments, netSpending, remaining: actualIncome - netSpending, recurring, reviewCount: txs.filter((tx) => tx.needsReview).length, byCategory };
+  txs.filter(isReportableExpense).forEach((tx) => { byCategory[tx.category] = (byCategory[tx.category] || 0) + reportableExpenseAmount(tx); });
+  const netCashFlow = round(actualIncome - spending);
+  return { actualIncome, spending, payments: creditCardPayments, netSpending: spending, netCashFlow, remaining: netCashFlow, internalTransfersIn, internalTransfersOut, internalTransferVolume, creditCardPayments, unmatchedTransfers, recurring: round(recurring), reviewCount: txs.filter((tx) => tx.needsReview).length, byCategory };
 }
 
 function summaryCard(title, value, tone, note = "") {
@@ -2179,7 +2639,7 @@ function categoryBars(data) {
 }
 
 function quickStatus(summary) {
-  return `<p><span class="tag good">Actual income</span> ${money(summary.actualIncome)}</p><p><span class="tag danger">Spending</span> ${money(summary.spending)}</p><p><span class="tag good">Payments</span> ${money(summary.payments)}</p><p><span class="tag warn">Potential overtime</span> ${money(overtimeIncome())} kept separate from received income.</p><p><span class="tag warn">Review</span> ${summary.reviewCount} transactions need attention.</p>`;
+  return `<p><span class="tag good">Outside income</span> ${money(summary.actualIncome)}</p><p><span class="tag danger">Outside spending</span> ${money(summary.spending)}</p><p><span class="tag warn">Internal movement</span> ${money(summary.internalTransferVolume)} ignored for income and spending.</p><p><span class="tag warn">Card timing</span> Purchases count on purchase dates; later card payments stay internal.</p><p><span class="tag warn">Review</span> ${summary.reviewCount} transactions need attention.</p>`;
 }
 
 function filteredTransactions() {
@@ -2198,18 +2658,23 @@ function filteredTransactions() {
     if (f.type === "review" && !tx.needsReview) return false;
     if (f.type === "uncategorized" && tx.category !== "Uncategorized") return false;
     if (["income", "expense", "transfer"].includes(f.type) && tx.type !== f.type) return false;
+    if (f.flow === "internal" && !isInternalFlow(tx)) return false;
+    if (f.flow === "review" && tx.reportingType !== "review") return false;
+    if (f.flow === "unmatched" && tx.transferStatus !== "unmatched") return false;
+    if (f.flow === "ambiguous" && tx.transferStatus !== "ambiguous") return false;
+    if (["external_income", "external_expense", "credit_card_payment"].includes(f.flow) && tx.flowType !== f.flow) return false;
     return true;
   }).sort((a, b) => b.date.localeCompare(a.date));
 }
 
 function reviewQueue() {
   const recurringMerchants = new Set(state.recurring.filter((item) => item.status === "suggested").map((item) => item.merchant));
-  return state.transactions.filter((tx) => tx.needsReview || tx.category === "Uncategorized" || tx.flags?.length || recurringMerchants.has(tx.merchant)).sort((a, b) => b.date.localeCompare(a.date));
+  return state.transactions.filter((tx) => tx.needsReview || tx.reportingType === "review" || tx.category === "Uncategorized" || tx.flags?.length || recurringMerchants.has(tx.merchant)).sort((a, b) => b.date.localeCompare(a.date));
 }
 
 function detectRecurring(transactions) {
   const groups = new Map();
-  transactions.filter((tx) => tx.type === "expense" && !isTransferCategory(tx.category) && Math.abs(tx.amount) > 0).forEach((tx) => {
+  transactions.filter((tx) => isReportableExpense(tx) && Math.abs(tx.amount) > 0).forEach((tx) => {
     const key = tx.merchant.toLowerCase();
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(tx);
@@ -2322,15 +2787,15 @@ function monthlyBars(kind) {
 function incomeExpenseBars() {
   const months = monthOptions();
   if (months.length < 2) return `<div class="empty-state">Not enough historical data yet.</div>`;
-  return months.map((m) => { const s = monthlySummary(m); return `<p><strong>${m}</strong> Income ${money(s.actualIncome)} · Expenses ${money(s.spending)} · Payments ${money(s.payments)} · Remaining ${money(s.remaining)}</p>`; }).join("");
+  return months.map((m) => { const s = monthlySummary(m); return `<p><strong>${m}</strong> Outside income ${money(s.actualIncome)} · Outside spending ${money(s.spending)} · Internal movement ${money(s.internalTransferVolume)} · Net ${money(s.netCashFlow)}</p>`; }).join("");
 }
 
 function trendList(type) {
   if (monthOptions().length < 2) return `<div class="empty-state">Not enough historical data to calculate trends.</div>`;
-  const current = state.transactions.filter((tx) => tx.date.startsWith(state.selectedMonth) && tx.type === "expense");
+  const current = state.transactions.filter((tx) => transactionReportingMonth(tx) === state.selectedMonth && isReportableExpense(tx));
   const previousMonth = addMonth(state.selectedMonth, -1);
-  const previous = state.transactions.filter((tx) => tx.date.startsWith(previousMonth) && tx.type === "expense");
-  const sumBy = (rows) => rows.reduce((acc, tx) => { const key = type === "category" ? tx.category : tx.merchant; acc[key] = (acc[key] || 0) + Math.abs(tx.amount); return acc; }, {});
+  const previous = state.transactions.filter((tx) => transactionReportingMonth(tx) === previousMonth && isReportableExpense(tx));
+  const sumBy = (rows) => rows.reduce((acc, tx) => { const key = type === "category" ? tx.category : tx.merchant; acc[key] = (acc[key] || 0) + reportableExpenseAmount(tx); return acc; }, {});
   const now = sumBy(current);
   const prev = sumBy(previous);
   const changes = Object.keys(now).map((key) => [key, now[key] - (prev[key] || 0)]).sort((a, b) => b[1] - a[1]).slice(0, 6);
@@ -2464,8 +2929,8 @@ function categoryAncestorMatches(category, term) {
 
 function categoryAggregate(category) {
   const names = new Set(categoryAndDescendantNames(category));
-  const rows = state.transactions.filter((tx) => names.has(tx.category) && tx.type === "expense" && !isTransferCategory(tx.category));
-  return { count: rows.length, total: round(rows.reduce((sum, tx) => sum + Math.abs(tx.amount), 0)) };
+  const rows = state.transactions.filter((tx) => names.has(tx.category) && isReportableExpense(tx));
+  return { count: rows.length, total: round(rows.reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0)) };
 }
 
 function categorySort(a, b) {
@@ -2521,13 +2986,13 @@ function categoryBreadcrumb(category) {
 
 function categoryDrilldown(category) {
   const names = new Set(categoryAndDescendantNames(category));
-  const rows = state.transactions.filter((tx) => names.has(tx.category) && tx.type === "expense" && !isTransferCategory(tx.category));
-  const total = round(rows.reduce((sum, tx) => sum + Math.abs(tx.amount), 0));
+  const rows = state.transactions.filter((tx) => names.has(tx.category) && isReportableExpense(tx));
+  const total = round(rows.reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0));
   const months = monthOptions();
-  const monthly = months.map((month) => ({ month, total: round(rows.filter((tx) => tx.date?.startsWith(month)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0)) })).filter((item) => item.total > 0);
+  const monthly = months.map((month) => ({ month, total: round(rows.filter((tx) => transactionReportingMonth(tx) === month).reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0)) })).filter((item) => item.total > 0);
   const childTotals = childCategories(category.id).map((child) => {
     const childNames = new Set(categoryAndDescendantNames(child));
-    return { child, total: round(rows.filter((tx) => childNames.has(tx.category)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0)) };
+    return { child, total: round(rows.filter((tx) => childNames.has(tx.category)).reduce((sum, tx) => sum + reportableExpenseAmount(tx), 0)) };
   }).filter((item) => item.total > 0).sort((a, b) => b.total - a.total);
   return `<div class="category-drilldown"><div class="summary-grid compact-summary">${summaryCard("Selected category", categoryBreadcrumb(category), "")} ${summaryCard("Overall total", total, "danger")} ${summaryCard("Transactions", rows.length, "warn", "Count")}</div>${childTotals.length ? `<h4>Nested totals</h4><div class="mini-category-list">${childTotals.map(({ child, total: childTotal }) => `<button class="mini-category-row drilldown-row" data-cat-report="${escapeAttr(child.id)}" type="button"><div><span>${escapeHtml(categoryBaseName(child))}</span><strong>${money(childTotal)}</strong></div><em><i style="width:${Math.max(7, total ? (childTotal / total) * 100 : 0)}%"></i></em></button>`).join("")}</div>` : ""}<h4>Monthly totals</h4>${monthly.length ? `<div class="table-wrap compact-table"><table><thead><tr><th>Month</th><th>Total</th></tr></thead><tbody>${monthly.map((item) => `<tr><td>${escapeHtml(item.month)}</td><td>${money(item.total)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state compact">No transactions assigned to this category or its nested categories yet.</div>`}</div>`;
 }
