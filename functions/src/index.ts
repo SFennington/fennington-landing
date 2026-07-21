@@ -659,7 +659,7 @@ function extractOpenAiResponseText(body: any): string {
   return body.output
     .filter((item: any) => item?.type === "message" && Array.isArray(item?.content))
     .flatMap((item: any) => item.content)
-    .map((content: any) => safeLongString(content?.text || "", "", 2000))
+    .map((content: any) => safeLongString(content?.text || "", "", 30000))
     .filter(Boolean)
     .join("\n");
 }
