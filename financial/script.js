@@ -336,6 +336,7 @@ async function loadUserState() {
     const snap = await getDocs(collection(profileRef, name));
     if (!snap.empty) state[name] = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
   }));
+  state.categories = uniqueCategoriesById(state.categories);
   const incomeSnap = await getDoc(doc(profileRef, "settings", "income"));
   if (incomeSnap.exists()) state.incomeSettings = { ...state.incomeSettings, ...incomeSnap.data() };
   if (!state.categories.length) state.categories = defaultCategories();
@@ -353,7 +354,12 @@ async function saveState() {
     await setDoc(profileRef, { ...stripId(state.profile), userId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true });
     await setDoc(doc(profileRef, "settings", "income"), { ...state.incomeSettings, userId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true });
     const batch = writeBatch(db);
-    const deletedCategoryIds = Array.from(pendingCategoryDeletes);
+    const currentCategoryIds = new Set(state.categories.map((category) => category.id));
+    const categorySnap = await getDocs(collection(profileRef, "categories"));
+    categorySnap.docs.forEach((item) => {
+      if (!currentCategoryIds.has(item.id)) pendingCategoryDeletes.add(item.id);
+    });
+    const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !currentCategoryIds.has(id));
     ["accounts", "imports", "mappings", "categories", "transactions", "merchantMappings", "rules", "recurring", "overtimeScenarios", "monthlySummaries"].forEach((name) => {
       state[name].forEach((item) => batch.set(doc(profileRef, name, item.id), { ...item, userId: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true }));
     });
@@ -382,9 +388,11 @@ function renderAll() {
 function ensureDefaultCategories() {
   const deletedDefaults = new Set(state.profile.deletedDefaultCategories || []);
   const deletedDefaultIds = new Set(state.profile.deletedDefaultCategoryIds || []);
+  state.categories = uniqueCategoriesById(state.categories);
   DEFAULT_CATEGORIES.forEach((name) => {
-    if (deletedDefaults.has(name) || deletedDefaultIds.has(slug(name))) return;
-    if (!state.categories.some((cat) => cat.name.toLowerCase() === name.toLowerCase())) {
+    const defaultId = slug(name);
+    if (deletedDefaults.has(name) || deletedDefaultIds.has(defaultId)) return;
+    if (!state.categories.some((cat) => cat.id === defaultId || cat.name.toLowerCase() === name.toLowerCase())) {
       state.categories.push({ id: slug(name), name, system: true });
     }
   });
@@ -394,7 +402,7 @@ function ensureDefaultCategories() {
     const name = subcategoryName(parent.name, item.name);
     const defaultSubcategoryId = slug(`${item.parent}-${item.name}`);
     if (deletedDefaults.has(name) || deletedDefaultIds.has(defaultSubcategoryId)) return;
-    const category = state.categories.find((cat) => cat.name.toLowerCase() === name.toLowerCase());
+    const category = state.categories.find((cat) => cat.id === defaultSubcategoryId || cat.name.toLowerCase() === name.toLowerCase());
     if (category) category.parentId = category.parentId || parent.id;
     else state.categories.push({ id: slug(name), name, parentId: parent.id, system: true });
   });
@@ -1040,6 +1048,7 @@ function renderCategories() {
     const to = document.getElementById("mergeTo").value;
     if (!from || !to || from === to) return;
     state.transactions.filter((tx) => tx.category === from).forEach((tx) => { tx.category = to; });
+    state.categories.filter((cat) => cat.name === from && !cat.system).forEach((cat) => pendingCategoryDeletes.add(cat.id));
     state.categories = state.categories.filter((cat) => cat.name !== from || cat.system);
     renderAll();
   });
@@ -1519,6 +1528,16 @@ function defaultCategories() {
     if (parent) categories.push({ id: slug(`${parent.name}-${item.name}`), name: subcategoryName(parent.name, item.name), parentId: parent.id, system: true });
   });
   return categories;
+}
+
+function uniqueCategoriesById(categories) {
+  const byId = new Map();
+  categories.forEach((category) => {
+    if (!category?.id) return;
+    const existing = byId.get(category.id);
+    if (!existing || (category.parentId && !existing.parentId)) byId.set(category.id, category);
+  });
+  return Array.from(byId.values());
 }
 
 function groupedCategories() {
