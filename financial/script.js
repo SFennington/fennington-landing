@@ -2259,13 +2259,13 @@ function bindTransactionTable(root) {
     const { tx, previousCategory, previousVendor } = saveTransactionRow(tr);
     if (!tx) return;
     let statusMessage = "";
-    if (previousCategory !== tx.category && tx.merchant && window.confirm("Apply this category to future transactions from this merchant?")) {
-      const updatedCount = createReviewRuleAndApplyToMatches(tx);
-      statusMessage = updatedCount > 1 ? `Rule created and ${updatedCount} matching transactions were categorized.` : "Rule created for future matching transactions.";
+    if (previousCategory !== tx.category && tx.merchant) {
+      const result = createReviewRuleAndApplyToMatches(tx);
+      statusMessage = ruleCreationStatusText(result, "Rule", "matching transactions were categorized");
     }
-    if (previousVendor !== tx.vendor && tx.vendor && window.confirm("Apply this vendor to matching transaction descriptions before AI analysis?")) {
-      const updatedCount = createVendorRuleAndApplyToMatches(tx);
-      statusMessage = updatedCount > 1 ? `Vendor rule created and ${updatedCount} matching transactions were updated.` : "Vendor rule created for future matching transactions.";
+    if (previousVendor !== tx.vendor && tx.vendor) {
+      const result = createVendorRuleAndApplyToMatches(tx);
+      statusMessage = ruleCreationStatusText(result, "Vendor rule", "matching transactions were updated");
     }
     renderAll();
     if (statusMessage) showStatus(statusMessage);
@@ -2274,10 +2274,10 @@ function bindTransactionTable(root) {
     const tr = transactionDataRowForAction(button);
     const { tx } = saveTransactionRow(tr);
     if (!tx) return;
-    const updatedCount = createReviewRuleAndApplyToMatches(tx);
+    const result = createReviewRuleAndApplyToMatches(tx);
     renderAll();
-    if (updatedCount > 1) showStatus(`Rule created and ${updatedCount} matching transactions were categorized.`);
-    else showStatus("Rule created for future matching transactions.");
+    const statusMessage = ruleCreationStatusText(result, "Rule", "matching transactions were categorized");
+    if (statusMessage) showStatus(statusMessage);
   }));
   root.querySelectorAll("[data-action='mark-internal']").forEach((button) => button.addEventListener("click", () => {
     const tx = transactionForAction(button);
@@ -2505,9 +2505,9 @@ function bindReviewActions(root) {
     tx.flags = [];
     resolveRecurringReview(tx, "confirmed");
     if (card.querySelector("[data-apply-rule]").checked) {
-      const updatedCount = createReviewRuleAndApplyToMatches(tx);
-      if (updatedCount > 1) showStatus(`Rule created and ${updatedCount} matching transactions were categorized.`);
-      else showStatus("Rule created for future matching transactions.");
+      const result = createReviewRuleAndApplyToMatches(tx);
+      const statusMessage = ruleCreationStatusText(result, "Rule", "matching transactions were categorized");
+      if (statusMessage) showStatus(statusMessage);
     }
     renderAll();
   }));
@@ -2572,11 +2572,17 @@ function resolveRecurringReview(tx, status) {
 
 function createReviewRuleAndApplyToMatches(sourceTx) {
   const match = categoryRuleMatchText(sourceTx);
-  if (!match) return 0;
+  if (!match) return { updatedCount: 0, created: false, duplicate: false, cancelled: false };
   const rule = { id: uniqueId("rule"), type: "merchant", match, category: sourceTx.category, createdAt: new Date().toISOString() };
-  const hasRule = state.rules.some((item) => item.type === rule.type && item.match.toLowerCase() === rule.match.toLowerCase() && item.category === rule.category);
-  if (!hasRule) state.rules.push(rule);
-  return applyCategoryRuleToTransactions(rule, state.transactions);
+  const existingRule = matchingCategoryRule(rule);
+  const matchCount = ruleMatchCount(existingRule || rule);
+  if (!confirmRuleCreation(rule, { duplicate: Boolean(existingRule), matchCount })) return { updatedCount: 0, created: false, duplicate: Boolean(existingRule), cancelled: true };
+  if (!existingRule) state.rules.push(rule);
+  return { updatedCount: applyCategoryRuleToTransactions(existingRule || rule, state.transactions), created: !existingRule, duplicate: Boolean(existingRule), cancelled: false };
+}
+
+function matchingCategoryRule(rule) {
+  return state.rules.find((item) => item.type === rule.type && normalizedRuleText(item.match) === normalizedRuleText(rule.match) && item.category === rule.category);
 }
 
 function categoryRuleMatchText(tx) {
@@ -2628,11 +2634,43 @@ function categoryRuleMatches(rule, tx) {
 
 function createVendorRuleAndApplyToMatches(sourceTx) {
   const match = vendorRuleMatch(sourceTx);
-  if (!match || !sourceTx.vendor) return 0;
+  if (!match || !sourceTx.vendor) return { updatedCount: 0, created: false, duplicate: false, cancelled: false };
   const rule = { id: uniqueId("rule"), type: "vendor", match, vendor: sourceTx.vendor, createdAt: new Date().toISOString() };
-  const hasRule = state.rules.some((item) => item.type === rule.type && item.match.toLowerCase() === rule.match.toLowerCase() && String(item.vendor || "").toLowerCase() === rule.vendor.toLowerCase());
-  if (!hasRule) state.rules.push(rule);
-  return applyVendorRulesToTransactions(state.transactions, state);
+  const existingRule = matchingVendorRule(rule);
+  const matchCount = vendorRuleMatchCount(existingRule || rule);
+  if (!confirmRuleCreation(rule, { duplicate: Boolean(existingRule), matchCount })) return { updatedCount: 0, created: false, duplicate: Boolean(existingRule), cancelled: true };
+  if (!existingRule) state.rules.push(rule);
+  return { updatedCount: applyVendorRulesToTransactions(state.transactions, state), created: !existingRule, duplicate: Boolean(existingRule), cancelled: false };
+}
+
+function matchingVendorRule(rule) {
+  return state.rules.find((item) => item.type === rule.type && normalizedRuleText(item.match) === normalizedRuleText(rule.match) && normalizedRuleText(item.vendor) === normalizedRuleText(rule.vendor));
+}
+
+function confirmRuleCreation(rule, { duplicate, matchCount }) {
+  const lines = rule.type === "vendor" ? [
+    duplicate ? "A vendor cleanup rule with the same criteria and vendor already exists." : "Create this vendor cleanup rule?",
+    "",
+    `Criteria: ${rule.match}`,
+    `Vendor: ${rule.vendor}`,
+    `Matching transactions: ${plural(matchCount, "transaction")}`
+  ] : [
+    duplicate ? "A categorization rule with the same criteria and category already exists." : "Create this categorization rule?",
+    "",
+    `Match field: ${rule.type === "description" ? "Description" : "Merchant or vendor"}`,
+    `Criteria: ${rule.match}`,
+    `Category: ${rule.category}`,
+    `Matching transactions: ${plural(matchCount, "transaction")}`
+  ];
+  lines.push("", duplicate ? "No duplicate rule will be created. Apply the existing rule now?" : "Create and apply this rule now?");
+  return window.confirm(lines.join("\n"));
+}
+
+function ruleCreationStatusText(result, label, appliedText) {
+  if (!result || result.cancelled) return "";
+  if (result.duplicate) return `${label} already exists. ${plural(result.updatedCount, "matching transaction")} updated with the existing rule.`;
+  if (result.updatedCount > 1) return `${label} created and ${result.updatedCount} ${appliedText}.`;
+  return `${label} created for future matching transactions.`;
 }
 
 function vendorRuleMatch(tx) {
