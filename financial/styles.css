@@ -4025,6 +4025,10 @@ summary.category-tree-summary::-webkit-details-marker {
   --finance-input-bg: #ffffff;
   --finance-input-border: rgba(71, 85, 105, 0.46);
   --finance-input-text: #0f172a;
+  --finance-control-accent: #b45309;
+  --finance-control-accent-soft: #fff7ed;
+  --finance-control-accent-border: rgba(180, 83, 9, 0.58);
+  --finance-control-arrow: #b45309;
   --finance-table-head: linear-gradient(180deg, #f8fafc 0%, #e9f1ff 100%);
   --finance-row: #ffffff;
   --finance-row-alt: #f4f7fb;
@@ -4083,6 +4087,10 @@ summary.category-tree-summary::-webkit-details-marker {
   --finance-input-bg: #020617;
   --finance-input-border: rgba(148, 163, 184, 0.52);
   --finance-input-text: #f8fafc;
+  --finance-control-accent: #f59e0b;
+  --finance-control-accent-soft: rgba(245, 158, 11, 0.14);
+  --finance-control-accent-border: rgba(251, 191, 36, 0.72);
+  --finance-control-arrow: #fbbf24;
   --finance-table-head: linear-gradient(180deg, #111827 0%, #0f1b33 100%);
   --finance-row: #0f172a;
   --finance-row-alt: #111827;
@@ -4428,6 +4436,172 @@ summary.category-tree-summary::-webkit-details-marker {
     linear-gradient(45deg, transparent 50%, #93c5fd 50%),
     linear-gradient(135deg, #93c5fd 50%, transparent 50%),
     linear-gradient(to right, rgba(96, 165, 250, 0.32), rgba(96, 165, 250, 0.32));
+}
+.financial-app-page .rules-table {
+  min-width: 1120px;
+}
+
+.financial-app-page .rules-table th,
+.financial-app-page .rules-table td {
+  vertical-align: middle;
+}
+
+.financial-app-page .rule-target-cell {
+  min-width: min(560px, 46vw);
+  text-align: center;
+  vertical-align: top;
+  width: 44%;
+}
+
+.financial-app-page .rule-target-panel {
+  background: var(--finance-surface-soft);
+  border: 1px solid var(--finance-border-strong);
+  border-radius: 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: grid;
+  gap: 0.9rem;
+  margin-inline: auto;
+  max-width: 560px;
+  padding: 0.85rem;
+  text-align: left;
+}
+
+.financial-app-page .rule-target-fields {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+}
+
+.financial-app-page .rule-target-fields label,
+.financial-app-page .rule-apply-fields label {
+  color: var(--finance-text);
+  display: grid;
+  font-size: 0.9rem;
+  font-weight: 800;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.financial-app-page .rule-target-fields span,
+.financial-app-page .rule-apply-title {
+  color: var(--finance-muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.financial-app-page .rule-target-fields input,
+.financial-app-page .rule-target-fields select,
+.financial-app-page .rules-table > tbody > tr > td > input,
+.financial-app-page .rules-table > tbody > tr > td > select {
+  appearance: none;
+  background-color: var(--finance-input-bg) !important;
+  border: 1px solid var(--finance-control-accent-border) !important;
+  border-radius: 12px;
+  color: var(--finance-input-text) !important;
+  min-height: 38px;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  width: 100%;
+}
+
+.financial-app-page .rule-target-fields select,
+.financial-app-page .rules-table > tbody > tr > td > select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--finance-control-arrow) 50%),
+    linear-gradient(135deg, var(--finance-control-arrow) 50%, transparent 50%),
+    linear-gradient(to right, var(--finance-control-accent-soft), var(--finance-control-accent-soft));
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 13px) 50%,
+    calc(100% - 2.45rem) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px, 1px 1.45rem;
+  padding-right: 3rem;
+}
+
+.financial-app-page .rule-target-fields input:focus,
+.financial-app-page .rule-target-fields select:focus,
+.financial-app-page .rules-table > tbody > tr > td > input:focus,
+.financial-app-page .rules-table > tbody > tr > td > select:focus {
+  border-color: var(--finance-control-accent) !important;
+  box-shadow: 0 0 0 3px var(--finance-control-accent-soft);
+  outline: 0;
+}
+
+.financial-app-page .rule-apply-group {
+  border-top: 1px solid var(--finance-border);
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.75rem;
+}
+
+.financial-app-page .rule-apply-fields {
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.financial-app-page .rule-apply-fields label {
+  align-items: center;
+  background: var(--finance-control-accent-soft);
+  border: 1px solid var(--finance-control-accent-border);
+  border-radius: 999px;
+  display: flex;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0.35rem 0.55rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.financial-app-page .rule-apply-fields input[type="checkbox"] {
+  accent-color: var(--finance-control-accent);
+  flex: 0 0 auto;
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.financial-app-page.financial-dark .rule-target-panel {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.88));
+  border-color: var(--finance-control-accent-border);
+}
+
+.financial-app-page.financial-dark .rule-target-fields label,
+.financial-app-page.financial-dark .rule-apply-fields label {
+  color: #fff7ed;
+}
+
+.financial-app-page.financial-dark .rule-target-fields span,
+.financial-app-page.financial-dark .rule-apply-title {
+  color: #fed7aa;
+}
+
+.financial-app-page.financial-dark .rule-target-fields input,
+.financial-app-page.financial-dark .rule-target-fields select,
+.financial-app-page.financial-dark .rules-table > tbody > tr > td > input,
+.financial-app-page.financial-dark .rules-table > tbody > tr > td > select {
+  background-color: #020617 !important;
+  border-color: var(--finance-control-accent-border) !important;
+  color: #ffffff !important;
+}
+
+.financial-app-page.financial-dark .rule-apply-fields label {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(251, 191, 36, 0.62);
+}
+
+@media (max-width: 900px) {
+  .financial-app-page .rule-target-cell {
+    min-width: 420px;
+  }
+
+  .financial-app-page .rule-target-fields,
+  .financial-app-page .rule-apply-fields {
+    grid-template-columns: 1fr;
+  }
 }
 
 .financial-app-page .checkbox-field {
