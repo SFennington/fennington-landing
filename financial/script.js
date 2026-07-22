@@ -39,6 +39,7 @@ const AI_UPDATE_FIELD_OPTIONS = [
   { key: "vendor", label: "Vendor" },
   { key: "notes", label: "Notes" }
 ];
+const AI_APPROVAL_FIELD_COLUMNS = ["merchant", "vendor", "category", "notes"];
 const AI_APPROVAL_TRANSACTION_FIELDS = [
   "category", "merchant", "vendor", "notes", "aiDisplayName", "confidence", "reason", "source", "type", "needsReview", "flags", "aiSourceUrls"
 ];
@@ -2237,10 +2238,12 @@ function cloneAiApprovalValue(value, field = "") {
 }
 
 function aiApprovalChangedFields(original, proposed, updateFields) {
-  return updateFields.filter((field) => {
-    const proposedField = field === "category" ? "category" : field;
-    return stableStringify(original[proposedField]) !== stableStringify(proposed[proposedField]);
-  });
+  return updateFields.filter((field) => aiApprovalFieldChanged({ original, proposed }, field));
+}
+
+function aiApprovalFieldChanged(pending, field) {
+  const comparedFields = field === "category" ? ["category", "confidence", "reason", "source", "type", "needsReview", "flags", "aiSourceUrls"] : [field];
+  return comparedFields.some((item) => stableStringify(pending.original?.[item]) !== stableStringify(pending.proposed?.[item]));
 }
 
 function applyAiApprovalSnapshot(tx, snapshot) {
@@ -2249,19 +2252,21 @@ function applyAiApprovalSnapshot(tx, snapshot) {
   });
 }
 
-function approveAiPendingUpdate(tx) {
+function approveAiPendingUpdate(tx, selectedFields = []) {
   const pending = tx.aiPendingUpdate;
   if (!pending) return;
-  applyAiApprovalSnapshot(tx, pending.proposed || {});
+  const fields = selectedFields.length ? selectedFields : pending.changedFields || pending.updateFields || [];
+  applyAiApprovalFields(tx, pending.proposed || {}, fields);
   const approvedAt = new Date().toISOString();
+  const changedFields = fields.filter((field) => aiApprovalFieldChanged(pending, field));
   tx.aiAudit = {
     designator: AI_AUDIT_FLAG,
     status: "approved",
     approvalId: pending.id || uniqueId("ai-approval"),
     runId: pending.runId || "",
     model: pending.model || AI_ANALYSIS_MODEL,
-    updateFields: pending.updateFields || [],
-    changedFields: pending.changedFields || [],
+    updateFields: fields,
+    changedFields,
     generatedAt: pending.generatedAt || "",
     approvedAt,
     approvedBy: currentUser?.email || "",
@@ -2270,6 +2275,21 @@ function approveAiPendingUpdate(tx) {
   };
   tx.flags = Array.from(new Set([...(tx.flags || []), AI_AUDIT_FLAG]));
   delete tx.aiPendingUpdate;
+}
+
+function applyAiApprovalFields(tx, proposed, fields) {
+  const selected = new Set(fields.filter((field) => AI_APPROVAL_FIELD_COLUMNS.includes(field)));
+  if (selected.has("merchant")) {
+    tx.merchant = cloneAiApprovalValue(proposed.merchant, "merchant");
+    tx.aiDisplayName = cloneAiApprovalValue(proposed.aiDisplayName || proposed.merchant, "aiDisplayName");
+  }
+  if (selected.has("vendor")) tx.vendor = cloneAiApprovalValue(proposed.vendor, "vendor");
+  if (selected.has("notes")) tx.notes = cloneAiApprovalValue(proposed.notes, "notes");
+  if (selected.has("category")) {
+    ["category", "confidence", "reason", "source", "type", "needsReview", "flags", "aiSourceUrls"].forEach((field) => {
+      tx[field] = cloneAiApprovalValue(proposed[field], field);
+    });
+  }
 }
 
 function revertAiPendingUpdate(tx) {
@@ -2493,11 +2513,11 @@ function aiPendingApprovalView(rows) {
       <div class="ai-approval-toolbar">
         <label class="checkbox-field ai-approval-select-all"><span>Select all pending proposals</span><input id="aiApprovalSelectAll" type="checkbox"></label>
         <button id="approveAiSelectedButton" class="btn btn-primary" type="button" disabled>Approve Selected</button>
-        <p>${plural(pendingRows.length, "transaction")} awaiting review. This list includes all pending AI proposals regardless of other ledger filters. Approving saves selected proposals to Firestore and reverts every unselected proposal.</p>
+        <p>${plural(pendingRows.length, "transaction")} awaiting review. Check the field columns you want to apply. Approving saves only checked field recommendations and reverts every unselected proposal.</p>
       </div>
       <div class="table-wrap ai-approval-table-wrap" tabindex="0" aria-label="Scrollable AI approval table">
         <table class="ai-approval-table">
-          <thead><tr><th>Select</th><th>Transaction</th><th>Amount</th><th>AI proposal</th><th>Reason</th></tr></thead>
+          <thead><tr><th>Select</th><th>Transaction</th><th>Amount</th>${AI_APPROVAL_FIELD_COLUMNS.map((field) => `<th>${escapeHtml(aiUpdateFieldLabel(field))}</th>`).join("")}<th>Reason</th></tr></thead>
           <tbody>${pendingRows.map(aiPendingApprovalRow).join("")}</tbody>
         </table>
       </div>
@@ -2511,20 +2531,27 @@ function aiPendingApprovalRow(tx) {
     <td class="ai-approval-select-cell"><input class="ai-approval-select" type="checkbox" value="${escapeAttr(tx.id)}" aria-label="Approve AI update for ${escapeAttr(tx.merchant || tx.description)}"></td>
     <td><strong>${escapeHtml(tx.merchant || tx.description)}</strong><small>${escapeHtml(tx.date || "")} · ${escapeHtml(accountName(tx.accountId))}</small><p>${escapeHtml(tx.description || "")}</p></td>
     <td class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</td>
-    <td>${aiPendingChangeListHtml(tx)}</td>
+    ${AI_APPROVAL_FIELD_COLUMNS.map((field) => aiPendingApprovalFieldCell(tx, field)).join("")}
     <td><span class="tag warn">Pending approval</span><p>${escapeHtml(pending.reason || "AI proposed updates for this transaction.")}</p><small>${escapeHtml((pending.updateFields || []).map((field) => aiUpdateFieldLabel(field)).join(", "))}</small></td>
   </tr>`;
 }
 
-function aiPendingChangeListHtml(tx) {
+function aiPendingApprovalFieldCell(tx, field) {
   const pending = tx.aiPendingUpdate || {};
-  const fields = Array.isArray(pending.changedFields) && pending.changedFields.length ? pending.changedFields : pending.updateFields || [];
-  const rows = fields.map((field) => {
-    const before = aiApprovalDisplayValue(field, pending.original?.[field]);
-    const after = aiApprovalDisplayValue(field, pending.proposed?.[field]);
-    return `<div class="ai-change-row"><span>${escapeHtml(aiUpdateFieldLabel(field))}</span><strong>${escapeHtml(before || "Blank")} → ${escapeHtml(after || "Blank")}</strong></div>`;
-  }).join("");
-  return `<div class="ai-change-list">${rows || `<div class="ai-change-row"><span>AI review</span><strong>No field-level change detected</strong></div>`}</div>`;
+  const before = aiApprovalDisplayValue(field, pending.original?.[field]);
+  const after = aiApprovalDisplayValue(field, pending.proposed?.[field]);
+  const changed = aiApprovalFieldChanged(pending, field);
+  const requested = (pending.updateFields || []).includes(field);
+  const disabled = !changed || !requested;
+  const labelText = aiUpdateFieldLabel(field);
+  return `<td class="ai-recommendation-cell ${disabled ? "no-change" : ""}" data-ai-field-cell="${escapeAttr(field)}">
+    <label class="ai-field-apply">
+      <input class="ai-approval-field-select" data-ai-field="${escapeAttr(field)}" type="checkbox" ${disabled ? "disabled" : "checked"} aria-label="Apply AI ${escapeAttr(labelText)} recommendation">
+      <span>${disabled ? "Keep" : "Apply"}</span>
+    </label>
+    <strong class="ai-field-value" title="${escapeAttr(after || "Blank")}">${escapeHtml(after || "Blank")}</strong>
+    <small class="ai-field-previous" title="${escapeAttr(before || "Blank")}">Was: ${escapeHtml(before || "Blank")}</small>
+  </td>`;
 }
 
 function aiApprovalDisplayValue(field, value) {
@@ -2546,28 +2573,57 @@ function bindAiApprovalControls(root) {
   const selectAll = root.querySelector("#aiApprovalSelectAll");
   const approveButton = root.querySelector("#approveAiSelectedButton");
   const checkboxes = Array.from(root.querySelectorAll(".ai-approval-select"));
+  const fieldCheckboxes = Array.from(root.querySelectorAll(".ai-approval-field-select"));
   const refresh = () => {
     const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
-    if (approveButton) approveButton.disabled = selectedCount === 0;
+    const selectedRowsWithFields = aiSelectedApprovalFieldMap(root).size;
+    if (approveButton) approveButton.disabled = selectedRowsWithFields === 0;
     if (selectAll) selectAll.checked = selectedCount > 0 && selectedCount === checkboxes.length;
   };
   selectAll?.addEventListener("change", () => {
     checkboxes.forEach((checkbox) => { checkbox.checked = selectAll.checked; });
     refresh();
   });
-  checkboxes.forEach((checkbox) => checkbox.addEventListener("change", refresh));
+  checkboxes.forEach((checkbox) => checkbox.addEventListener("change", () => {
+    if (checkbox.checked) {
+      const row = checkbox.closest("[data-ai-approval-id]");
+      const rowFields = Array.from(row?.querySelectorAll(".ai-approval-field-select:not(:disabled)") || []);
+      if (!rowFields.some((field) => field.checked)) rowFields.forEach((field) => { field.checked = true; });
+    }
+    refresh();
+  }));
+  fieldCheckboxes.forEach((checkbox) => checkbox.addEventListener("change", () => {
+    const row = checkbox.closest("[data-ai-approval-id]");
+    const rowSelect = row?.querySelector(".ai-approval-select");
+    const hasSelectedField = Boolean(row?.querySelector(".ai-approval-field-select:checked"));
+    if (rowSelect) rowSelect.checked = hasSelectedField;
+    refresh();
+  }));
   approveButton?.addEventListener("click", () => approveSelectedAiUpdates(root));
 }
 
+function aiSelectedApprovalFieldMap(root) {
+  const selections = new Map();
+  root.querySelectorAll("[data-ai-approval-id]").forEach((row) => {
+    const rowSelect = row.querySelector(".ai-approval-select");
+    if (!rowSelect?.checked) return;
+    const fields = Array.from(row.querySelectorAll(".ai-approval-field-select:checked")).map((checkbox) => checkbox.dataset.aiField).filter(Boolean);
+    if (fields.length) selections.set(row.dataset.aiApprovalId, fields);
+  });
+  return selections;
+}
+
 async function approveSelectedAiUpdates(root) {
-  const selectedIds = new Set(Array.from(root.querySelectorAll(".ai-approval-select:checked")).map((checkbox) => checkbox.value));
-  if (!selectedIds.size) return showStatus("Select at least one AI proposal to approve.");
+  const selectedFieldMap = aiSelectedApprovalFieldMap(root);
+  if (!selectedFieldMap.size) return showStatus("Select at least one AI field recommendation to approve.");
   const pendingRows = aiPendingApprovalTransactions();
-  const revertedCount = Math.max(0, pendingRows.length - selectedIds.size);
+  const selectedFieldCount = Array.from(selectedFieldMap.values()).reduce((sum, fields) => sum + fields.length, 0);
+  const revertedCount = Math.max(0, pendingRows.length - selectedFieldMap.size);
   const confirmation = [
     "Approve AI Updates?",
     "",
-    `Selected approvals: ${selectedIds.size}`,
+    `Selected transactions: ${selectedFieldMap.size}`,
+    `Selected field updates: ${selectedFieldCount}`,
     `Unselected proposals reverted: ${revertedCount}`,
     "Approved transactions will be saved to the permanent database with an ai_modified audit flag.",
     "",
@@ -2576,14 +2632,15 @@ async function approveSelectedAiUpdates(root) {
   if (!window.confirm(confirmation)) return;
   let approvedCount = 0;
   pendingRows.forEach((tx) => {
-    if (selectedIds.has(tx.id)) {
-      approveAiPendingUpdate(tx);
+    const fields = selectedFieldMap.get(tx.id);
+    if (fields?.length) {
+      approveAiPendingUpdate(tx, fields);
       approvedCount += 1;
     } else revertAiPendingUpdate(tx);
   });
   renderAll({ save: false });
   const saved = await saveStateImmediately();
-  showStatus(`${plural(approvedCount, "AI update")} approved and ${plural(revertedCount, "proposal")} reverted.${saved ? " Changes saved." : " Changes remain local until the next successful save."}`);
+  showStatus(`${plural(approvedCount, "AI transaction")} approved with ${plural(selectedFieldCount, "field update")} and ${plural(revertedCount, "proposal")} reverted.${saved ? " Changes saved." : " Changes remain local until the next successful save."}`);
 }
 
 function transactionTable(rows, totalRows = rows.length) {

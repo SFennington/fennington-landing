@@ -1768,7 +1768,7 @@ body.import-overlay-open {
 .ai-approval-table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 920px;
+  min-width: 1280px;
   table-layout: fixed;
   width: 100%;
 }
@@ -1780,6 +1780,15 @@ body.import-overlay-open {
   text-align: left;
   vertical-align: top;
 }
+
+.ai-approval-table th:nth-child(1) { width: 66px; }
+.ai-approval-table th:nth-child(2) { width: 22%; }
+.ai-approval-table th:nth-child(3) { width: 9%; }
+.ai-approval-table th:nth-child(4),
+.ai-approval-table th:nth-child(5),
+.ai-approval-table th:nth-child(6) { width: 14%; }
+.ai-approval-table th:nth-child(7) { width: 18%; }
+.ai-approval-table th:nth-child(8) { width: 15%; }
 
 .ai-approval-table thead th {
   background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
@@ -1795,7 +1804,7 @@ body.import-overlay-open {
 .ai-approval-table th:first-child,
 .ai-approval-select-cell {
   text-align: center;
-  width: 82px;
+  width: 66px;
 }
 
 .ai-approval-table td strong,
@@ -1810,32 +1819,48 @@ body.import-overlay-open {
   margin: 0.24rem 0 0;
 }
 
-.ai-change-list {
-  display: grid;
-  gap: 0.45rem;
-}
-
-.ai-change-row {
+.ai-recommendation-cell {
   background: rgba(239, 246, 255, 0.72);
-  border: 1px solid rgba(191, 219, 254, 0.8);
-  border-radius: 12px;
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.55rem;
 }
 
-.ai-change-row span {
-  color: var(--muted);
-  font-size: 0.74rem;
+.ai-recommendation-cell.no-change {
+  background: rgba(248, 250, 252, 0.74);
+}
+
+.ai-field-apply {
+  align-items: center;
+  color: var(--brand-dark);
+  display: inline-flex;
+  font-size: 0.76rem;
   font-weight: 900;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  gap: 0.35rem;
+  margin-bottom: 0.28rem;
+  white-space: nowrap;
 }
 
-.ai-change-row strong {
+.ai-field-apply input {
+  margin: 0;
+}
+
+.ai-field-value,
+.ai-field-previous {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-field-value {
   color: var(--financial-ink);
+  display: block;
   font-size: 0.9rem;
-  line-height: 1.35;
+  line-height: 1.25;
+}
+
+.ai-field-previous {
+  color: var(--muted);
+  display: block;
+  font-size: 0.78rem;
+  margin-top: 0.16rem;
 }
 
 .ai-web-lookup {
@@ -3858,14 +3883,18 @@ summary.category-tree-summary::-webkit-details-marker {
 
 .financial-dark .ai-approval-banner,
 .financial-dark .ai-approval-toolbar,
-.financial-dark .ai-change-row {
+.financial-dark .ai-recommendation-cell {
   background: rgba(30, 41, 59, 0.86);
   border-color: rgba(245, 158, 11, 0.34);
   color: #e5eefb;
 }
 
+.financial-dark .ai-recommendation-cell.no-change {
+  background: rgba(15, 23, 42, 0.72);
+}
+
 .financial-dark .ai-approval-banner strong,
-.financial-dark .ai-change-row strong,
+.financial-dark .ai-field-value,
 .financial-dark .ai-approval-table td strong {
   color: #f8fafc;
 }
@@ -3874,8 +3903,12 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-dark .ai-approval-toolbar p,
 .financial-dark .ai-approval-table td small,
 .financial-dark .ai-approval-table td p,
-.financial-dark .ai-change-row span {
+.financial-dark .ai-field-previous {
   color: #b6c3d8;
+}
+
+.financial-dark .ai-field-apply {
+  color: #fde68a;
 }
 
 .financial-dark .ai-approval-table thead th {
