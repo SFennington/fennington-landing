@@ -2198,7 +2198,7 @@ function transactionRow(tx) {
     <td><input class="note-input" data-field="notes" aria-label="Transaction notes" value="${escapeAttr(tx.notes || "")}" placeholder="Add note"></td>
   </tr>
   <tr data-id="${escapeAttr(tx.id)}" class="tx-action-row ${tx.needsReview ? "needs-review" : ""}">
-    <td class="table-action-cell" colspan="10"><div class="row-action-buttons"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Apply Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></div></td>
+    <td class="table-action-cell" colspan="10"><div class="row-action-buttons"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Create Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></div></td>
   </tr>`;
 }
 
@@ -2278,21 +2278,12 @@ function topCategoryMiniList(entries) {
 }
 
 function bindTransactionTable(root) {
-  root.querySelectorAll("[data-action='save-row']").forEach((button) => button.addEventListener("click", async () => {
+  root.querySelectorAll("[data-action='save-row']").forEach((button) => button.addEventListener("click", () => {
     const tr = transactionDataRowForAction(button);
-    const { tx, previousCategory, previousVendor } = saveTransactionRow(tr);
+    const { tx } = saveTransactionRow(tr);
     if (!tx) return;
-    let statusMessage = "";
-    if (previousCategory !== tx.category && tx.merchant) {
-      const result = await createReviewRuleAndApplyToMatches(tx);
-      statusMessage = ruleCreationStatusText(result, "Rule", "matching transactions were categorized");
-    }
-    if (previousVendor !== tx.vendor && tx.vendor) {
-      const result = await createVendorRuleAndApplyToMatches(tx);
-      statusMessage = ruleCreationStatusText(result, "Vendor rule", "matching transactions were updated");
-    }
     renderAll();
-    if (statusMessage) showStatus(statusMessage);
+    showStatus("Transaction saved.");
   }));
   root.querySelectorAll("[data-action='apply-rule']").forEach((button) => button.addEventListener("click", async () => {
     const tr = transactionDataRowForAction(button);
@@ -2300,7 +2291,7 @@ function bindTransactionTable(root) {
     if (!tx) return;
     const result = await createReviewRuleAndApplyToMatches(tx);
     renderAll();
-    const statusMessage = ruleCreationStatusText(result, "Rule", "matching transactions were categorized");
+    const statusMessage = ruleCreationStatusText(result, "Rule", "uncategorized matching transactions were categorized");
     if (statusMessage) showStatus(statusMessage);
   }));
   root.querySelectorAll("[data-action='mark-internal']").forEach((button) => button.addEventListener("click", () => {
@@ -2481,7 +2472,7 @@ function reviewCard(tx) {
   return `<article class="review-card panel" data-id="${tx.id}">
     <input type="checkbox" class="review-select" aria-label="Select transaction">
     <div class="review-details"><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span> ${splitStatusTag(tx)}</p><p>${flowStatusHtml(tx)}</p>${splitReviewHtml(tx)}<p>${reasonTags} ${flagTags}</p></div>
-    <div class="review-actions"><select data-review-category>${categoryOptions(tx.category)}</select><label><input data-apply-rule type="checkbox"> Apply rule</label><button class="mini-btn" data-review="confirm" type="button">Confirm</button><button class="mini-btn" data-review="split" type="button">Split</button><button class="mini-btn" data-review="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-review="internal" type="button">Confirm Internal</button><button class="mini-btn" data-review="skip" type="button">Skip</button></div>
+    <div class="review-actions"><select data-review-category>${categoryOptions(tx.category)}</select><label><input data-apply-rule type="checkbox"> Create rule</label><button class="mini-btn" data-review="confirm" type="button">Confirm</button><button class="mini-btn" data-review="split" type="button">Split</button><button class="mini-btn" data-review="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-review="internal" type="button">Confirm Internal</button><button class="mini-btn" data-review="skip" type="button">Skip</button></div>
   </article>`;
 }
 
@@ -2530,7 +2521,7 @@ function bindReviewActions(root) {
     resolveRecurringReview(tx, "confirmed");
     if (card.querySelector("[data-apply-rule]").checked) {
       const result = await createReviewRuleAndApplyToMatches(tx);
-      const statusMessage = ruleCreationStatusText(result, "Rule", "matching transactions were categorized");
+      const statusMessage = ruleCreationStatusText(result, "Rule", "uncategorized matching transactions were categorized");
       if (statusMessage) showStatus(statusMessage);
     }
     renderAll();
@@ -2601,7 +2592,7 @@ async function createReviewRuleAndApplyToMatches(sourceTx) {
   if (!rule) return { updatedCount: 0, created: false, duplicate: false, cancelled: true };
   const existingRule = matchingCategoryRule(rule);
   if (!existingRule) state.rules.push(rule);
-  return { updatedCount: applyCategoryRuleToTransactions(existingRule || rule, state.transactions), created: !existingRule, duplicate: Boolean(existingRule), cancelled: false };
+  return { updatedCount: applyCategoryRuleToUncategorizedTransactions(existingRule || rule, state.transactions), created: !existingRule, duplicate: Boolean(existingRule), cancelled: false };
 }
 
 function matchingCategoryRule(rule) {
@@ -2633,6 +2624,20 @@ function stableDescriptionRuleMatch(description) {
 function applyCategoryRuleToTransactions(rule, transactions) {
   if (!rule?.category) return 0;
   const matches = transactions.filter((tx) => categoryRuleMatches(rule, tx));
+  return applyCategoryRuleToMatchedTransactions(rule, matches);
+}
+
+function applyCategoryRuleToUncategorizedTransactions(rule, transactions) {
+  if (!rule?.category) return 0;
+  const matches = transactions.filter((tx) => categoryRuleMatches(rule, tx) && isUncategorizedRuleTarget(tx));
+  return applyCategoryRuleToMatchedTransactions(rule, matches);
+}
+
+function isUncategorizedRuleTarget(tx) {
+  return tx.needsReview || !tx.category || tx.category === "Uncategorized" || (tx.flags || []).includes("uncategorized");
+}
+
+function applyCategoryRuleToMatchedTransactions(rule, matches) {
   matches.forEach((tx) => {
     tx.category = rule.category;
     tx.type = typeForCategory(rule.category, tx.amount);
@@ -3006,7 +3011,7 @@ function renderRules() {
         </div>
         <button id="rerunAllRules" class="btn btn-secondary" type="button" ${categoryRules.length ? "" : "disabled"}>Rerun All Category Rules</button>
       </div>
-      ${categoryRules.length ? rulesTable(categoryRules) : `<div class="empty-state compact">No category rules yet. Use Apply Rule from a transaction or review card to create one.</div>`}
+      ${categoryRules.length ? rulesTable(categoryRules) : `<div class="empty-state compact">No category rules yet. Use Create Rule from a transaction or review card to create one.</div>`}
     </section>
     <section class="panel rules-panel" style="margin-top:1rem">
       <h3>Vendor Cleanup Rules</h3>
