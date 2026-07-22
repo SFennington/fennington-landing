@@ -3910,11 +3910,21 @@ function parentCategoryOptions(selected, excludeId = "") {
 
 function categoryOptionRows(excludeId = "") {
   const excluded = new Set([excludeId, ...categoryDescendantIds(excludeId)]);
+  const optionSort = (a, b) => {
+    if (a.name === "Uncategorized") return 1;
+    if (b.name === "Uncategorized") return -1;
+    return categoryBaseName(a).localeCompare(categoryBaseName(b));
+  };
+  const optionChildren = (parentId) => state.categories.filter((cat) => cat.parentId === parentId).sort(optionSort);
+  const optionRoots = () => {
+    repairCategoryParents();
+    return state.categories.filter((cat) => !cat.parentId).sort(optionSort);
+  };
   const walk = (parents, depth = 0) => parents.flatMap((category) => {
     if (excluded.has(category.id)) return [];
-    return [{ category, depth }, ...walk(childCategories(category.id), depth + 1)];
+    return [{ category, depth }, ...walk(optionChildren(category.id), depth + 1)];
   });
-  return walk(groupedCategories());
+  return walk(optionRoots());
 }
 
 function categoryIndent(depth) {
@@ -3987,7 +3997,10 @@ function categoryMatches(category, term) {
 
 function categoryAncestorMatches(category, term) {
   let parent = parentCategory(category);
+  const visited = new Set();
   while (parent) {
+    if (visited.has(parent.id)) return false;
+    visited.add(parent.id);
     if (categoryMatches(parent, term)) return true;
     parent = parentCategory(parent);
   }
@@ -4025,10 +4038,12 @@ function updateChildCategoryNames(parentCategoryItem) {
   });
 }
 
-function categoryDescendantIds(categoryId) {
+function categoryDescendantIds(categoryId, visited = new Set()) {
   if (!categoryId) return [];
-  const direct = state.categories.filter((cat) => cat.parentId === categoryId);
-  return direct.flatMap((cat) => [cat.id, ...categoryDescendantIds(cat.id)]);
+  if (visited.has(categoryId)) return [];
+  visited.add(categoryId);
+  const direct = state.categories.filter((cat) => cat.parentId === categoryId && !visited.has(cat.id));
+  return direct.flatMap((cat) => [cat.id, ...categoryDescendantIds(cat.id, visited)]);
 }
 
 function categoryAndDescendantNames(category) {
@@ -4045,7 +4060,10 @@ function reportCategory() {
 function categoryBreadcrumb(category) {
   const path = [];
   let current = category;
+  const visited = new Set();
   while (current) {
+    if (visited.has(current.id)) break;
+    visited.add(current.id);
     path.unshift(categoryBaseName(current));
     current = parentCategory(current);
   }
