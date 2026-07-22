@@ -2160,7 +2160,7 @@ function bindFilters() {
 }
 
 function transactionTable(rows) {
-  return `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant, vendor & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Flow</th><th>Match</th><th>Recurring</th><th>Type</th><th>Notes</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant, vendor & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Flow</th><th>Confidence</th><th>Type</th><th>Notes</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
 }
 
 function transactionRow(tx) {
@@ -2173,10 +2173,9 @@ function transactionRow(tx) {
   const reviewTag = tx.needsReview ? `<span class="tag warn">Needs review</span>` : "";
   const flagTags = (tx.flags || []).slice(0, 3).map((flag) => `<span class="tag subtle">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join("");
   const splitTag = splitStatusTag(tx);
-  const recurringOptions = ["none", "suggested", "confirmed", "rejected"].map((status) => `<option value="${status}" ${tx.recurringStatus === status ? "selected" : ""}>${label(status)}</option>`).join("");
   const typeOptions = ["expense", "income", "transfer"].map((option) => `<option value="${option}" ${type === option ? "selected" : ""}>${label(option)}</option>`).join("");
   return `<tr data-id="${escapeAttr(tx.id)}" class="tx-row ${tx.needsReview ? "needs-review" : ""}">
-    <td class="date-cell"><input class="date-input" data-field="date" aria-label="Transaction date" type="date" value="${escapeAttr(tx.date)}"></td>
+    <td class="date-cell"><span class="date-value" aria-label="Imported transaction date">${escapeHtml(tx.date || "")}</span></td>
     <td class="tx-description-cell">
       <div class="merchant-control">
         <span class="merchant-avatar" aria-hidden="true">${initial}</span>
@@ -2190,16 +2189,23 @@ function transactionRow(tx) {
     </td>
     <td><span class="account-pill">${escapeHtml(accountName(tx.accountId))}</span></td>
     <td class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}"><span>${money(tx.amount)}</span><small>${tx.amount >= 0 ? "Money in" : "Money out"}</small></td>
-    <td><select class="category-select" data-field="category" aria-label="Transaction category">${categoryOptions(tx.category)}</select></td>
+    <td class="category-cell">${transactionCategoryCombobox(tx)}</td>
     <td>${flowStatusHtml(tx)}</td>
     <td class="confidence-cell"><div class="confidence-meter" aria-label="${confidence} percent confidence"><span style="width:${confidence}%"></span></div><div class="confidence-meta"><strong>${confidence}%</strong><small>${escapeHtml(source)}</small></div></td>
-    <td><select class="recurring-select" data-field="recurringStatus" aria-label="Recurring status">${recurringOptions}</select></td>
     <td><select class="type-select type-${escapeAttr(type)}" data-field="type" aria-label="Transaction type">${typeOptions}</select></td>
     <td><input class="note-input" data-field="notes" aria-label="Transaction notes" value="${escapeAttr(tx.notes || "")}" placeholder="Add note"></td>
   </tr>
   <tr data-id="${escapeAttr(tx.id)}" class="tx-action-row ${tx.needsReview ? "needs-review" : ""}">
-    <td class="table-action-cell" colspan="10"><div class="row-action-buttons"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Create Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></div></td>
+    <td class="table-action-cell" colspan="9"><div class="row-action-buttons"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Create Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn" data-action="mark-internal" type="button">Internal</button><button class="mini-btn" data-action="mark-external" type="button">External</button><button class="mini-btn" data-action="auto-flow" type="button">Auto Flow</button></div></td>
   </tr>`;
+}
+
+function transactionCategoryCombobox(tx) {
+  return `<div class="category-combobox" data-category-combobox>
+    <input class="category-select category-combobox-input" data-field="category" data-category-input aria-label="Transaction category" value="${escapeAttr(tx.category || "")}" placeholder="Type category" autocomplete="off">
+    <button class="category-combobox-toggle" data-category-toggle type="button" aria-label="Show category options">&#9662;</button>
+    <div class="category-combobox-menu" data-category-menu hidden></div>
+  </div>`;
 }
 
 function shouldShowVendor(merchant, vendor) {
@@ -2220,7 +2226,7 @@ function flowStatusHtml(tx) {
   const status = tx.transferStatus ? ` · ${label(tx.transferStatus.replace(/_/g, " "))}` : "";
   const peer = tx.counterpartyAccountId ? `<small>${escapeHtml(tx.transferDirection === "out" ? "To" : "From")} ${escapeHtml(accountName(tx.counterpartyAccountId))}</small>` : "";
   const tone = tx.reportingType === "internal" ? "good" : tx.reportingType === "review" ? "warn" : tx.reportingType === "expense" ? "danger" : "good";
-  return `<div class="flow-status"><span class="tag ${tone}">${escapeHtml(flowLabel)}${escapeHtml(status)}</span>${peer}<small>${escapeHtml(tx.flowReason || "")}</small></div>`;
+  return `<div class="flow-status" title="${escapeAttr(tx.flowReason || "")}"><span class="tag ${tone}">${escapeHtml(flowLabel)}${escapeHtml(status)}</span>${peer}</div>`;
 }
 
 function transactionInsightsHtml(rows) {
@@ -2278,6 +2284,7 @@ function topCategoryMiniList(entries) {
 }
 
 function bindTransactionTable(root) {
+  bindTransactionCategoryComboboxes(root);
   root.querySelectorAll("[data-action='save-row']").forEach((button) => button.addEventListener("click", () => {
     const tr = transactionDataRowForAction(button);
     const { tx } = saveTransactionRow(tr);
@@ -2335,6 +2342,91 @@ function bindTransactionTable(root) {
     renderAll();
     showStatus("Split lines cleared.");
   }));
+}
+
+function bindTransactionCategoryComboboxes(root) {
+  root.querySelectorAll("[data-category-combobox]").forEach((combo) => {
+    const input = combo.querySelector("[data-category-input]");
+    const toggle = combo.querySelector("[data-category-toggle]");
+    const menu = combo.querySelector("[data-category-menu]");
+    if (!input || !toggle || !menu) return;
+    const openMenu = () => renderTransactionCategoryMenu(combo, true);
+    input.addEventListener("focus", openMenu);
+    input.addEventListener("input", openMenu);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") menu.hidden = true;
+      if (event.key === "Enter" && !menu.hidden) {
+        const firstOption = menu.querySelector("[data-category-option]");
+        if (firstOption) {
+          event.preventDefault();
+          input.value = firstOption.dataset.categoryOption;
+          menu.hidden = true;
+        }
+      }
+    });
+    toggle.addEventListener("click", () => renderTransactionCategoryMenu(combo, menu.hidden));
+  });
+  root.addEventListener("click", (event) => {
+    root.querySelectorAll("[data-category-menu]").forEach((menu) => {
+      if (!menu.closest("[data-category-combobox]")?.contains(event.target)) menu.hidden = true;
+    });
+  });
+}
+
+function renderTransactionCategoryMenu(combo, open) {
+  const input = combo.querySelector("[data-category-input]");
+  const menu = combo.querySelector("[data-category-menu]");
+  if (!input || !menu) return;
+  if (!open) {
+    menu.hidden = true;
+    return;
+  }
+  const term = input.value.trim().toLowerCase();
+  const rows = categoryOptionRows().filter(({ category }) => !term || categoryMatches(category, term)).slice(0, 14);
+  const options = rows.map(({ category, depth }) => `<button class="category-combobox-option" data-category-option="${escapeAttr(category.name)}" type="button"><span>${escapeHtml(`${categoryIndent(depth)}${categoryBaseName(category)}`)}</span><small>${escapeHtml(categoryBreadcrumb(category))}</small></button>`).join("");
+  const createLabel = term ? `Create "${input.value.trim()}"` : "Create new category";
+  menu.innerHTML = `${options || `<div class="category-combobox-empty">No matching categories.</div>`}<button class="category-combobox-create" data-category-create type="button">${escapeHtml(createLabel)}</button>`;
+  menu.hidden = false;
+  menu.querySelectorAll("[data-category-option]").forEach((button) => button.addEventListener("click", () => {
+    input.value = button.dataset.categoryOption || "";
+    menu.hidden = true;
+    input.focus();
+  }));
+  menu.querySelector("[data-category-create]")?.addEventListener("click", () => {
+    const createdName = promptAndCreateTransactionCategory(input.value);
+    if (!createdName) return;
+    input.value = createdName;
+    menu.hidden = true;
+    input.focus();
+  });
+}
+
+function promptAndCreateTransactionCategory(seedName = "") {
+  const requested = sanitize(window.prompt("New category name:", sanitize(seedName)) || "");
+  if (!requested) return "";
+  const existing = state.categories.find((cat) => cat.name.toLowerCase() === requested.toLowerCase());
+  if (existing) return existing.name;
+  let parent = null;
+  let baseName = requested;
+  const parts = requested.split(":").map((part) => sanitize(part)).filter(Boolean);
+  if (parts.length > 1) {
+    const parentName = parts.slice(0, -1).join(": ");
+    parent = state.categories.find((cat) => cat.name.toLowerCase() === parentName.toLowerCase()) || null;
+    if (parent) baseName = parts[parts.length - 1];
+  }
+  const name = categoryPathName(parent, baseName);
+  if (!name) return "";
+  const duplicate = state.categories.find((cat) => cat.name.toLowerCase() === name.toLowerCase());
+  if (duplicate) return duplicate.name;
+  const newCategory = { id: uniqueId("cat"), name, parentId: parent?.id || "", system: false };
+  state.categories.push(newCategory);
+  selectedCategoryReportId = newCategory.id;
+  if (parent) categoryExpandedIds.add(parent.id);
+  renderCategories();
+  renderReview();
+  saveCategoryState();
+  showStatus(`Category ${name} created. Save the transaction row to apply it.`);
+  return name;
 }
 
 function transactionDataRowForAction(button) {

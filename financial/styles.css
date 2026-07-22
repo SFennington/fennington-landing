@@ -1560,7 +1560,9 @@ td select {
 .transaction-table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 1360px;
+  min-width: 0;
+  table-layout: fixed;
+  width: 100%;
 }
 
 .transaction-table thead th {
@@ -1578,9 +1580,19 @@ td select {
 .transaction-table th,
 .transaction-table td {
   border-bottom: 1px solid rgba(226, 232, 240, 0.92);
-  padding: 0.82rem 0.85rem;
+  padding: 0.7rem 0.55rem;
   vertical-align: middle;
 }
+
+.transaction-table th:nth-child(1) { width: 86px; }
+.transaction-table th:nth-child(2) { width: 25%; }
+.transaction-table th:nth-child(3) { width: 9%; }
+.transaction-table th:nth-child(4) { width: 9%; }
+.transaction-table th:nth-child(5) { width: 16%; }
+.transaction-table th:nth-child(6) { width: 10%; }
+.transaction-table th:nth-child(7) { width: 9%; }
+.transaction-table th:nth-child(8) { width: 8%; }
+.transaction-table th:nth-child(9) { width: 14%; }
 
 .transaction-table tbody tr {
   background: rgba(255, 255, 255, 0.96);
@@ -1615,16 +1627,107 @@ td select {
   background-color: #fff;
 }
 
-.date-cell {
-  width: 148px;
+.category-cell {
+  min-width: 0;
+  position: relative;
 }
 
-.date-input {
-  min-width: 130px !important;
+.category-combobox {
+  align-items: stretch;
+  display: flex;
+  position: relative;
+}
+
+.category-combobox-input {
+  border-bottom-right-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  width: 100%;
+}
+
+.category-combobox-toggle {
+  background: #fff;
+  border: 1px solid rgba(203, 213, 225, 0.86);
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+  color: #475569;
+  cursor: pointer;
+  min-height: 38px;
+  padding: 0 0.58rem;
+}
+
+.category-combobox-menu {
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  border-radius: 14px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+  left: 0;
+  max-height: 320px;
+  min-width: 280px;
+  overflow: auto;
+  padding: 0.35rem;
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  z-index: 20;
+}
+
+.category-combobox-option,
+.category-combobox-create {
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  color: #0f172a;
+  cursor: pointer;
+  display: block;
+  padding: 0.58rem 0.65rem;
+  text-align: left;
+  width: 100%;
+}
+
+.category-combobox-option:hover,
+.category-combobox-create:hover {
+  background: #eff6ff;
+}
+
+.category-combobox-option span,
+.category-combobox-option small {
+  display: block;
+}
+
+.category-combobox-option span {
+  font-weight: 800;
+}
+
+.category-combobox-option small,
+.category-combobox-empty {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.category-combobox-empty {
+  padding: 0.65rem;
+}
+
+.category-combobox-create {
+  border-top: 1px solid rgba(226, 232, 240, 0.92);
+  color: #1d4ed8;
+  font-weight: 900;
+  margin-top: 0.25rem;
+}
+
+.date-cell {
+  width: 86px;
+}
+
+.date-value {
+  color: #334155;
+  display: inline-block;
+  font-size: 0.86rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .tx-description-cell {
-  min-width: 340px;
+  min-width: 0;
   width: 31%;
 }
 
@@ -1694,8 +1797,11 @@ td select {
   display: inline-flex;
   font-size: 0.86rem;
   font-weight: 800;
-  max-width: 190px;
+  max-width: 100%;
+  overflow: hidden;
   padding: 0.42rem 0.65rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .amount-cell span {
@@ -1713,13 +1819,13 @@ td select {
 }
 
 .category-select {
-  min-width: 196px !important;
+  min-width: 0 !important;
 }
 
 .flow-status {
   display: grid;
-  gap: 0.35rem;
-  min-width: 180px;
+  gap: 0.25rem;
+  min-width: 0;
 }
 
 .flow-status small {
@@ -1727,20 +1833,24 @@ td select {
   display: block;
   font-size: 0.76rem;
   line-height: 1.35;
-  max-width: 220px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.recurring-select,
 .type-select {
-  min-width: 132px !important;
+  min-width: 0 !important;
+  width: 100%;
 }
 
 .note-input {
-  min-width: 185px !important;
+  min-width: 0 !important;
+  width: 100%;
 }
 
 .confidence-cell {
-  min-width: 138px;
+  min-width: 0;
 }
 
 .confidence-meter {
@@ -2773,10 +2883,9 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-dark .transaction-table td input,
 .financial-dark .transaction-table td select,
 .financial-dark .merchant-copy input,
-.financial-dark .date-input,
 .financial-dark .note-input,
 .financial-dark .category-select,
-.financial-dark .recurring-select,
+.financial-dark .category-combobox-toggle,
 .financial-dark .type-select {
   background: rgba(2, 6, 23, 0.86) !important;
   border-color: rgba(148, 163, 184, 0.38) !important;
@@ -2787,10 +2896,9 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-dark .transaction-table td input:focus,
 .financial-dark .transaction-table td select:focus,
 .financial-dark .merchant-copy input:focus,
-.financial-dark .date-input:focus,
 .financial-dark .note-input:focus,
 .financial-dark .category-select:focus,
-.financial-dark .recurring-select:focus,
+.financial-dark .category-combobox-toggle:focus,
 .financial-dark .type-select:focus {
   background: rgba(15, 23, 42, 0.98) !important;
   border-color: rgba(96, 165, 250, 0.82) !important;
@@ -2801,6 +2909,36 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-dark .note-input::placeholder {
   color: #94a3b8 !important;
   opacity: 1;
+}
+
+.financial-dark .date-value {
+  color: #e5eefb;
+}
+
+.financial-dark .category-combobox-menu {
+  background: rgba(2, 6, 23, 0.98);
+  border-color: rgba(148, 163, 184, 0.38);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+}
+
+.financial-dark .category-combobox-option,
+.financial-dark .category-combobox-create {
+  color: #f8fafc;
+}
+
+.financial-dark .category-combobox-option:hover,
+.financial-dark .category-combobox-create:hover {
+  background: rgba(37, 99, 235, 0.22);
+}
+
+.financial-dark .category-combobox-option small,
+.financial-dark .category-combobox-empty {
+  color: #94a3b8;
+}
+
+.financial-dark .category-combobox-create {
+  border-top-color: rgba(148, 163, 184, 0.24);
+  color: #93c5fd;
 }
 
 .financial-dark input[type="date"]::-webkit-calendar-picker-indicator {
