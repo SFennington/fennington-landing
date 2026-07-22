@@ -3040,7 +3040,7 @@ function renderReview() {
         <div class="transaction-title-copy">
           <p class="eyebrow">Manual review</p>
           <h3>Review queue</h3>
-          <p class="status-line">Low-confidence categories, uncategorized items, possible transfers, possible duplicates, new recurring expenses, and unusually high amounts appear here.</p>
+          <p class="status-line">This view uses the same editable ledger rows as Transactions, filtered down to items requiring review.</p>
         </div>
         <div class="transaction-heading-actions">
           <div class="transaction-count-pill" aria-label="Filtered review queue count">
@@ -3050,62 +3050,23 @@ function renderReview() {
         </div>
       </div>
       ${reviewReasonFiltersHtml()}
-      <div class="bulk-actions review-bulk-actions" aria-label="Bulk review actions"><select id="bulkCategory" aria-label="Bulk category"><option value="">Bulk category</option>${categoryOptions("")}</select><button id="bulkCategorize" class="btn btn-secondary" type="button">Apply to Selected</button></div>
       <div class="transaction-table-shell review-queue-shell">
-        <div class="transaction-table-header review-queue-header">
+        <div class="transaction-table-header">
           <div>
             <span class="eyebrow">Review ledger</span>
             <strong>Transactions needing attention</strong>
-            <p>Confirm categories, set flow treatment, split itemized charges, or skip the queue from the same row pattern used in the transaction ledger.</p>
+            <p>Edit, save, create rules, split transactions, and mark internal or external using the exact same controls as the transaction table.</p>
           </div>
-          <div class="table-legend" aria-label="Review legend">
-            <span><i class="legend-dot expense"></i>Needs action</span>
-            <span><i class="legend-dot income"></i>Ready to confirm</span>
+          <div class="table-legend" aria-label="Amount legend">
+            <span><i class="legend-dot income"></i>Income / credits</span>
+            <span><i class="legend-dot expense"></i>Spending</span>
           </div>
         </div>
-        ${queue.length ? `<div class="review-queue-list" role="list" aria-label="Transactions requiring manual review">${queue.map(reviewCard).join("")}</div>` : `<div class="empty-state">No transactions currently require review.</div>`}
+        ${queue.length ? transactionTable(queue, queue.length) : `<div class="empty-state">No transactions currently require review.</div>`}
       </div>
     </section>
   `;
   bindReviewActions(tab);
-}
-
-function reviewCard(tx) {
-  const reviewReasons = reviewReasonsForTransaction(tx);
-  const reasonSet = new Set(reviewReasons);
-  const confidence = Math.max(0, Math.min(100, Number(tx.confidence || 0)));
-  const merchant = tx.merchant || tx.description || "Unknown merchant";
-  const description = tx.description || merchant;
-  const initial = escapeHtml(merchant.trim().charAt(0).toUpperCase() || "?");
-  const source = tx.source || "Imported";
-  const vendor = transactionVendor(tx);
-  const vendorTag = vendor ? `<span class="tag subtle">Vendor: ${escapeHtml(vendor)}</span>` : "";
-  const reviewTag = `<span class="tag warn">Needs review</span>`;
-  const reasonTags = reviewReasons.map((reason) => `<span class="tag subtle">${escapeHtml(reviewReasonLabel(reason))}</span>`).join("");
-  const flagTags = reviewableTransactionFlags(tx).filter((flag) => !reasonSet.has(flag)).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join("");
-  const splitTag = splitStatusTag(tx);
-  const amountDirection = tx.amount >= 0 ? "Money in" : "Money out";
-  const internalActive = isInternalFlow(tx);
-  return `<article class="review-card needs-review" data-id="${escapeAttr(tx.id)}" role="listitem" aria-label="${escapeAttr(`${merchant} ${money(tx.amount)} ${tx.date || ""}`)}">
-    <div class="review-row-main">
-      <label class="review-select-cell" data-label="Select"><input type="checkbox" class="review-select" aria-label="Select ${escapeAttr(merchant)} for bulk review"></label>
-      <div class="date-cell review-date-cell" data-label="Date"><span class="date-value" aria-label="Imported transaction date">${escapeHtml(tx.date || "")}</span></div>
-      <div class="tx-description-cell review-description-cell" data-label="Transaction">
-        <div class="merchant-control">
-          <span class="merchant-avatar" aria-hidden="true">${initial}</span>
-          <div class="merchant-copy"><strong class="review-merchant-name">${escapeHtml(merchant)}</strong><p>${escapeHtml(description)}</p></div>
-        </div>
-        <div class="tx-tag-row">${reviewTag}${reasonTags}${flagTags}${vendorTag}${splitTag}</div>
-        ${splitReviewHtml(tx)}
-      </div>
-      <div class="account-cell review-account-cell" data-label="Account"><span class="account-pill">${escapeHtml(accountName(tx.accountId))}</span></div>
-      <div class="amount-cell review-amount-cell ${tx.amount >= 0 ? "positive" : "negative"}" data-label="Amount"><span>${money(tx.amount)}</span><small>${amountDirection}</small></div>
-      <div class="category-cell review-category-cell" data-label="Category"><select class="category-select review-category-select" data-review-category aria-label="Review category for ${escapeAttr(merchant)}">${categoryOptions(tx.category)}</select></div>
-      <div class="flow-cell review-flow-cell" data-label="Flow">${flowStatusHtml(tx)}</div>
-      <div class="confidence-cell review-confidence-cell" data-label="Confidence"><div class="confidence-meter" aria-label="${confidence} percent confidence"><span style="width:${confidence}%"></span></div><div class="confidence-meta"><strong>${confidence}%</strong><small>${escapeHtml(source)}</small></div></div>
-    </div>
-    <div class="review-row-actions review-actions table-action-cell" data-label="Actions"><label class="review-rule-toggle"><input data-apply-rule type="checkbox"> <span>Create rule</span></label><div class="row-action-buttons review-action-buttons"><button class="mini-btn save-row-btn" data-review="confirm" type="button">Confirm</button><button class="mini-btn" data-review="split" type="button">Split</button><button class="mini-btn" data-review="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn flow-toggle ${internalActive ? "active" : ""}" data-review="internal" type="button" aria-pressed="${internalActive ? "true" : "false"}">Confirm Internal</button><button class="mini-btn" data-review="skip" type="button">Skip</button></div></div>
-  </article>`;
 }
 
 function reviewReasonFiltersHtml() {
@@ -3140,74 +3101,7 @@ function splitReviewHtml(tx) {
 
 function bindReviewActions(root) {
   bindReviewReasonFilters(root);
-  root.querySelectorAll("[data-review='confirm']").forEach((button) => button.addEventListener("click", async () => {
-    const card = button.closest("article");
-    const tx = state.transactions.find((item) => item.id === card.dataset.id);
-    tx.category = card.querySelector("[data-review-category]").value;
-    tx.type = typeForCategory(tx.category, tx.amount);
-    if (!isTransferCategory(tx.category)) markExternalFlow(tx);
-    tx.needsReview = false;
-    tx.confidence = 100;
-    tx.source = "User";
-    tx.flags = [];
-    resolveRecurringReview(tx, "confirmed");
-    if (card.querySelector("[data-apply-rule]").checked) {
-      const result = await createReviewRuleAndApplyToMatches(tx);
-      const statusMessage = ruleCreationStatusText(result, "Rule", "uncategorized matching transactions were categorized");
-      if (statusMessage) showStatus(statusMessage);
-    }
-    renderAll();
-  }));
-  root.querySelectorAll("[data-review='internal']").forEach((button) => button.addEventListener("click", () => {
-    const tx = state.transactions.find((item) => item.id === button.closest("article").dataset.id);
-    if (!tx) return;
-    const counterparty = promptForCounterpartyAccount(tx);
-    tx.flowSource = "user";
-    tx.flowType = counterparty && (accountById(counterparty)?.type === "credit" || accountById(counterparty)?.flowRole === "credit_card") ? "credit_card_payment" : "internal_transfer";
-    markSingleSidedInternal(tx, counterparty, counterparty ? `Manually confirmed internal movement with ${accountName(counterparty)}.` : "Manually confirmed internal account movement.");
-    tx.category = tx.category === "Uncategorized" ? TRANSFER_CATEGORY : tx.category;
-    tx.type = "transfer";
-    tx.source = "User flow";
-    tx.confidence = 100;
-    resolveRecurringReview(tx, "confirmed");
-    renderAll();
-    showStatus("Internal money movement confirmed.");
-  }));
-  root.querySelectorAll("[data-review='split']").forEach((button) => button.addEventListener("click", () => {
-    const tx = state.transactions.find((item) => item.id === button.closest("article")?.dataset.id);
-    if (tx) editTransactionSplits(tx);
-  }));
-  root.querySelectorAll("[data-review='clear-split']").forEach((button) => button.addEventListener("click", () => {
-    const tx = state.transactions.find((item) => item.id === button.closest("article")?.dataset.id);
-    if (!tx?.splits?.length || !window.confirm("Clear split/itemized lines and use the parent transaction category again?")) return;
-    clearTransactionSplits(tx);
-    renderAll();
-    showStatus("Split lines cleared.");
-  }));
-  root.querySelectorAll("[data-review='skip']").forEach((button) => button.addEventListener("click", () => {
-    const tx = state.transactions.find((item) => item.id === button.closest("article").dataset.id);
-    tx.needsReview = false;
-    tx.flags = [];
-    resolveRecurringReview(tx, "rejected");
-    tx.notes = `${tx.notes || ""} Skipped during review.`.trim();
-    renderAll();
-  }));
-  document.getElementById("bulkCategorize").addEventListener("click", () => {
-    const category = document.getElementById("bulkCategory").value;
-    if (!category) return;
-    root.querySelectorAll(".review-select:checked").forEach((checkbox) => {
-      const tx = state.transactions.find((item) => item.id === checkbox.closest("article").dataset.id);
-      tx.category = category;
-      tx.type = typeForCategory(category, tx.amount);
-      if (!isTransferCategory(category)) markExternalFlow(tx);
-      tx.needsReview = false;
-      tx.confidence = 100;
-      tx.source = "Bulk review";
-      tx.flags = [];
-      resolveRecurringReview(tx, "confirmed");
-    });
-    renderAll();
-  });
+  bindTransactionTable(root);
 }
 
 function resolveRecurringReview(tx, status) {
