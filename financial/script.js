@@ -2315,7 +2315,7 @@ function filtersHtml() {
         <div class="field search-field"><label for="filterSearch">Search</label><input id="filterSearch" value="${escapeAttr(state.filters.search || "")}" placeholder="Merchant, vendor, or description"></div>
         <div class="field"><label for="filterStart">Date range start</label><input id="filterStart" type="date" value="${escapeAttr(state.filters.start || "")}"></div>
         <div class="field"><label for="filterEnd">Date range end</label><input id="filterEnd" type="date" value="${escapeAttr(state.filters.end || "")}"></div>
-        <div class="field"><label for="filterMonth">Month</label><select id="filterMonth"><option value="">All months</option>${monthOptions().map((m) => `<option value="${m}" ${state.filters.month === m ? "selected" : ""}>${m}</option>`).join("")}</select></div>
+        <div class="field"><label for="filterMonth">Month</label><select id="filterMonth"><option value="">All Months</option>${transactionMonthOptions().map((m) => `<option value="${m}" ${state.filters.month === m ? "selected" : ""}>${formatMonthLabel(m)}</option>`).join("")}</select></div>
         <div class="field"><label for="filterAccount">Account</label><select id="filterAccount">${accounts}</select></div>
         <div class="field"><label for="filterCategory">Category</label><select id="filterCategory"><option value="">All categories</option>${cats}</select></div>
         <div class="field"><label for="filterMerchant">Merchant</label><input id="filterMerchant" value="${escapeAttr(state.filters.merchant || "")}" placeholder="Merchant"></div>
@@ -4726,6 +4726,19 @@ function categoryDrilldown(category) {
 function monthOptions() {
   const months = Array.from(new Set(state.transactions.map((tx) => tx.date?.slice(0, 7)).filter(Boolean))).sort();
   return months.length ? months : [state.selectedMonth || monthKey(new Date())];
+}
+
+function transactionMonthOptions() {
+  const currentMonth = localMonthKey(new Date());
+  const nextMonth = addMonth(currentMonth, 1);
+  const months = new Set([currentMonth, nextMonth, ...state.transactions.map((tx) => tx.date?.slice(0, 7)).filter(Boolean)]);
+  return [currentMonth, nextMonth, ...Array.from(months).filter((month) => month !== currentMonth && month !== nextMonth).sort().reverse()];
+}
+
+function formatMonthLabel(month) {
+  const date = new Date(`${month}-01T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return month;
+  return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
 function latestMonth(transactions) {
