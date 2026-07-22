@@ -631,6 +631,7 @@ function renderAll(options = {}) {
   normalizeTransactionAmountSigns();
   normalizeCreditCardPaymentSigns();
   normalizeFinancialFlows();
+  backfillCategoryRuleTargets();
   const previousRecurring = new Map(state.recurring.map((item) => [item.id, item]));
   state.recurring = detectRecurring(state.transactions).map((item) => ({ ...item, status: previousRecurring.get(item.id)?.status || item.status }));
   renderDashboard();
@@ -2779,7 +2780,16 @@ function resolveRecurringReview(tx, status) {
 async function createReviewRuleAndApplyToMatches(sourceTx) {
   const match = categoryRuleMatchText(sourceTx);
   if (!match) return { updatedCount: 0, created: false, duplicate: false, cancelled: false };
-  const rule = await editRuleBeforeCreation({ id: uniqueId("rule"), type: "merchant", match, amount: Math.abs(Number(sourceTx.amount || 0)), category: sourceTx.category, createdAt: new Date().toISOString() }, sourceTx);
+  const rule = await editRuleBeforeCreation({
+    id: uniqueId("rule"),
+    type: "merchant",
+    match,
+    amount: Math.abs(Number(sourceTx.amount || 0)),
+    category: sourceTx.category,
+    transactionType: sourceTx.type || typeForCategory(sourceTx.category, sourceTx.amount),
+    flowType: FLOW_TYPES.includes(sourceTx.flowType) ? sourceTx.flowType : deriveTransactionFlowType(sourceTx),
+    createdAt: new Date().toISOString()
+  }, sourceTx);
   if (!rule) return { updatedCount: 0, created: false, duplicate: false, cancelled: true };
   const existingRule = matchingCategoryRule(rule);
   if (!existingRule) state.rules.push(rule);
@@ -2787,7 +2797,7 @@ async function createReviewRuleAndApplyToMatches(sourceTx) {
 }
 
 function matchingCategoryRule(rule) {
-  return state.rules.find((item) => item.type === rule.type && normalizedRuleText(item.match) === normalizedRuleText(rule.match) && item.category === rule.category && ruleAmountValue(item) === ruleAmountValue(rule));
+  return state.rules.find((item) => item.type === rule.type && normalizedRuleText(item.match) === normalizedRuleText(rule.match) && item.category === rule.category && ruleTransactionType(item) === ruleTransactionType(rule) && ruleFlowType(item) === ruleFlowType(rule) && ruleAmountValue(item) === ruleAmountValue(rule));
 }
 
 function categoryRuleMatchText(tx) {
@@ -2824,6 +2834,39 @@ function applyCategoryRuleToUncategorizedTransactions(rule, transactions) {
   return applyCategoryRuleToMatchedTransactions(rule, matches);
 }
 
+function backfillCategoryRuleTargets() {
+  state.rules.filter((rule) => rule.type !== "vendor" && (!ruleTransactionType(rule) || !ruleFlowType(rule))).forEach((rule) => {
+    const matches = state.transactions.filter((tx) => categoryRuleMatches(rule, tx));
+    const target = preferredRuleTargetTransaction(rule, matches);
+    if (!ruleTransactionType(rule)) rule.transactionType = inferRuleTransactionType(rule, target);
+    if (!ruleFlowType(rule)) rule.flowType = inferRuleFlowType(rule, target);
+  });
+}
+
+function preferredRuleTargetTransaction(rule, matches) {
+  const sameCategory = matches.filter((tx) => tx.category === rule.category);
+  return sameCategory.find((tx) => tx.flowSource === "user" && ruleFlowType(tx))
+    || sameCategory.find((tx) => Number(tx.confidence || 0) >= 100 && ruleFlowType(tx))
+    || sameCategory.find((tx) => ruleFlowType(tx))
+    || sameCategory[0]
+    || matches[0]
+    || null;
+}
+
+function inferRuleTransactionType(rule, target) {
+  if (["income", "expense", "transfer"].includes(target?.type)) return target.type;
+  if (rule.category === "Income") return "income";
+  if (isTransferCategory(rule.category)) return "transfer";
+  return ruleAmountValue(rule) && target ? typeForCategory(rule.category, target.amount) : "expense";
+}
+
+function inferRuleFlowType(rule, target) {
+  if (ruleFlowType(target)) return target.flowType;
+  if (rule.category === "Income" || inferRuleTransactionType(rule, target) === "income") return "external_income";
+  if (isTransferCategory(rule.category)) return "uncategorized";
+  return "external_expense";
+}
+
 function isUncategorizedRuleTarget(tx) {
   return tx.needsReview || !tx.category || tx.category === "Uncategorized" || (tx.flags || []).includes("uncategorized");
 }
@@ -2831,7 +2874,8 @@ function isUncategorizedRuleTarget(tx) {
 function applyCategoryRuleToMatchedTransactions(rule, matches) {
   matches.forEach((tx) => {
     tx.category = rule.category;
-    tx.type = typeForCategory(rule.category, tx.amount);
+    tx.type = ruleTransactionType(rule) || typeForCategory(rule.category, tx.amount);
+    applyRuleFlowToTransaction(rule, tx);
     tx.needsReview = false;
     tx.confidence = 100;
     tx.source = "User rule";
@@ -2839,6 +2883,44 @@ function applyCategoryRuleToMatchedTransactions(rule, matches) {
     tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized"].includes(flag));
   });
   return matches.length;
+}
+
+function ruleTransactionType(rule) {
+  return ["income", "expense", "transfer"].includes(rule?.transactionType) ? rule.transactionType : "";
+}
+
+function ruleFlowType(rule) {
+  return FLOW_TYPES.includes(rule?.flowType) ? rule.flowType : "";
+}
+
+function applyRuleFlowToTransaction(rule, tx) {
+  const flowType = ruleFlowType(rule);
+  if (!flowType) {
+    if (!isTransferCategory(tx.category) && tx.flowSource !== "user") {
+      tx.flowType = deriveTransactionFlowType(tx);
+      tx.flowReason = flowReasonFor(tx);
+      applyReportingType(tx);
+    }
+    return;
+  }
+  tx.flowSource = "user";
+  tx.flowType = flowType;
+  if (INTERNAL_FLOW_TYPES.has(flowType)) {
+    tx.transferGroupId = "";
+    tx.transferPeerTransactionId = "";
+    tx.counterpartyAccountId = "";
+    tx.transferDirection = "";
+    tx.transferStatus = "";
+  } else if (flowType === "external_income" || flowType === "external_expense" || flowType === "refund") {
+    tx.transferGroupId = "";
+    tx.transferPeerTransactionId = "";
+    tx.counterpartyAccountId = "";
+    tx.transferDirection = "";
+    tx.transferStatus = "";
+  }
+  applyReportingType(tx);
+  tx.flowConfidence = 100;
+  tx.flowReason = `Matched a user-created ${label(String(flowType).replace(/_/g, " "))} rule.`;
 }
 
 function categoryRuleMatches(rule, tx) {
@@ -2941,7 +3023,8 @@ function editRuleBeforeCreation(initialRule, sourceTx) {
       const existingRule = isVendorRule ? matchingVendorRule(rule) : matchingCategoryRule(rule);
       const matchCount = isVendorRule ? vendorRuleMatchCount(existingRule || rule) : ruleMatchCount(existingRule || rule);
       const duplicateText = existingRule ? `<p><strong>${isVendorRule ? "A vendor cleanup rule" : "A categorization rule"} with the same criteria${ruleAmountValue(rule) ? ", amount," : ""} and target already exists.</strong></p>` : "";
-      preview.innerHTML = `${duplicateText}<p><strong>Criteria:</strong> ${escapeHtml(rule.match || "None")}</p><p><strong>${isVendorRule ? "Vendor" : "Category"}:</strong> ${escapeHtml(isVendorRule ? rule.vendor : rule.category)}</p><p><strong>Amount:</strong> ${escapeHtml(ruleAmountLabel(rule))}</p><p><strong>Matching transactions:</strong> ${escapeHtml(plural(matchCount, "transaction"))}</p>`;
+      const targetDetails = isVendorRule ? "" : `<p><strong>Type:</strong> ${escapeHtml(label(ruleTransactionType(rule) || typeForCategory(rule.category, sourceTx.amount)))}</p><p><strong>Flow:</strong> ${escapeHtml(label((ruleFlowType(rule) || deriveTransactionFlowType(sourceTx)).replace(/_/g, " ")))}</p>`;
+      preview.innerHTML = `${duplicateText}<p><strong>Criteria:</strong> ${escapeHtml(rule.match || "None")}</p><p><strong>${isVendorRule ? "Vendor" : "Category"}:</strong> ${escapeHtml(isVendorRule ? rule.vendor : rule.category)}</p>${targetDetails}<p><strong>Amount:</strong> ${escapeHtml(ruleAmountLabel(rule))}</p><p><strong>Matching transactions:</strong> ${escapeHtml(plural(matchCount, "transaction"))}</p>`;
     };
     dialog.querySelectorAll("input, textarea, select").forEach((input) => input.addEventListener("input", renderPreview));
     dialog.querySelectorAll("select, input[type='checkbox']").forEach((input) => input.addEventListener("change", renderPreview));
@@ -3537,7 +3620,7 @@ function applyCategorization(tx, sourceState) {
   tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized", "possible_transfer", "unusually_high_amount"].includes(flag));
   const haystack = `${tx.description} ${tx.merchant} ${tx.vendor || ""}`;
   const userRule = rulesByAmountSpecificity(sourceState.rules.filter((rule) => rule.type !== "vendor")).find((rule) => categoryRuleMatches(rule, tx));
-  if (userRule) return setCategory(tx, userRule.category, 100, "User rule", "Matched a user-created categorization rule.");
+  if (userRule) return applyCategoryRuleToMatchedTransactions(userRule, [tx]);
   const mapping = sourceState.merchantMappings.find((item) => item.merchant.toLowerCase() === tx.merchant.toLowerCase());
   if (mapping) return setCategory(tx, mapping.category, 96, "Confirmed merchant mapping", "Matched a previously confirmed merchant mapping.");
   const builtIn = BUILT_IN_RULES.find((rule) => rule.match.test(haystack));
