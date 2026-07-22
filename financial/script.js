@@ -32,11 +32,15 @@ const AI_OUTPUT_PRICE_PER_1M = 1.25;
 const AI_WEB_SEARCH_PRICE_PER_1K = 10;
 const AI_DEFAULT_BATCH_LIMIT = 50;
 const AI_MAX_BATCH_LIMIT = 100;
+const AI_AUDIT_FLAG = "ai_modified";
 const AI_UPDATE_FIELD_OPTIONS = [
   { key: "category", label: "Category" },
   { key: "merchant", label: "Merchant" },
   { key: "vendor", label: "Vendor" },
   { key: "notes", label: "Notes" }
+];
+const AI_APPROVAL_TRANSACTION_FIELDS = [
+  "category", "merchant", "vendor", "notes", "aiDisplayName", "confidence", "reason", "source", "type", "needsReview", "flags", "aiSourceUrls"
 ];
 const REVIEW_REASON_DEFINITIONS = [
   { key: "uncategorized", label: "Uncategorized" },
@@ -503,9 +507,10 @@ async function commitProfileCollectionWrites(profileRef, deletedCategoryIds, del
   profileCollectionNames.forEach((name) => {
     const collectionSnapshots = persistedCollectionSnapshots.get(name) || new Map();
     state[name].forEach((item) => {
-      const snapshot = persistedCollectionSnapshot(item);
+      const snapshot = persistedCollectionSnapshot(item, name);
       if (collectionSnapshots.get(item.id) === snapshot) return;
-      queueWrite((currentBatch) => currentBatch.set(doc(profileRef, name, item.id), { ...item, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true }));
+      const persistedItem = persistableCollectionItem(name, item);
+      queueWrite((currentBatch) => currentBatch.set(doc(profileRef, name, item.id), { ...persistedItem, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true }));
       persistedUpdates.push({ name, id: item.id, snapshot });
     });
   });
@@ -533,7 +538,7 @@ function financialApiUrl(path) {
 
 function markPersistedCollectionSnapshot(name, item) {
   if (!persistedCollectionSnapshots.has(name)) persistedCollectionSnapshots.set(name, new Map());
-  persistedCollectionSnapshots.get(name).set(item.id, item.__snapshot || persistedCollectionSnapshot(item));
+  persistedCollectionSnapshots.get(name).set(item.id, item.__snapshot || persistedCollectionSnapshot(item, name));
 }
 
 function deletePersistedCollectionSnapshot(name, id) {
@@ -544,12 +549,19 @@ function deletePersistedCollectionSnapshot(name, id) {
 function resetPersistedCollectionSnapshots() {
   persistedCollectionSnapshots.clear();
   profileCollectionNames.forEach((name) => {
-    persistedCollectionSnapshots.set(name, new Map(state[name].map((item) => [item.id, persistedCollectionSnapshot(item)])));
+    persistedCollectionSnapshots.set(name, new Map(state[name].map((item) => [item.id, persistedCollectionSnapshot(item, name)])));
   });
 }
 
-function persistedCollectionSnapshot(item) {
-  return stableStringify({ ...item, workspaceId: sharedWorkspaceId, updatedAt: undefined });
+function persistedCollectionSnapshot(item, name = "") {
+  return stableStringify({ ...persistableCollectionItem(name, item), workspaceId: sharedWorkspaceId, updatedAt: undefined });
+}
+
+function persistableCollectionItem(name, item) {
+  if (name !== "transactions") return item;
+  const persisted = { ...item };
+  delete persisted.aiPendingUpdate;
+  return persisted;
 }
 
 function stableStringify(value) {
@@ -576,7 +588,7 @@ async function saveCategoryState(affectedTransactions = []) {
       batchWrites.push((batch) => batch.delete(doc(profileRef, "categories", id)));
     });
     affectedTransactions.forEach((tx) => {
-      batchWrites.push((batch) => batch.set(doc(profileRef, "transactions", tx.id), { ...tx, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true }));
+      batchWrites.push((batch) => batch.set(doc(profileRef, "transactions", tx.id), { ...persistableCollectionItem("transactions", tx), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true }));
     });
     await commitBatchWrites(batchWrites);
     state.categories.forEach((item) => markPersistedCollectionSnapshot("categories", item));
@@ -1737,9 +1749,11 @@ function bindAccountControls(root) {
 
 function renderTransactions() {
   const tab = document.getElementById("transactionsTab");
-  const rows = filteredTransactions();
-  const visibleRows = rows.slice(0, transactionRowsShown);
   const activeFilter = captureActiveFilter();
+  const pendingAiRows = aiPendingApprovalTransactions();
+  const approvalViewActive = state.filters.aiStatus === "pending";
+  const rows = approvalViewActive ? pendingAiRows : filteredTransactions();
+  const visibleRows = rows.slice(0, transactionRowsShown);
   if (activeImportPanel && !["csv", "amazon", "ai"].includes(activeImportPanel)) activeImportPanel = "";
   document.body.classList.toggle("import-overlay-open", Boolean(activeImportPanel));
   tab.innerHTML = `
@@ -1760,19 +1774,20 @@ function renderTransactions() {
       </div>
       ${transactionInsightsHtml(rows)}
       ${filtersHtml()}
+      ${!approvalViewActive && pendingAiRows.length ? aiPendingApprovalBanner(pendingAiRows.length) : ""}
       <div class="transaction-table-shell">
         <div class="transaction-table-header">
           <div>
-            <span class="eyebrow">Ledger</span>
-            <strong>Transaction activity</strong>
-            <p>Inline edits save back to the profile, rules, and review queue.</p>
+            <span class="eyebrow">${approvalViewActive ? "Human approval" : "Ledger"}</span>
+            <strong>${approvalViewActive ? "AI pending approval" : "Transaction activity"}</strong>
+            <p>${approvalViewActive ? "Approve selected AI proposals. Proposals left unselected in this list are reverted to their original state." : "Inline edits save back to the profile, rules, and review queue."}</p>
           </div>
           <div class="table-legend" aria-label="Amount legend">
             <span><i class="legend-dot income"></i>Income / credits</span>
             <span><i class="legend-dot expense"></i>Spending</span>
           </div>
         </div>
-        ${rows.length ? transactionTable(visibleRows, rows.length) : `<div class="empty-state">No transactions match the current filters.</div>`}
+        ${approvalViewActive ? aiPendingApprovalView(rows) : rows.length ? transactionTable(visibleRows, rows.length) : `<div class="empty-state">No transactions match the current filters.</div>`}
       </div>
     </section>
   `;
@@ -1782,6 +1797,7 @@ function renderTransactions() {
   if (overlayRoot) bindAiAnalysisControls(overlayRoot);
   bindFilters();
   bindTransactionTable(tab);
+  bindAiApprovalControls(tab);
   restoreActiveFilter(activeFilter);
 }
 
@@ -2077,15 +2093,14 @@ function plural(count, singular, pluralLabel = `${singular}s`) {
 
 function aiAnalysisSummaryText(summary, actualCost) {
   return [
-    `AI analysis complete: ${plural(summary.searchedCount, "record")} searched`,
+    `AI proposals ready: ${plural(summary.searchedCount, "record")} searched`,
     `${plural(summary.uniqueRequestCount, "AI request")} sent`,
-    `${plural(summary.matchedRecordCount, "record")} matched to AI results`,
-    `${plural(summary.categoryUpdatedCount, "category", "categories")} updated`,
-    `${plural(summary.vendorUpdatedCount, "vendor")} updated`,
-    `${plural(summary.merchantUpdatedCount, "merchant name")} updated`,
-    `${plural(summary.notesUpdatedCount, "note")} updated`,
-    `${plural(summary.descriptionUpdatedCount, "description")} updated`,
-    `${plural(summary.reviewStatusUpdatedCount, "review status", "review statuses")} changed`,
+    `${plural(summary.matchedRecordCount, "record")} staged for approval`,
+    `${plural(summary.categoryUpdatedCount, "category", "categories")} proposed`,
+    `${plural(summary.vendorUpdatedCount, "vendor")} proposed`,
+    `${plural(summary.merchantUpdatedCount, "merchant name")} proposed`,
+    `${plural(summary.notesUpdatedCount, "note")} proposed`,
+    `${plural(summary.reviewStatusUpdatedCount, "review status", "review statuses")} would change`,
     `cost ${actualCost}.`
   ].join("; ");
 }
@@ -2154,10 +2169,122 @@ function ruleRerunSnapshot(tx) {
   };
 }
 
+function isAiPendingApprovalTransaction(tx) {
+  return tx?.aiPendingUpdate?.status === "pending";
+}
+
+function isAiInfluencedTransaction(tx) {
+  return Boolean(tx?.aiAudit?.designator === AI_AUDIT_FLAG || (tx?.flags || []).includes(AI_AUDIT_FLAG));
+}
+
+function aiPendingApprovalTransactions() {
+  return state.transactions.filter(isAiPendingApprovalTransaction).sort((a, b) => {
+    const aTime = a.aiPendingUpdate?.generatedAt || "";
+    const bTime = b.aiPendingUpdate?.generatedAt || "";
+    return bTime.localeCompare(aTime) || (b.date || "").localeCompare(a.date || "");
+  });
+}
+
+function stageAiPendingUpdate(tx, result, updateFields, metadata = {}) {
+  const original = tx.aiPendingUpdate?.original || aiTransactionApprovalSnapshot(tx);
+  const draft = aiProposalDraftTransaction(tx);
+  applyAiAnalysisToTransaction(draft, result, updateFields);
+  const proposed = aiTransactionApprovalSnapshot(draft);
+  const changedFields = aiApprovalChangedFields(original, proposed, updateFields);
+  const reviewStatusChanged = Boolean(original.needsReview) !== Boolean(proposed.needsReview);
+  if (!changedFields.length && !reviewStatusChanged) return null;
+  tx.aiPendingUpdate = {
+    id: uniqueId("ai-approval"),
+    status: "pending",
+    designator: "ai_pending_approval",
+    runId: metadata.runId || uniqueId("ai-run"),
+    generatedAt: metadata.generatedAt || new Date().toISOString(),
+    model: metadata.model || AI_ANALYSIS_MODEL,
+    updateFields: updateFields.slice(),
+    changedFields,
+    original,
+    proposed,
+    confidence: Math.max(0, Math.min(100, Number(result.confidence || 0))),
+    reason: sanitize(result.reason || "AI proposed updates for this transaction."),
+    source: result.source === "ai_web" ? "AI web" : "AI",
+    sourceUrls: Array.isArray(result.sourceUrls) ? result.sourceUrls.slice(0, 3).map((url) => sanitize(url)).filter(Boolean) : []
+  };
+  return { changedFields, reviewStatusChanged };
+}
+
+function aiProposalDraftTransaction(tx) {
+  const draft = { ...tx };
+  draft.flags = Array.isArray(tx.flags) ? tx.flags.slice() : [];
+  draft.aiSourceUrls = Array.isArray(tx.aiSourceUrls) ? tx.aiSourceUrls.slice() : [];
+  delete draft.aiPendingUpdate;
+  return draft;
+}
+
+function aiTransactionApprovalSnapshot(tx) {
+  return AI_APPROVAL_TRANSACTION_FIELDS.reduce((snapshot, field) => {
+    snapshot[field] = cloneAiApprovalValue(tx[field], field);
+    return snapshot;
+  }, {});
+}
+
+function cloneAiApprovalValue(value, field = "") {
+  if (Array.isArray(value)) return value.slice();
+  if (value && typeof value === "object") return JSON.parse(JSON.stringify(value));
+  if (field === "flags" || field === "aiSourceUrls") return [];
+  if (field === "needsReview") return Boolean(value);
+  if (field === "confidence") return Math.max(0, Math.min(100, Number(value || 0)));
+  return value ?? "";
+}
+
+function aiApprovalChangedFields(original, proposed, updateFields) {
+  return updateFields.filter((field) => {
+    const proposedField = field === "category" ? "category" : field;
+    return stableStringify(original[proposedField]) !== stableStringify(proposed[proposedField]);
+  });
+}
+
+function applyAiApprovalSnapshot(tx, snapshot) {
+  AI_APPROVAL_TRANSACTION_FIELDS.forEach((field) => {
+    tx[field] = cloneAiApprovalValue(snapshot?.[field], field);
+  });
+}
+
+function approveAiPendingUpdate(tx) {
+  const pending = tx.aiPendingUpdate;
+  if (!pending) return;
+  applyAiApprovalSnapshot(tx, pending.proposed || {});
+  const approvedAt = new Date().toISOString();
+  tx.aiAudit = {
+    designator: AI_AUDIT_FLAG,
+    status: "approved",
+    approvalId: pending.id || uniqueId("ai-approval"),
+    runId: pending.runId || "",
+    model: pending.model || AI_ANALYSIS_MODEL,
+    updateFields: pending.updateFields || [],
+    changedFields: pending.changedFields || [],
+    generatedAt: pending.generatedAt || "",
+    approvedAt,
+    approvedBy: currentUser?.email || "",
+    source: pending.source || "AI",
+    reason: pending.reason || "AI update approved by a user."
+  };
+  tx.flags = Array.from(new Set([...(tx.flags || []), AI_AUDIT_FLAG]));
+  delete tx.aiPendingUpdate;
+}
+
+function revertAiPendingUpdate(tx) {
+  const pending = tx.aiPendingUpdate;
+  if (pending?.original) applyAiApprovalSnapshot(tx, pending.original);
+  delete tx.aiPendingUpdate;
+}
+
+function clearAiPendingUpdate(tx) {
+  if (tx) delete tx.aiPendingUpdate;
+}
+
 async function runAiAnalyzeTransactions(root) {
   if (aiAnalysisRunning) return;
   if (!currentUser) return showStatus("Sign in before running AI transaction analysis.");
-  const vendorRuleUpdates = applyVendorRulesToTransactions(state.transactions, state);
   const plan = buildAiAnalysisPlan(filteredTransactions());
   const updateFields = aiSelectedUpdateFields();
   if (!plan.groups.length) return showStatus("No transactions match the selected AI analysis scope.");
@@ -2210,46 +2337,41 @@ async function runAiAnalyzeTransactions(root) {
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || "AI analysis failed.");
-    setAiAnalysisStatus("Applying AI results", "Updating matching transactions in this workspace.");
+    setAiAnalysisStatus("Staging AI proposals", "Preparing transactions for human approval before saving updates.");
     const groupsById = new Map(plan.groups.map((group) => [group.representative.id, group]));
+    const runId = uniqueId("ai-run");
+    const generatedAt = new Date().toISOString();
     const summary = {
       searchedCount: plan.selectedTransactionCount,
       uniqueRequestCount: plan.groups.length,
       matchedRecordCount: 0,
       categoryUpdatedCount: 0,
-      vendorUpdatedCount: vendorRuleUpdates,
+      vendorUpdatedCount: 0,
       merchantUpdatedCount: 0,
       notesUpdatedCount: 0,
-      descriptionUpdatedCount: 0,
       reviewStatusUpdatedCount: 0
     };
     (body.results || []).forEach((result) => {
       const group = groupsById.get(result.id);
       if (!group) return;
       group.transactions.forEach((tx) => {
-        const before = {
-          category: tx.category || "",
-          vendor: tx.vendor || "",
-          merchant: tx.merchant || "",
-          notes: tx.notes || "",
-          description: tx.description || "",
-          needsReview: Boolean(tx.needsReview)
-        };
-        applyAiAnalysisToTransaction(tx, result, updateFields);
+        const staged = stageAiPendingUpdate(tx, result, updateFields, { runId, generatedAt, model: body.model || AI_ANALYSIS_MODEL });
+        if (!staged) return;
         summary.matchedRecordCount += 1;
-        if ((tx.category || "") !== before.category) summary.categoryUpdatedCount += 1;
-        if ((tx.vendor || "") !== before.vendor) summary.vendorUpdatedCount += 1;
-        if ((tx.merchant || "") !== before.merchant) summary.merchantUpdatedCount += 1;
-        if ((tx.notes || "") !== before.notes) summary.notesUpdatedCount += 1;
-        if ((tx.description || "") !== before.description) summary.descriptionUpdatedCount += 1;
-        if (Boolean(tx.needsReview) !== before.needsReview) summary.reviewStatusUpdatedCount += 1;
+        if (staged.changedFields.includes("category")) summary.categoryUpdatedCount += 1;
+        if (staged.changedFields.includes("vendor")) summary.vendorUpdatedCount += 1;
+        if (staged.changedFields.includes("merchant")) summary.merchantUpdatedCount += 1;
+        if (staged.changedFields.includes("notes")) summary.notesUpdatedCount += 1;
+        if (staged.reviewStatusChanged) summary.reviewStatusUpdatedCount += 1;
       });
     });
     const actualCost = body.cost?.totalCost ? formatUsd(body.cost.totalCost) : formatUsd(plan.estimatedCost);
     clearAiAnalysisStatus();
-    finalStatusMessage = `${aiAnalysisSummaryText(summary, actualCost)} Model: ${body.model || AI_ANALYSIS_MODEL}.`;
-    setAiAnalysisLastResult("success", "AI analysis complete", finalStatusMessage);
-    renderAll();
+    state.filters.aiStatus = "pending";
+    resetTransactionRowsShown();
+    finalStatusMessage = `${aiAnalysisSummaryText(summary, actualCost)} Review and approve selected rows to save them. Model: ${body.model || AI_ANALYSIS_MODEL}.`;
+    setAiAnalysisLastResult("success", "AI proposals ready", finalStatusMessage);
+    renderAll({ save: false });
     uiRestored = true;
   } catch (error) {
     finalStatusMessage = `AI analysis failed: ${error.message}`;
@@ -2258,7 +2380,7 @@ async function runAiAnalyzeTransactions(root) {
     clearAiAnalysisStatus();
     if (!uiRestored) renderTransactions();
     const button = document.getElementById("aiAnalyzeButton") || root.querySelector("#aiAnalyzeButton");
-    if (button) button.disabled = !buildAiAnalysisPlan(filteredTransactions()).groups.length;
+    if (button) button.disabled = !buildAiAnalysisPlan(filteredTransactions()).groups.length || !aiSelectedUpdateFields().length;
     if (finalStatusMessage) showStatus(finalStatusMessage);
   }
 }
@@ -2301,7 +2423,7 @@ function transactionVendor(tx) {
 function filtersHtml() {
   const cats = categoryOptions(state.filters.category || "");
   const accounts = [`<option value="">All accounts</option>`, ...state.accounts.map((a) => `<option value="${a.id}" ${state.filters.account === a.id ? "selected" : ""}>${escapeHtml(a.name)}</option>`)].join("");
-  const activeFilterCount = ["search", "start", "end", "month", "account", "category", "merchant", "vendor", "type", "flow"].filter((key) => Boolean(state.filters[key])).length + (state.filters.hideCredits ? 1 : 0);
+  const activeFilterCount = ["search", "start", "end", "month", "account", "category", "merchant", "vendor", "type", "flow", "aiStatus"].filter((key) => Boolean(state.filters[key])).length + (state.filters.hideCredits ? 1 : 0);
   return `
     <div class="filters-card">
       <div class="filters-header">
@@ -2322,6 +2444,7 @@ function filtersHtml() {
         <div class="field"><label for="filterVendor">Vendor</label><input id="filterVendor" value="${escapeAttr(state.filters.vendor || "")}" placeholder="Vendor"></div>
         <div class="field"><label for="filterType">Type</label><select id="filterType"><option value="">Any</option>${["income", "expense", "transfer", "uncategorized", "review"].map((t) => `<option value="${t}" ${state.filters.type === t ? "selected" : ""}>${label(t)}</option>`).join("")}</select></div>
         <div class="field"><label for="filterFlow">Flow</label><select id="filterFlow"><option value="">Any flow</option>${["external_income", "external_expense", "internal", "credit_card_payment", "unmatched", "ambiguous", "review"].map((t) => `<option value="${t}" ${state.filters.flow === t ? "selected" : ""}>${escapeHtml(label(t.replace(/_/g, " ")))}</option>`).join("")}</select></div>
+        <div class="field"><label for="filterAiStatus">AI status</label><select id="filterAiStatus"><option value="">Any AI status</option><option value="pending" ${state.filters.aiStatus === "pending" ? "selected" : ""}>Pending AI approval</option><option value="modified" ${state.filters.aiStatus === "modified" ? "selected" : ""}>AI-influenced approved</option></select></div>
         <label class="field checkbox-field"><span>Hide Credits from Transactions</span><input id="filterHideCredits" type="checkbox" ${state.filters.hideCredits ? "checked" : ""}></label>
       </div>
     </div>
@@ -2329,11 +2452,12 @@ function filtersHtml() {
 }
 
 function bindFilters() {
-  ["Search", "Start", "End", "Month", "Account", "Category", "Merchant", "Vendor", "Type", "Flow"].forEach((name) => {
+  ["Search", "Start", "End", "Month", "Account", "Category", "Merchant", "Vendor", "Type", "Flow", "AiStatus"].forEach((name) => {
     const el = document.getElementById(`filter${name}`);
     if (!el) return;
     el.addEventListener("input", () => {
-      state.filters[name.toLowerCase()] = el.value;
+      const key = name === "AiStatus" ? "aiStatus" : name.toLowerCase();
+      state.filters[key] = el.value;
       resetTransactionRowsShown();
       renderTransactions();
     });
@@ -2352,6 +2476,116 @@ function resetTransactionRowsShown() {
   transactionRowsShown = TRANSACTION_TABLE_BATCH_SIZE;
 }
 
+function aiPendingApprovalBanner(count) {
+  return `
+    <div class="ai-approval-banner" role="status">
+      <div><strong>${plural(count, "AI proposal")}</strong><p>AI-updated transactions are waiting for human approval before they are saved permanently.</p></div>
+      <button class="btn btn-secondary" data-ai-pending-filter type="button">Review Pending AI Updates</button>
+    </div>
+  `;
+}
+
+function aiPendingApprovalView(rows) {
+  const pendingRows = rows.filter(isAiPendingApprovalTransaction).sort((a, b) => (b.aiPendingUpdate?.generatedAt || "").localeCompare(a.aiPendingUpdate?.generatedAt || "") || (b.date || "").localeCompare(a.date || ""));
+  if (!pendingRows.length) return `<div class="empty-state">No AI-updated transactions are currently awaiting approval.</div>`;
+  return `
+    <div class="ai-approval-panel">
+      <div class="ai-approval-toolbar">
+        <label class="checkbox-field ai-approval-select-all"><span>Select all pending proposals</span><input id="aiApprovalSelectAll" type="checkbox"></label>
+        <button id="approveAiSelectedButton" class="btn btn-primary" type="button" disabled>Approve Selected</button>
+        <p>${plural(pendingRows.length, "transaction")} awaiting review. This list includes all pending AI proposals regardless of other ledger filters. Approving saves selected proposals to Firestore and reverts every unselected proposal.</p>
+      </div>
+      <div class="table-wrap ai-approval-table-wrap" tabindex="0" aria-label="Scrollable AI approval table">
+        <table class="ai-approval-table">
+          <thead><tr><th>Select</th><th>Transaction</th><th>Amount</th><th>AI proposal</th><th>Reason</th></tr></thead>
+          <tbody>${pendingRows.map(aiPendingApprovalRow).join("")}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function aiPendingApprovalRow(tx) {
+  const pending = tx.aiPendingUpdate || {};
+  return `<tr data-ai-approval-id="${escapeAttr(tx.id)}">
+    <td class="ai-approval-select-cell"><input class="ai-approval-select" type="checkbox" value="${escapeAttr(tx.id)}" aria-label="Approve AI update for ${escapeAttr(tx.merchant || tx.description)}"></td>
+    <td><strong>${escapeHtml(tx.merchant || tx.description)}</strong><small>${escapeHtml(tx.date || "")} · ${escapeHtml(accountName(tx.accountId))}</small><p>${escapeHtml(tx.description || "")}</p></td>
+    <td class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</td>
+    <td>${aiPendingChangeListHtml(tx)}</td>
+    <td><span class="tag warn">Pending approval</span><p>${escapeHtml(pending.reason || "AI proposed updates for this transaction.")}</p><small>${escapeHtml((pending.updateFields || []).map((field) => aiUpdateFieldLabel(field)).join(", "))}</small></td>
+  </tr>`;
+}
+
+function aiPendingChangeListHtml(tx) {
+  const pending = tx.aiPendingUpdate || {};
+  const fields = Array.isArray(pending.changedFields) && pending.changedFields.length ? pending.changedFields : pending.updateFields || [];
+  const rows = fields.map((field) => {
+    const before = aiApprovalDisplayValue(field, pending.original?.[field]);
+    const after = aiApprovalDisplayValue(field, pending.proposed?.[field]);
+    return `<div class="ai-change-row"><span>${escapeHtml(aiUpdateFieldLabel(field))}</span><strong>${escapeHtml(before || "Blank")} → ${escapeHtml(after || "Blank")}</strong></div>`;
+  }).join("");
+  return `<div class="ai-change-list">${rows || `<div class="ai-change-row"><span>AI review</span><strong>No field-level change detected</strong></div>`}</div>`;
+}
+
+function aiApprovalDisplayValue(field, value) {
+  if (field === "confidence" && value !== undefined && value !== "") return `${Math.round(Number(value || 0))}%`;
+  if (Array.isArray(value)) return value.join(", ");
+  return sanitize(value || "").slice(0, 120);
+}
+
+function aiUpdateFieldLabel(field) {
+  return AI_UPDATE_FIELD_OPTIONS.find((item) => item.key === field)?.label || label(String(field || "").replace(/_/g, " "));
+}
+
+function bindAiApprovalControls(root) {
+  root.querySelector("[data-ai-pending-filter]")?.addEventListener("click", () => {
+    state.filters.aiStatus = "pending";
+    resetTransactionRowsShown();
+    renderTransactions();
+  });
+  const selectAll = root.querySelector("#aiApprovalSelectAll");
+  const approveButton = root.querySelector("#approveAiSelectedButton");
+  const checkboxes = Array.from(root.querySelectorAll(".ai-approval-select"));
+  const refresh = () => {
+    const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+    if (approveButton) approveButton.disabled = selectedCount === 0;
+    if (selectAll) selectAll.checked = selectedCount > 0 && selectedCount === checkboxes.length;
+  };
+  selectAll?.addEventListener("change", () => {
+    checkboxes.forEach((checkbox) => { checkbox.checked = selectAll.checked; });
+    refresh();
+  });
+  checkboxes.forEach((checkbox) => checkbox.addEventListener("change", refresh));
+  approveButton?.addEventListener("click", () => approveSelectedAiUpdates(root));
+}
+
+async function approveSelectedAiUpdates(root) {
+  const selectedIds = new Set(Array.from(root.querySelectorAll(".ai-approval-select:checked")).map((checkbox) => checkbox.value));
+  if (!selectedIds.size) return showStatus("Select at least one AI proposal to approve.");
+  const pendingRows = aiPendingApprovalTransactions();
+  const revertedCount = Math.max(0, pendingRows.length - selectedIds.size);
+  const confirmation = [
+    "Approve AI Updates?",
+    "",
+    `Selected approvals: ${selectedIds.size}`,
+    `Unselected proposals reverted: ${revertedCount}`,
+    "Approved transactions will be saved to the permanent database with an ai_modified audit flag.",
+    "",
+    "Continue?"
+  ].join("\n");
+  if (!window.confirm(confirmation)) return;
+  let approvedCount = 0;
+  pendingRows.forEach((tx) => {
+    if (selectedIds.has(tx.id)) {
+      approveAiPendingUpdate(tx);
+      approvedCount += 1;
+    } else revertAiPendingUpdate(tx);
+  });
+  renderAll({ save: false });
+  const saved = await saveStateImmediately();
+  showStatus(`${plural(approvedCount, "AI update")} approved and ${plural(revertedCount, "proposal")} reverted.${saved ? " Changes saved." : " Changes remain local until the next successful save."}`);
+}
+
 function transactionTable(rows, totalRows = rows.length) {
   const remaining = Math.max(0, totalRows - rows.length);
   const table = `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant, vendor & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Flow</th><th>Confidence</th><th>Type</th><th>Notes</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
@@ -2368,7 +2602,8 @@ function transactionRow(tx) {
   const vendorInput = shouldShowVendor(tx.merchant, vendor) ? `<input class="vendor-input" data-field="vendor" aria-label="Detected vendor" value="${escapeAttr(vendor)}" placeholder="Vendor">` : "";
   const source = tx.source || "Imported";
   const reviewTag = tx.needsReview ? `<span class="tag warn">Needs review</span>` : "";
-  const flagTags = (tx.flags || []).slice(0, 3).map((flag) => `<span class="tag subtle">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join("");
+  const aiTag = isAiPendingApprovalTransaction(tx) ? `<span class="tag warn">AI pending approval</span>` : isAiInfluencedTransaction(tx) ? `<span class="tag subtle">AI modified</span>` : "";
+  const flagTags = (tx.flags || []).filter((flag) => flag !== AI_AUDIT_FLAG).slice(0, 3).map((flag) => `<span class="tag subtle">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join("");
   const splitTag = splitStatusTag(tx);
   const typeOptions = ["expense", "income", "transfer"].map((option) => `<option value="${option}" ${type === option ? "selected" : ""}>${label(option)}</option>`).join("");
   const internalActive = isInternalFlow(tx);
@@ -2384,7 +2619,7 @@ function transactionRow(tx) {
           <p>${escapeHtml(tx.description)}</p>
         </div>
       </div>
-      <div class="tx-tag-row">${reviewTag}${splitTag}${flagTags}</div>
+      <div class="tx-tag-row">${reviewTag}${aiTag}${splitTag}${flagTags}</div>
     </td>
     <td class="account-cell" data-label="Account"><span class="account-pill">${escapeHtml(accountName(tx.accountId))}</span></td>
     <td class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}" data-label="Amount"><span>${money(tx.amount)}</span><small>${tx.amount >= 0 ? "Money in" : "Money out"}</small></td>
@@ -2646,6 +2881,7 @@ function saveTransactionRow(tr) {
   tx.vendor = hasVendorInput ? transactionVendor(tx) : sanitize(tx.merchant || "");
   if (tx.category === "Income" || isTransferCategory(tx.category)) tx.type = typeForCategory(tx.category, tx.amount);
   if (selectedType === "income" || selectedType === "expense") tx.importDirection = "";
+  clearAiPendingUpdate(tx);
   normalizeTransactionAmountSign(tx);
   if (previousCategory !== tx.category && tx.flowSource !== "user") {
     tx.flowType = deriveTransactionFlowType(tx);
@@ -2756,7 +2992,7 @@ function reviewCard(tx) {
   const reviewReasons = reviewReasonsForTransaction(tx);
   const reasonSet = new Set(reviewReasons);
   const reasonTags = reviewReasons.map((reason) => `<span class="tag subtle">${escapeHtml(reviewReasonLabel(reason))}</span>`).join(" ");
-  const flagTags = (tx.flags || []).filter((flag) => !reasonSet.has(flag)).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ");
+  const flagTags = reviewableTransactionFlags(tx).filter((flag) => !reasonSet.has(flag)).map((flag) => `<span class="tag warn">${escapeHtml(flag.replace(/_/g, " "))}</span>`).join(" ");
   return `<article class="review-card panel" data-id="${tx.id}">
     <input type="checkbox" class="review-select" aria-label="Select transaction">
     <div class="review-details"><strong>${escapeHtml(tx.merchant || tx.description)}</strong><p>${escapeHtml(tx.date)} · ${escapeHtml(accountName(tx.accountId))} · <span class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}">${money(tx.amount)}</span></p><p>${escapeHtml(tx.description)}</p><p><span class="tag subtle">Vendor: ${escapeHtml(transactionVendor(tx))}</span> ${splitStatusTag(tx)}</p><p>${flowStatusHtml(tx)}</p>${splitReviewHtml(tx)}<p>${reasonTags} ${flagTags}</p></div>
@@ -4207,7 +4443,8 @@ function filteredTransactions() {
   return state.transactions.filter((tx) => {
     const f = state.filters;
     const splitText = (tx.splits || []).map((split) => `${split.description} ${split.category} ${split.merchant}`).join(" ");
-    const haystack = `${tx.description} ${tx.merchant} ${tx.vendor || ""} ${splitText}`.toLowerCase();
+    const aiText = `${(tx.flags || []).join(" ")} ${tx.aiAudit?.designator || ""} ${tx.aiAudit?.status || ""} ${tx.aiAudit?.runId || ""}`;
+    const haystack = `${tx.description} ${tx.merchant} ${tx.vendor || ""} ${splitText} ${aiText}`.toLowerCase();
     if (f.search && !haystack.includes(f.search.toLowerCase())) return false;
     if (f.start && tx.date < f.start) return false;
     if (f.end && tx.date > f.end) return false;
@@ -4225,6 +4462,8 @@ function filteredTransactions() {
     if (f.flow === "unmatched" && tx.transferStatus !== "unmatched") return false;
     if (f.flow === "ambiguous" && tx.transferStatus !== "ambiguous") return false;
     if (["external_income", "external_expense", "credit_card_payment"].includes(f.flow) && tx.flowType !== f.flow) return false;
+    if (f.aiStatus === "pending" && !isAiPendingApprovalTransaction(tx)) return false;
+    if (f.aiStatus === "modified" && !isAiInfluencedTransaction(tx)) return false;
     return true;
   }).sort((a, b) => b.date.localeCompare(a.date));
 }
@@ -4233,7 +4472,7 @@ function reviewQueue(applyReasonFilters = true) {
   const recurringMerchants = new Set(state.recurring.filter((item) => item.status === "suggested").map((item) => item.merchant));
   const selectedReasons = applyReasonFilters ? reviewReasonFilterSet() : new Set();
   return state.transactions.filter((tx) => {
-    if (!(tx.needsReview || tx.reportingType === "review" || tx.splitStatus === "needs_split_review" || tx.category === "Uncategorized" || tx.flags?.length || recurringMerchants.has(tx.merchant))) return false;
+    if (!(tx.needsReview || tx.reportingType === "review" || tx.splitStatus === "needs_split_review" || tx.category === "Uncategorized" || reviewableTransactionFlags(tx).length || recurringMerchants.has(tx.merchant))) return false;
     if (!selectedReasons.size) return true;
     const reasons = reviewReasonsForTransaction(tx, recurringMerchants);
     return reasons.some((reason) => selectedReasons.has(reason));
@@ -4255,7 +4494,7 @@ function reviewReasonCounts() {
 
 function reviewReasonsForTransaction(tx, recurringMerchants = null) {
   const reasons = [];
-  const flags = new Set(tx.flags || []);
+  const flags = new Set(reviewableTransactionFlags(tx));
   if (tx.category === "Uncategorized" || flags.has("uncategorized")) reasons.push("uncategorized");
   if (flags.has("low_confidence") || (tx.needsReview && tx.category !== "Uncategorized" && Number(tx.confidence || 0) < Number(state.profile.confidenceThreshold || 78))) reasons.push("low_confidence");
   if (flags.has("possible_transfer") || tx.transferStatus === "unmatched" || tx.transferStatus === "ambiguous") reasons.push("possible_transfer");
@@ -4266,6 +4505,10 @@ function reviewReasonsForTransaction(tx, recurringMerchants = null) {
   if (tx.reportingType === "review") reasons.push("flow_review");
   if (!reasons.length && (tx.needsReview || flags.size)) reasons.push("other");
   return Array.from(new Set(reasons));
+}
+
+function reviewableTransactionFlags(tx) {
+  return (tx.flags || []).filter((flag) => flag !== AI_AUDIT_FLAG);
 }
 
 function reviewReasonLabel(key) {

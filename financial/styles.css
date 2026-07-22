@@ -1666,6 +1666,114 @@ body.import-overlay-open {
   padding: 0 0.35rem;
 }
 
+.ai-approval-banner,
+.ai-approval-toolbar {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.94), rgba(255, 255, 255, 0.9));
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  border-radius: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  justify-content: space-between;
+  margin: 1rem 0;
+  padding: 0.9rem;
+}
+
+.ai-approval-banner strong,
+.ai-approval-toolbar strong {
+  color: var(--financial-ink);
+}
+
+.ai-approval-banner p,
+.ai-approval-toolbar p {
+  color: var(--muted);
+  font-weight: 700;
+  margin: 0.15rem 0 0;
+}
+
+.ai-approval-panel {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.ai-approval-select-all {
+  margin: 0;
+}
+
+.ai-approval-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 920px;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.ai-approval-table th,
+.ai-approval-table td {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+  padding: 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.ai-approval-table thead th {
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  color: #92400e;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 2;
+}
+
+.ai-approval-table th:first-child,
+.ai-approval-select-cell {
+  text-align: center;
+  width: 82px;
+}
+
+.ai-approval-table td strong,
+.ai-approval-table td small,
+.ai-approval-table td p {
+  display: block;
+}
+
+.ai-approval-table td small,
+.ai-approval-table td p {
+  color: var(--muted);
+  margin: 0.24rem 0 0;
+}
+
+.ai-change-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.ai-change-row {
+  background: rgba(239, 246, 255, 0.72);
+  border: 1px solid rgba(191, 219, 254, 0.8);
+  border-radius: 12px;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.55rem;
+}
+
+.ai-change-row span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ai-change-row strong {
+  color: var(--financial-ink);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
 .ai-web-lookup {
   align-self: end;
 }
@@ -3682,6 +3790,38 @@ summary.category-tree-summary::-webkit-details-marker {
 
 .financial-dark .ai-estimate-grid strong {
   color: #93c5fd;
+}
+
+.financial-dark .ai-approval-banner,
+.financial-dark .ai-approval-toolbar,
+.financial-dark .ai-change-row {
+  background: rgba(30, 41, 59, 0.86);
+  border-color: rgba(245, 158, 11, 0.34);
+  color: #e5eefb;
+}
+
+.financial-dark .ai-approval-banner strong,
+.financial-dark .ai-change-row strong,
+.financial-dark .ai-approval-table td strong {
+  color: #f8fafc;
+}
+
+.financial-dark .ai-approval-banner p,
+.financial-dark .ai-approval-toolbar p,
+.financial-dark .ai-approval-table td small,
+.financial-dark .ai-approval-table td p,
+.financial-dark .ai-change-row span {
+  color: #b6c3d8;
+}
+
+.financial-dark .ai-approval-table thead th {
+  background: linear-gradient(180deg, rgba(69, 26, 3, 0.96), rgba(120, 53, 15, 0.92));
+  color: #fde68a;
+}
+
+.financial-dark .ai-approval-table th,
+.financial-dark .ai-approval-table td {
+  border-bottom-color: rgba(148, 163, 184, 0.22);
 }
 
 .financial-dark .chart-card,
