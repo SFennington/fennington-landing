@@ -1937,6 +1937,18 @@ td select {
   transform: translateY(-1px);
 }
 
+.row-action-buttons .flow-toggle.active {
+  background: linear-gradient(135deg, #0f766e, #10b981);
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(16, 185, 129, 0.22);
+  color: #fff;
+}
+
+.row-action-buttons .flow-toggle.active:hover {
+  background: linear-gradient(135deg, #115e59, #059669);
+  color: #fff;
+}
+
 @media (max-width: 1280px) {
   .transaction-insights {
     grid-template-columns: repeat(2, minmax(240px, 1fr));
@@ -2742,6 +2754,12 @@ summary.category-tree-summary::-webkit-details-marker {
   background: rgba(127, 29, 29, 0.32);
   border-color: rgba(248, 113, 113, 0.42);
   color: #fecaca;
+}
+
+.financial-dark .row-action-buttons .flow-toggle.active {
+  background: linear-gradient(135deg, #0f766e, #10b981);
+  border-color: transparent;
+  color: #fff;
 }
 
 .financial-dark .review-reason-filter {
