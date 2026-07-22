@@ -1521,6 +1521,23 @@ body.import-overlay-open {
   margin-top: 0.9rem;
 }
 
+.ai-update-fields {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin: 0.9rem 0 0;
+  padding: 0.8rem;
+}
+
+.ai-update-fields legend {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 0 0.35rem;
+}
+
 .ai-web-lookup {
   align-self: end;
 }

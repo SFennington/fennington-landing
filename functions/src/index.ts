@@ -717,15 +717,18 @@ function keywordFinancialCategorize(item: any, allowedCategories = FINANCIAL_CAT
     category,
     confidence: matched?.confidence || 35,
     suggestedDescription: vendor,
+    notes: matched ? `Matched ${category} from conservative keyword rules.` : "Manual review recommended.",
     reason: matched ? "Matched conservative server-side keyword rules." : "No server-side keyword rule matched; manual review recommended.",
     sourceUrls: [],
     source: "server_keyword"
   };
 }
 
-async function aiFinancialCategorize(transactions: any[], categories: string[], options: { webLookupEnabled?: boolean } = {}) {
+async function aiFinancialCategorize(transactions: any[], categories: string[], options: { webLookupEnabled?: boolean; updateFields?: string[] } = {}) {
   const apiKey = openAiApiKeyValue();
   if (!apiKey) return null;
+  const validUpdateFields = new Set(["category", "merchant", "vendor", "notes"]);
+  const updateFields: string[] = Array.isArray(options.updateFields) ? Array.from(new Set(options.updateFields.map((field) => safeString(field)).filter((field): field is string => validUpdateFields.has(field)))) : ["category", "merchant", "vendor", "notes"];
   const minimalTransactions = transactions.slice(0, FINANCIAL_AI_MAX_TRANSACTIONS).map((item) => ({
     id: safeString(item?.id),
     description: safeString(item?.description),
@@ -762,10 +765,11 @@ async function aiFinancialCategorize(transactions: any[], categories: string[], 
                   category: { type: "string", enum: allowedCategories },
                   confidence: { type: "number", minimum: 0, maximum: 100 },
                   suggestedDescription: { type: "string" },
+                  notes: { type: "string" },
                   reason: { type: "string" },
                   sourceUrls: { type: "array", items: { type: "string" }, maxItems: 3 }
                 },
-                required: ["id", "displayName", "vendor", "category", "confidence", "suggestedDescription", "reason", "sourceUrls"]
+                required: ["id", "displayName", "vendor", "category", "confidence", "suggestedDescription", "notes", "reason", "sourceUrls"]
               }
             }
           },
@@ -776,11 +780,11 @@ async function aiFinancialCategorize(transactions: any[], categories: string[], 
     input: [
       {
         role: "system",
-        content: "You clean and categorize personal finance transactions. Return only JSON that matches the schema. For each transaction, create a short recognizable displayName, detect the real vendor, choose exactly one allowed category, and explain the decision. Use description, currentMerchant, currentVendor, amount, date, and duplicate count. Treat payment processors such as PayPal, Venmo, Cash App, Square, Stripe, Apple Pay, and Google Pay as processors, not vendors, when the description contains a more specific seller token or name. In PayPal descriptions like PAYPAL *SELLER 4029357733, the real vendor is the token after PAYPAL *. Use Transfers for likely account movements and credit-card payments, but do not assume the final money-flow treatment; local account-aware reconciliation decides whether a transfer is internal, matched, single-sided, or reportable. Use Credits to the Account for credit-card credits/payments. Use Uncategorized when uncertain. Do not invent product details. If web search is available, use it only for low-confidence purchases with enough vendor/description context; never search by price alone."
+        content: "You clean and categorize personal finance transactions. Return only JSON that matches the schema. The selected updateFields indicate which fields the user wants applied locally, but still populate every schema field with your best analysis. For category updates, choose exactly one category from the provided List of Categories and never invent a category. For merchant updates, create a short recognizable displayName. For vendor updates, detect the real vendor. For notes updates, write one concise transaction note suitable for a notes field. Explain the decision in reason. Use description, currentMerchant, currentVendor, amount, date, and duplicate count. Treat payment processors such as PayPal, Venmo, Cash App, Square, Stripe, Apple Pay, and Google Pay as processors, not vendors, when the description contains a more specific seller token or name. In PayPal descriptions like PAYPAL *SELLER 4029357733, the real vendor is the token after PAYPAL *. Use Transfers for likely account movements and credit-card payments, but do not assume the final money-flow treatment; local account-aware reconciliation decides whether a transfer is internal, matched, single-sided, or reportable. Use Credits to the Account for credit-card credits/payments. Use Uncategorized when uncertain. Do not invent product details. If web search is available, use it only for low-confidence purchases with enough vendor/description context; never search by price alone."
       },
       {
         role: "user",
-        content: JSON.stringify({ categories: allowedCategories, webLookupEnabled: Boolean(options.webLookupEnabled), transactions: minimalTransactions })
+        content: JSON.stringify({ updateFields, "List of Categories": allowedCategories, categories: allowedCategories, webLookupEnabled: Boolean(options.webLookupEnabled), transactions: minimalTransactions })
       }
     ]
   };
@@ -812,6 +816,7 @@ async function aiFinancialCategorize(transactions: any[], categories: string[], 
         category: allowedCategories.includes(safeString(result?.category)) ? safeString(result?.category) : "Uncategorized",
         confidence: Math.max(0, Math.min(100, Number(result?.confidence || 0))),
         suggestedDescription: safeString(result?.suggestedDescription || displayName || vendor),
+        notes: safeString(result?.notes || result?.reason || ""),
         reason: safeString(result?.reason || "AI categorization based on supplied transaction fields."),
         sourceUrls: Array.isArray(result?.sourceUrls) ? result.sourceUrls.slice(0, 3).map((url: unknown) => safeString(url)).filter(Boolean) : [],
         source: webSearchCalls ? "ai_web" : "ai"
@@ -1079,6 +1084,8 @@ apiApp.post("/financial/categorize", asyncRoute(async (req, res) => {
   const transactions = Array.isArray(req.body?.transactions) ? req.body.transactions.slice(0, FINANCIAL_AI_MAX_TRANSACTIONS) : [];
   const categories = Array.isArray(req.body?.categories) ? req.body.categories.map((category: unknown) => safeString(category)).filter(Boolean) : FINANCIAL_CATEGORIES;
   const webLookupEnabled = req.body?.webLookupEnabled === true;
+  const validUpdateFields = new Set(["category", "merchant", "vendor", "notes"]);
+  const updateFields: string[] = Array.isArray(req.body?.updateFields) ? Array.from(new Set(req.body.updateFields.map((field: unknown) => safeString(field)).filter((field: string): field is string => validUpdateFields.has(field)))) : ["category", "merchant", "vendor", "notes"];
   const requireAi = req.body?.requireAi !== false;
   if (!transactions.length) throw Object.assign(new Error("At least one transaction is required."), { statusCode: 400 });
   const safeTransactions = transactions.map((item: any) => ({
@@ -1099,7 +1106,7 @@ apiApp.post("/financial/categorize", asyncRoute(async (req, res) => {
   let cost = estimateFinancialCost(0, 0, 0);
   let webSearchCalls = 0;
   try {
-    const aiResult = await aiFinancialCategorize(safeTransactions, categories, { webLookupEnabled });
+    const aiResult = await aiFinancialCategorize(safeTransactions, categories, { webLookupEnabled, updateFields });
     if (aiResult?.results?.length) {
       const aiById = new Map(aiResult.results.map((item: any) => [item.id, item]));
       results = results.map((fallback: any) => aiById.get(fallback.id) || fallback);

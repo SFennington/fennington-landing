@@ -31,6 +31,12 @@ const AI_OUTPUT_PRICE_PER_1M = 1.25;
 const AI_WEB_SEARCH_PRICE_PER_1K = 10;
 const AI_DEFAULT_BATCH_LIMIT = 50;
 const AI_MAX_BATCH_LIMIT = 100;
+const AI_UPDATE_FIELD_OPTIONS = [
+  { key: "category", label: "Category" },
+  { key: "merchant", label: "Merchant" },
+  { key: "vendor", label: "Vendor" },
+  { key: "notes", label: "Notes" }
+];
 const REVIEW_REASON_DEFINITIONS = [
   { key: "uncategorized", label: "Uncategorized" },
   { key: "low_confidence", label: "Low confidence" },
@@ -1784,6 +1790,7 @@ function aiAnalysisPanelHtml(rows) {
   const scope = state.filters.aiScope || "review";
   const limit = aiBatchLimit();
   const webLookup = state.filters.aiWebLookup === true;
+  const selectedFields = aiSelectedUpdateFields();
   const status = aiAnalysisStatusHtml();
   const result = aiAnalysisLastResultHtml();
   return `
@@ -1796,7 +1803,7 @@ function aiAnalysisPanelHtml(rows) {
         </div>
         <div class="form-actions">
           <button id="rerunRulesButton" class="btn btn-secondary" type="button" ${!plan.eligibleCount || aiAnalysisRunning ? "disabled" : ""}>Re Run Rules</button>
-          <button id="aiAnalyzeButton" class="btn btn-primary" type="button" ${!plan.groups.length || aiAnalysisRunning ? "disabled" : ""}>${aiAnalysisRunning ? "Analyzing..." : "Analyze Transactions"}</button>
+          <button id="aiAnalyzeButton" class="btn btn-primary" type="button" ${!plan.groups.length || !selectedFields.length || aiAnalysisRunning ? "disabled" : ""}>${aiAnalysisRunning ? "Analyzing..." : "Analyze Transactions"}</button>
         </div>
       </div>
       <div class="ai-analysis-controls">
@@ -1804,6 +1811,10 @@ function aiAnalysisPanelHtml(rows) {
         <div class="field"><label for="aiAnalyzeLimit">Max unique AI requests</label><input id="aiAnalyzeLimit" type="number" min="1" max="${AI_MAX_BATCH_LIMIT}" step="1" value="${escapeAttr(limit)}"></div>
         <label class="field checkbox-field ai-web-lookup"><span>Use web lookup fallback</span><input id="aiWebLookup" type="checkbox" ${webLookup ? "checked" : ""}></label>
       </div>
+      <fieldset class="ai-update-fields" aria-label="Fields AI can update">
+        <legend>Fields AI can update</legend>
+        ${AI_UPDATE_FIELD_OPTIONS.map((field) => `<label class="checkbox-field"><span>${escapeHtml(field.label)}</span><input class="ai-update-field" type="checkbox" value="${escapeAttr(field.key)}" ${selectedFields.includes(field.key) ? "checked" : ""}></label>`).join("")}
+      </fieldset>
       <div id="aiAnalysisEstimate" class="ai-analysis-estimate">${aiAnalysisEstimateHtml(plan)}</div>
       ${status}
       ${result}
@@ -1815,26 +1826,41 @@ function bindAiAnalysisControls(root) {
   const scope = root.querySelector("#aiAnalyzeScope");
   const limit = root.querySelector("#aiAnalyzeLimit");
   const webLookup = root.querySelector("#aiWebLookup");
+  const updateFields = Array.from(root.querySelectorAll(".ai-update-field"));
   const estimate = root.querySelector("#aiAnalysisEstimate");
   const updateEstimate = () => {
     state.filters.aiScope = scope?.value || "review";
     state.filters.aiLimit = aiBatchLimit(limit?.value);
     state.filters.aiWebLookup = Boolean(webLookup?.checked);
+    state.filters.aiUpdateFields = updateFields.filter((input) => input.checked).map((input) => input.value);
     if (estimate) estimate.innerHTML = aiAnalysisEstimateHtml(buildAiAnalysisPlan(filteredTransactions()));
     const button = root.querySelector("#aiAnalyzeButton");
-    if (button) button.disabled = !buildAiAnalysisPlan(filteredTransactions()).groups.length || aiAnalysisRunning;
+    if (button) button.disabled = !buildAiAnalysisPlan(filteredTransactions()).groups.length || !aiSelectedUpdateFields().length || aiAnalysisRunning;
     const rerunButton = root.querySelector("#rerunRulesButton");
     if (rerunButton) rerunButton.disabled = !buildAiAnalysisPlan(filteredTransactions()).eligibleCount || aiAnalysisRunning;
   };
   scope?.addEventListener("change", updateEstimate);
   limit?.addEventListener("input", updateEstimate);
   webLookup?.addEventListener("change", updateEstimate);
+  updateFields.forEach((input) => input.addEventListener("change", updateEstimate));
   root.querySelector("#rerunRulesButton")?.addEventListener("click", () => rerunRulesForTransactions());
   root.querySelector("#aiAnalyzeButton")?.addEventListener("click", () => runAiAnalyzeTransactions(root));
 }
 
+function aiSelectedUpdateFields() {
+  const saved = Array.isArray(state.filters.aiUpdateFields) ? state.filters.aiUpdateFields : AI_UPDATE_FIELD_OPTIONS.map((field) => field.key);
+  const valid = new Set(AI_UPDATE_FIELD_OPTIONS.map((field) => field.key));
+  return Array.from(new Set(saved.filter((field) => valid.has(field))));
+}
+
+function aiSelectedUpdateFieldLabels(fields = aiSelectedUpdateFields()) {
+  const labels = new Map(AI_UPDATE_FIELD_OPTIONS.map((field) => [field.key, field.label]));
+  return fields.map((field) => labels.get(field) || field).join(", ");
+}
+
 function aiAnalysisEstimateHtml(plan) {
   const webLookupText = plan.webLookupEnabled ? `Web lookup worst-case estimate: ${formatUsd(plan.webLookupEstimate)}.` : "Web lookup fallback is disabled.";
+  const updateFields = aiSelectedUpdateFields();
   return `
     <div class="ai-estimate-grid">
       <span><strong>${plan.selectedTransactionCount}</strong> transactions selected</span>
@@ -1842,6 +1868,7 @@ function aiAnalysisEstimateHtml(plan) {
       <span><strong>${plan.skippedCategorizedCount}</strong> already categorized skipped</span>
       <span><strong>${plan.skippedByLimitCount}</strong> deferred by limit</span>
     </div>
+    <p>AI will update: <strong>${escapeHtml(aiSelectedUpdateFieldLabels(updateFields) || "No fields selected")}</strong>.</p>
     <p>Estimated tokens: ${plan.estimatedInputTokens.toLocaleString()} input, ${plan.estimatedOutputTokens.toLocaleString()} output. Estimated AI cost: <strong>${formatUsd(plan.estimatedCost)}</strong>. ${webLookupText}</p>
   `;
 }
@@ -1954,6 +1981,7 @@ function buildAiAnalysisPlan(rows = filteredTransactions()) {
   const selectedTransactionCount = groups.reduce((sum, group) => sum + group.transactions.length, 0);
   const payload = JSON.stringify({
     model: AI_ANALYSIS_MODEL,
+    updateFields: aiSelectedUpdateFields(),
     categories: state.categories.map((cat) => cat.name),
     transactions: groups.map((group) => aiRequestTransaction(group))
   });
@@ -2032,6 +2060,7 @@ function aiAnalysisSummaryText(summary, actualCost) {
     `${plural(summary.categoryUpdatedCount, "category", "categories")} updated`,
     `${plural(summary.vendorUpdatedCount, "vendor")} updated`,
     `${plural(summary.merchantUpdatedCount, "merchant name")} updated`,
+    `${plural(summary.notesUpdatedCount, "note")} updated`,
     `${plural(summary.descriptionUpdatedCount, "description")} updated`,
     `${plural(summary.reviewStatusUpdatedCount, "review status", "review statuses")} changed`,
     `cost ${actualCost}.`
@@ -2107,7 +2136,9 @@ async function runAiAnalyzeTransactions(root) {
   if (!currentUser) return showStatus("Sign in before running AI transaction analysis.");
   const vendorRuleUpdates = applyVendorRulesToTransactions(state.transactions, state);
   const plan = buildAiAnalysisPlan(filteredTransactions());
+  const updateFields = aiSelectedUpdateFields();
   if (!plan.groups.length) return showStatus("No transactions match the selected AI analysis scope.");
+  if (!updateFields.length) return showStatus("Select at least one field for AI to update.");
   const confirmation = [
     "Analyze Transactions?",
     "",
@@ -2119,6 +2150,7 @@ async function runAiAnalyzeTransactions(root) {
     `Estimated output tokens: ${plan.estimatedOutputTokens.toLocaleString()}`,
     `Estimated total cost: ${formatUsd(plan.estimatedCost)}`,
     `Web lookup fallback: ${plan.webLookupEnabled ? `Enabled, worst-case ${formatUsd(plan.webLookupEstimate)}` : "Disabled"}`,
+    `Fields AI can update: ${aiSelectedUpdateFieldLabels(updateFields)}`,
     "",
     "Continue?"
   ].join("\n");
@@ -2148,6 +2180,7 @@ async function runAiAnalyzeTransactions(root) {
       body: JSON.stringify({
         requireAi: true,
         webLookupEnabled: plan.webLookupEnabled,
+        updateFields,
         transactions: plan.groups.map((group) => aiRequestTransaction(group)),
         categories: state.categories.map((cat) => cat.name)
       })
@@ -2163,6 +2196,7 @@ async function runAiAnalyzeTransactions(root) {
       categoryUpdatedCount: 0,
       vendorUpdatedCount: vendorRuleUpdates,
       merchantUpdatedCount: 0,
+      notesUpdatedCount: 0,
       descriptionUpdatedCount: 0,
       reviewStatusUpdatedCount: 0
     };
@@ -2174,14 +2208,16 @@ async function runAiAnalyzeTransactions(root) {
           category: tx.category || "",
           vendor: tx.vendor || "",
           merchant: tx.merchant || "",
+          notes: tx.notes || "",
           description: tx.description || "",
           needsReview: Boolean(tx.needsReview)
         };
-        applyAiAnalysisToTransaction(tx, result);
+        applyAiAnalysisToTransaction(tx, result, updateFields);
         summary.matchedRecordCount += 1;
         if ((tx.category || "") !== before.category) summary.categoryUpdatedCount += 1;
         if ((tx.vendor || "") !== before.vendor) summary.vendorUpdatedCount += 1;
         if ((tx.merchant || "") !== before.merchant) summary.merchantUpdatedCount += 1;
+        if ((tx.notes || "") !== before.notes) summary.notesUpdatedCount += 1;
         if ((tx.description || "") !== before.description) summary.descriptionUpdatedCount += 1;
         if (Boolean(tx.needsReview) !== before.needsReview) summary.reviewStatusUpdatedCount += 1;
       });
@@ -2204,22 +2240,30 @@ async function runAiAnalyzeTransactions(root) {
   }
 }
 
-function applyAiAnalysisToTransaction(tx, result) {
+function applyAiAnalysisToTransaction(tx, result, updateFields = AI_UPDATE_FIELD_OPTIONS.map((field) => field.key)) {
+  const fields = new Set(updateFields);
   const threshold = Number(state.profile.confidenceThreshold || 78);
   const confidence = Math.max(0, Math.min(100, Number(result.confidence || 0)));
   const category = state.categories.some((cat) => cat.name === result.category) ? result.category : "Uncategorized";
-  tx.vendor = sanitize(result.vendor || result.merchant || tx.vendor || tx.merchant);
-  tx.merchant = sanitize(result.displayName || result.merchant || tx.vendor || tx.merchant);
-  tx.aiDisplayName = sanitize(result.displayName || tx.merchant);
-  tx.category = category;
-  tx.confidence = confidence;
-  tx.reason = sanitize(result.reason || "AI analyzed vendor, description, and price.");
-  tx.source = result.source === "ai_web" ? "AI web" : "AI";
-  tx.type = typeForCategory(tx.category, tx.amount);
-  tx.needsReview = confidence < threshold || category === "Uncategorized";
-  tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized"].includes(flag));
-  if (tx.needsReview) tx.flags.push(category === "Uncategorized" ? "uncategorized" : "low_confidence");
-  tx.aiSourceUrls = Array.isArray(result.sourceUrls) ? result.sourceUrls.slice(0, 3).map((url) => sanitize(url)).filter(Boolean) : [];
+  const vendor = sanitize(result.vendor || result.merchant || tx.vendor || tx.merchant);
+  const merchant = sanitize(result.displayName || result.merchant || vendor || tx.merchant);
+  if (fields.has("vendor")) tx.vendor = vendor;
+  if (fields.has("merchant")) {
+    tx.merchant = merchant;
+    tx.aiDisplayName = sanitize(result.displayName || tx.merchant);
+  }
+  if (fields.has("notes")) tx.notes = sanitize(result.notes || result.reason || tx.notes || "");
+  if (fields.has("category")) {
+    tx.category = category;
+    tx.confidence = confidence;
+    tx.reason = sanitize(result.reason || "AI analyzed vendor, description, and price.");
+    tx.source = result.source === "ai_web" ? "AI web" : "AI";
+    tx.type = typeForCategory(tx.category, tx.amount);
+    tx.needsReview = confidence < threshold || category === "Uncategorized";
+    tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized"].includes(flag));
+    if (tx.needsReview) tx.flags.push(category === "Uncategorized" ? "uncategorized" : "low_confidence");
+  }
+  if (fields.has("category") || fields.has("notes")) tx.aiSourceUrls = Array.isArray(result.sourceUrls) ? result.sourceUrls.slice(0, 3).map((url) => sanitize(url)).filter(Boolean) : [];
   tx.flags = Array.from(new Set(tx.flags || []));
 }
 
