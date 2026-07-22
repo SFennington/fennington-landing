@@ -5877,3 +5877,114 @@ summary.category-tree-summary::-webkit-details-marker {
   border-color: rgba(252, 165, 165, 0.58);
   color: #fecaca;
 }
+
+/* Standalone checkbox controls: keep checkboxes from inheriting text-input chrome. */
+.financial-app-page {
+  --finance-checkbox-size: 1.2rem;
+  --finance-checkbox-checkmark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M3.2 8.3l3 3.1 6.6-6.9'/%3E%3C/svg%3E");
+}
+
+.financial-app-page.financial-dark {
+  --finance-checkbox-checkmark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23111827' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M3.2 8.3l3 3.1 6.6-6.9'/%3E%3C/svg%3E");
+}
+
+.financial-app-page input[type="checkbox"],
+.financial-app-page .rule-target-fields .rule-target-apply-checkbox,
+.financial-app-page.financial-dark .rule-target-fields .rule-target-apply-checkbox {
+  -webkit-appearance: none;
+  appearance: none;
+  accent-color: var(--finance-control-accent, var(--brand));
+  background-color: transparent !important;
+  background-image: none !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-size: 0.78rem 0.78rem !important;
+  border: 2px solid var(--finance-control-accent-border, rgba(37, 99, 235, 0.45)) !important;
+  border-radius: 0.28rem !important;
+  box-shadow: none !important;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-grid;
+  flex: 0 0 var(--finance-checkbox-size);
+  height: var(--finance-checkbox-size) !important;
+  margin: 0;
+  min-height: var(--finance-checkbox-size) !important;
+  min-width: var(--finance-checkbox-size) !important;
+  padding: 0 !important;
+  place-content: center;
+  transform: none !important;
+  vertical-align: middle;
+  width: var(--finance-checkbox-size) !important;
+}
+
+.financial-app-page.financial-dark input[type="checkbox"]:not(:checked),
+.financial-app-page.financial-dark .rule-target-fields .rule-target-apply-checkbox:not(:checked) {
+  background-color: rgba(2, 6, 23, 0.48) !important;
+}
+
+.financial-app-page input[type="checkbox"]:checked,
+.financial-app-page .rule-target-fields .rule-target-apply-checkbox:checked,
+.financial-app-page.financial-dark .rule-target-fields .rule-target-apply-checkbox:checked {
+  background-color: var(--finance-control-accent, #2563eb) !important;
+  background-image: var(--finance-checkbox-checkmark) !important;
+  border-color: var(--finance-control-accent, #2563eb) !important;
+}
+
+.financial-app-page input[type="checkbox"]:focus,
+.financial-app-page .rule-target-fields .rule-target-apply-checkbox:focus,
+.financial-app-page.financial-dark .rule-target-fields .rule-target-apply-checkbox:focus {
+  box-shadow: none !important;
+  outline: none;
+}
+
+.financial-app-page input[type="checkbox"]:focus-visible,
+.financial-app-page .rule-target-fields .rule-target-apply-checkbox:focus-visible,
+.financial-app-page.financial-dark .rule-target-fields .rule-target-apply-checkbox:focus-visible {
+  box-shadow: 0 0 0 4px var(--finance-control-accent-soft, rgba(37, 99, 235, 0.18)) !important;
+  outline: 2px solid var(--finance-control-accent, #2563eb);
+  outline-offset: 2px;
+}
+
+.financial-app-page input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.financial-app-page .checkbox-field input[type="checkbox"],
+.financial-app-page .rule-apply-fields input[type="checkbox"],
+.financial-app-page .rule-target-fields .rule-target-apply-checkbox,
+.financial-app-page .review-card input[type="checkbox"],
+.financial-app-page .review-actions input[type="checkbox"],
+.financial-app-page .ai-approval-table input[type="checkbox"] {
+  margin: 0;
+}
+
+.financial-app-page .rule-apply-fields label {
+  gap: 0.42rem;
+}
+
+.financial-app-page .rule-target-title {
+  gap: 0.28rem;
+  min-height: var(--finance-checkbox-size);
+}
+
+.financial-app-page .review-card > input[type="checkbox"] {
+  margin-top: 0.35rem;
+}
+
+@media (forced-colors: active) {
+  .financial-app-page input[type="checkbox"],
+  .financial-app-page .rule-target-fields .rule-target-apply-checkbox,
+  .financial-app-page.financial-dark .rule-target-fields .rule-target-apply-checkbox {
+    -webkit-appearance: auto;
+    appearance: auto;
+    background-image: none !important;
+    forced-color-adjust: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .financial-app-page {
+    --finance-checkbox-size: 1.25rem;
+  }
+}
