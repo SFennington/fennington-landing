@@ -129,6 +129,8 @@ const persistedCollectionSnapshots = new Map();
 let aiAnalysisStatus = null;
 let aiAnalysisLastResult = null;
 let aiAnalysisStatusTimer = null;
+const TRANSACTION_TABLE_BATCH_SIZE = 150;
+let transactionRowsShown = TRANSACTION_TABLE_BATCH_SIZE;
 
 applyTheme();
 renderFeatures();
@@ -1652,6 +1654,7 @@ function bindAccountControls(root) {
 function renderTransactions() {
   const tab = document.getElementById("transactionsTab");
   const rows = filteredTransactions();
+  const visibleRows = rows.slice(0, transactionRowsShown);
   const activeFilter = captureActiveFilter();
   if (activeImportPanel && !["csv", "amazon"].includes(activeImportPanel)) activeImportPanel = "";
   document.body.classList.toggle("import-overlay-open", Boolean(activeImportPanel));
@@ -1687,7 +1690,7 @@ function renderTransactions() {
             <span><i class="legend-dot expense"></i>Spending</span>
           </div>
         </div>
-        ${rows.length ? transactionTable(rows) : `<div class="empty-state">No transactions match the current filters.</div>`}
+        ${rows.length ? transactionTable(visibleRows, rows.length) : `<div class="empty-state">No transactions match the current filters.</div>`}
       </div>
     </section>
   `;
@@ -2209,6 +2212,7 @@ function bindFilters() {
     if (!el) return;
     el.addEventListener("input", () => {
       state.filters[name.toLowerCase()] = el.value;
+      resetTransactionRowsShown();
       renderTransactions();
     });
   });
@@ -2216,13 +2220,22 @@ function bindFilters() {
   if (hideCredits) {
     hideCredits.addEventListener("change", () => {
       state.filters.hideCredits = hideCredits.checked;
+      resetTransactionRowsShown();
       renderTransactions();
     });
   }
 }
 
-function transactionTable(rows) {
-  return `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant, vendor & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Flow</th><th>Confidence</th><th>Type</th><th>Notes</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
+function resetTransactionRowsShown() {
+  transactionRowsShown = TRANSACTION_TABLE_BATCH_SIZE;
+}
+
+function transactionTable(rows, totalRows = rows.length) {
+  const remaining = Math.max(0, totalRows - rows.length);
+  const table = `<div class="table-wrap transaction-table-wrap" tabindex="0" aria-label="Scrollable transaction table"><table class="transaction-table"><thead><tr><th>Date</th><th>Merchant, vendor & description</th><th>Account</th><th>Amount</th><th>Category</th><th>Flow</th><th>Confidence</th><th>Type</th><th>Notes</th></tr></thead><tbody>${rows.map(transactionRow).join("")}</tbody></table></div>`;
+  if (!remaining) return table;
+  const nextCount = Math.min(TRANSACTION_TABLE_BATCH_SIZE, remaining);
+  return `${table}<div class="transaction-load-more"><p>Showing ${rows.length.toLocaleString()} of ${totalRows.toLocaleString()} matching transactions.</p><button id="loadMoreTransactionsButton" class="btn btn-secondary" type="button">Show ${nextCount.toLocaleString()} more</button></div>`;
 }
 
 function transactionRow(tx) {
@@ -2348,6 +2361,13 @@ function topCategoryMiniList(entries) {
 }
 
 function bindTransactionTable(root) {
+  root.querySelector("#loadMoreTransactionsButton")?.addEventListener("click", () => {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    transactionRowsShown += TRANSACTION_TABLE_BATCH_SIZE;
+    renderTransactions();
+    window.scrollTo(scrollX, scrollY);
+  });
   bindTransactionCategoryComboboxes(root);
   root.querySelectorAll("[data-action='save-row']").forEach((button) => button.addEventListener("click", () => {
     const tr = transactionDataRowForAction(button);
