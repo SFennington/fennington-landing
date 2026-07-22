@@ -2293,6 +2293,200 @@ body.import-overlay-open {
 }
 
 
+.dashboard-category-breakdown {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dashboard-category-node {
+  background: rgba(248, 250, 252, 0.78);
+  border: 1px solid rgba(226, 232, 240, 0.82);
+  border-radius: 16px;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.72rem;
+}
+
+.dashboard-category-panel .dashboard-category-node {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.financial-app-section button.dashboard-category-toggle,
+.dashboard-category-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: 0.85rem;
+  justify-content: space-between;
+  min-height: auto;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.dashboard-category-toggle:focus-visible {
+  outline: 3px solid var(--financial-ring);
+  outline-offset: 4px;
+}
+
+.dashboard-category-label {
+  align-items: center;
+  display: flex;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.dashboard-category-label > span:last-child {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.dashboard-category-label strong {
+  color: var(--financial-ink);
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-category-label small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-category-caret {
+  align-items: center;
+  background: #eff6ff;
+  border-radius: 10px;
+  color: var(--brand-dark);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-weight: 900;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.dashboard-category-caret::before {
+  content: "▸";
+  transition: transform 160ms ease;
+}
+
+.dashboard-category-toggle[aria-expanded="true"] .dashboard-category-caret::before {
+  transform: rotate(90deg);
+}
+
+.dashboard-category-amount {
+  color: #334155;
+  flex: 0 0 auto;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.dashboard-category-track {
+  height: 10px;
+}
+
+.dashboard-category-panel {
+  border-left: 2px solid #bfdbfe;
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.25rem 0 0.1rem 0.65rem;
+  padding-left: 0.9rem;
+}
+
+.dashboard-transaction-group {
+  background: rgba(239, 246, 255, 0.72);
+  border: 1px solid rgba(191, 219, 254, 0.72);
+  border-radius: 14px;
+  padding: 0.65rem;
+}
+
+.dashboard-transaction-group h4 {
+  color: var(--financial-ink);
+  font-size: 0.86rem;
+  margin: 0 0 0.55rem;
+}
+
+.dashboard-transaction-list {
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-transaction-item {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.62rem;
+}
+
+.dashboard-transaction-item > span:first-child {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.dashboard-transaction-item strong {
+  color: var(--financial-ink);
+  font-size: 0.86rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-transaction-item em,
+.dashboard-transaction-item small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-style: normal;
+}
+
+.dashboard-transaction-item > span:last-child {
+  color: var(--financial-danger);
+  flex: 0 0 auto;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+
+@media (max-width: 640px) {
+  .financial-app-section button.dashboard-category-toggle,
+  .dashboard-category-toggle,
+  .dashboard-transaction-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-category-panel {
+    margin-left: 0.25rem;
+    padding-left: 0.65rem;
+  }
+
+  .dashboard-category-amount,
+  .dashboard-transaction-item > span:last-child {
+    align-self: flex-start;
+  }
+}
+
+
 /* Hierarchical category explorer and compact recurring summaries */
 .recurring-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr));

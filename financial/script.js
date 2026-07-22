@@ -114,6 +114,7 @@ let state = emptyState();
 const pendingCategoryDeletes = new Set();
 const pendingRuleDeletes = new Set();
 const categoryExpandedIds = new Set();
+const dashboardCategoryExpandedKeys = new Set();
 const recurringTransactionExpandedIds = new Set();
 let categoryExpansionInitialized = false;
 let selectedCategoryReportId = "";
@@ -1122,8 +1123,10 @@ function categoryTotalsForTransactions(transactions) {
 
 function categoryMatchesTransaction(tx, categoryName) {
   if (!categoryName) return true;
-  if (tx.category === categoryName) return true;
-  return reportingAllocationsForTransaction(tx).some((allocation) => allocation.category === categoryName);
+  const selectedCategory = categoryByName(categoryName);
+  const categoryNames = selectedCategory ? new Set(categoryAndDescendantNames(selectedCategory)) : new Set([categoryName]);
+  if (categoryNames.has(tx.category)) return true;
+  return reportingAllocationsForTransaction(tx).some((allocation) => categoryNames.has(allocation.category));
 }
 
 function isInternalFlow(tx) {
@@ -1155,14 +1158,16 @@ function renderDashboard() {
       ${summaryCard("Split/itemization review", String(summary.splitReviewCount), "warn", "Count")}
     </div>
     <div class="split-panel" style="margin-top:1rem">
-      <section class="panel"><h3>Monthly Spending</h3>${categoryBars(summary.byCategory)}</section>
+      <section class="panel"><h3>Monthly Spending</h3><p class="status-line">Click a category to see nested subcategories, then expand subcategories to view the transactions behind each total.</p>${dashboardCategoryBreakdown(state.selectedMonth)}</section>
       <aside class="panel"><h3>Quick Status</h3>${quickStatus(summary)}</aside>
     </div>
   `;
   document.getElementById("dashboardMonth").addEventListener("change", (event) => {
     state.selectedMonth = event.target.value;
+    dashboardCategoryExpandedKeys.clear();
     renderAll();
   });
+  bindDashboardCategoryBreakdown(tab);
 }
 
 
@@ -3424,6 +3429,7 @@ function seedExpandedCategories() {
 
 function resetCategoryExpansion() {
   categoryExpandedIds.clear();
+  dashboardCategoryExpandedKeys.clear();
   categoryExpansionInitialized = false;
   selectedCategoryReportId = "";
 }
@@ -3704,6 +3710,130 @@ function categoryBars(data) {
   if (!entries.length) return `<div class="empty-state">No spending data for this period.</div>`;
   const max = Math.max(...entries.map((entry) => entry[1]));
   return entries.map(([name, value]) => `<div class="bar-row"><div class="bar-label"><span>${escapeHtml(name)}</span><span>${money(value)}</span></div><div class="bar-track"><span class="bar-fill" style="width:${Math.max(4, (value / max) * 100)}%"></span></div></div>`).join("");
+}
+
+
+function dashboardCategoryBreakdown(month) {
+  const context = dashboardCategoryContext(month);
+  if (!context.topRows.length) return `<div class="empty-state">No spending data for this period.</div>`;
+  return `<div class="dashboard-category-breakdown" aria-label="Monthly spending by category">${context.topRows.map(({ category }) => dashboardCategoryNode(category, context, 0)).join("")}</div>`;
+}
+
+function dashboardCategoryContext(month) {
+  const txs = state.transactions.filter((tx) => transactionReportingMonth(tx) === month);
+  const allocations = reportingAllocationsForTransactions(txs).filter((allocation) => allocation.amount > 0);
+  const directTotals = new Map();
+  const directAllocations = new Map();
+  allocations.forEach((allocation) => {
+    const name = allocation.category || "Uncategorized";
+    directTotals.set(name, round((directTotals.get(name) || 0) + allocation.amount));
+    if (!directAllocations.has(name)) directAllocations.set(name, []);
+    directAllocations.get(name).push(allocation);
+  });
+  repairCategoryParents();
+  const knownCategoryNames = new Set(state.categories.map((category) => category.name.toLowerCase()));
+  const orphanCategories = Array.from(directTotals.keys())
+    .filter((name) => !knownCategoryNames.has(name.toLowerCase()))
+    .map((name) => ({ id: `orphan-${slug(name)}`, name, parentId: "", orphan: true }));
+  const directTotalForCategory = (category) => round(directTotals.get(category?.name || "") || 0);
+  const totalForCategory = (category) => {
+    if (!category) return 0;
+    if (category.orphan) return directTotalForCategory(category);
+    const names = categoryAndDescendantNames(category);
+    return round(names.reduce((sum, name) => sum + (directTotals.get(name) || 0), 0));
+  };
+  const sortRows = (a, b) => b.total - a.total || categoryBaseName(a.category).localeCompare(categoryBaseName(b.category));
+  const topRows = [...state.categories.filter((category) => !category.parentId), ...orphanCategories]
+    .map((category) => ({ category, total: totalForCategory(category) }))
+    .filter((row) => row.total > 0)
+    .sort(sortRows);
+  return {
+    directAllocations,
+    directTotalForCategory,
+    max: Math.max(...topRows.map((row) => row.total), 1),
+    sortRows,
+    topRows,
+    totalForCategory
+  };
+}
+
+function dashboardCategoryNode(category, context, depth = 0) {
+  const total = context.totalForCategory(category);
+  const children = dashboardCategoryChildren(category, context);
+  const directAllocations = dashboardDirectAllocations(category, context);
+  const key = dashboardCategoryKey(category);
+  const isExpanded = dashboardCategoryExpandedKeys.has(key);
+  const panelId = dashboardCategoryPanelId(key);
+  const width = Math.max(4, (total / context.max) * 100);
+  const childCountText = children.length
+    ? `${children.length} ${children.length === 1 ? "subcategory" : "subcategories"}`
+    : `${directAllocations.length} ${directAllocations.length === 1 ? "transaction" : "transactions"}`;
+  const breadcrumb = categoryBreadcrumb(category);
+  const baseName = categoryBaseName(category);
+  const meta = breadcrumb === baseName ? childCountText : `${breadcrumb} · ${childCountText}`;
+  return `
+    <div class="dashboard-category-node depth-${Math.min(depth, 5)}">
+      <button class="dashboard-category-toggle" data-dashboard-category-toggle="${escapeAttr(key)}" type="button" aria-expanded="${isExpanded}" aria-controls="${escapeAttr(panelId)}">
+        <span class="dashboard-category-label"><span class="dashboard-category-caret" aria-hidden="true"></span><span><strong>${escapeHtml(baseName)}</strong><small>${escapeHtml(meta)}</small></span></span>
+        <span class="dashboard-category-amount">${money(total)}</span>
+      </button>
+      <div class="bar-track dashboard-category-track" aria-hidden="true"><span class="bar-fill" style="width:${width}%"></span></div>
+      ${isExpanded ? `<div id="${escapeAttr(panelId)}" class="dashboard-category-panel">${directAllocations.length ? dashboardAllocationList(category, directAllocations, Boolean(children.length)) : ""}${children.map(({ category: child }) => dashboardCategoryNode(child, context, depth + 1)).join("")}</div>` : ""}
+    </div>`;
+}
+
+function dashboardCategoryChildren(category, context) {
+  if (!category?.id || category.orphan) return [];
+  return state.categories
+    .filter((child) => child.parentId === category.id)
+    .map((child) => ({ category: child, total: context.totalForCategory(child) }))
+    .filter((row) => row.total > 0)
+    .sort(context.sortRows);
+}
+
+function dashboardDirectAllocations(category, context) {
+  return (context.directAllocations.get(category?.name || "") || []).slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+}
+
+function dashboardAllocationList(category, allocations, hasChildRows = false) {
+  const name = categoryBaseName(category);
+  const heading = hasChildRows ? `Direct transactions in ${name}` : `Transactions in ${name}`;
+  return `<section class="dashboard-transaction-group" aria-label="${escapeAttr(heading)}"><h4>${escapeHtml(heading)}</h4><ul class="dashboard-transaction-list">${allocations.map(dashboardAllocationRow).join("")}</ul></section>`;
+}
+
+function dashboardAllocationRow(allocation) {
+  const tx = allocation.transaction || {};
+  const title = allocation.merchant || tx.merchant || tx.description || "Transaction";
+  const description = allocation.description && allocation.description !== title ? `<small>${escapeHtml(allocation.description)}</small>` : "";
+  const source = allocation.source && allocation.source !== "transaction" ? label(String(allocation.source).replace(/_/g, " ")) : "";
+  const account = tx.accountId ? accountName(tx.accountId) : "";
+  const details = [allocation.date || tx.date || "", account, source].filter(Boolean).join(" · ");
+  return `<li class="dashboard-transaction-item"><span><strong>${escapeHtml(title)}</strong><em>${escapeHtml(details)}</em>${description}</span><span>${money(allocation.amount)}</span></li>`;
+}
+
+function dashboardCategoryKey(category) {
+  return category?.id || `category-${slug(category?.name || "uncategorized")}`;
+}
+
+function dashboardCategoryPanelId(key) {
+  return `dashboard-category-panel-${slug(key)}`;
+}
+
+function bindDashboardCategoryBreakdown(root = document) {
+  root.querySelectorAll("[data-dashboard-category-toggle]").forEach((button) => button.addEventListener("click", () => {
+    const key = button.dataset.dashboardCategoryToggle;
+    if (!key) return;
+    if (dashboardCategoryExpandedKeys.has(key)) dashboardCategoryExpandedKeys.delete(key);
+    else dashboardCategoryExpandedKeys.add(key);
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    renderDashboard();
+    window.scrollTo(scrollX, scrollY);
+    window.requestAnimationFrame(() => {
+      const nextButton = Array.from(document.querySelectorAll("[data-dashboard-category-toggle]")).find((item) => item.dataset.dashboardCategoryToggle === key);
+      nextButton?.focus({ preventScroll: true });
+    });
+  }));
 }
 
 function quickStatus(summary) {
@@ -4006,6 +4136,11 @@ function categoryTreeList() {
 
 function parentCategory(category) {
   return category?.parentId ? state.categories.find((cat) => cat.id === category.parentId) : null;
+}
+
+function categoryByName(name) {
+  const normalized = String(name || "").toLowerCase();
+  return state.categories.find((cat) => cat.name.toLowerCase() === normalized) || null;
 }
 
 function categoryBaseName(category) {
