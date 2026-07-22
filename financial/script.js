@@ -108,6 +108,7 @@ let currentUser = null;
 let mode = "signed-out";
 let pendingImport = null;
 let pendingAmazonImport = null;
+let activeImportPanel = "";
 let saveTimer = null;
 let state = emptyState();
 const pendingCategoryDeletes = new Set();
@@ -133,6 +134,7 @@ applyTheme();
 renderFeatures();
 setupMobileMenu();
 setupTabs();
+setupImportOverlayShortcuts();
 if (isAppPage) setupAuth();
 bindStaticActions();
 
@@ -183,6 +185,10 @@ function setupMobileMenu() {
 function setupTabs() {
   const tabSelect = document.getElementById("appTabSelect");
   const activateTab = (tabName) => {
+    if (tabName !== "transactions" && activeImportPanel) {
+      activeImportPanel = "";
+      document.body.classList.remove("import-overlay-open");
+    }
     document.querySelectorAll(".app-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tabName));
     document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.remove("active"));
     document.getElementById(`${tabName}Tab`)?.classList.add("active");
@@ -192,6 +198,13 @@ function setupTabs() {
     button.addEventListener("click", () => activateTab(button.dataset.tab));
   });
   if (tabSelect) tabSelect.addEventListener("change", (event) => activateTab(event.target.value));
+}
+
+function setupImportOverlayShortcuts() {
+  if (!isAppPage) return;
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && activeImportPanel) closeImportPanel();
+  });
 }
 
 function setupAuth() {
@@ -1150,20 +1163,67 @@ function renderDashboard() {
 }
 
 
-function csvImportDetailsHtml() {
+function transactionImportActionsHtml() {
   return `
-    <details class="import-disclosure" ${pendingImport ? "open" : ""}>
-      <summary>
-        <span class="import-summary-copy">
-          <span class="eyebrow">CSV import</span>
-          <strong>Import transaction CSV files</strong>
-          <small>Upload bank or credit-card exports without leaving Transactions.</small>
-        </span>
-        <span class="chip">${pendingImport ? "Preview ready" : "Expand import"}</span>
-      </summary>
-      <div class="import-disclosure-body">${csvImportPanelHtml()}</div>
-    </details>
+    <div class="import-action-row" aria-label="Transaction import actions">
+      ${importActionButtonHtml("csv", "CSV import", "CSV Import", pendingImport ? "Preview ready" : "Open")}
+      ${importActionButtonHtml("amazon", "Amazon import", "Amazon Import", pendingAmazonImport ? "Preview ready" : "Open")}
+    </div>
   `;
+}
+
+function importActionButtonHtml(type, eyebrow, title, status) {
+  const active = activeImportPanel === type;
+  return `
+    <button class="import-action-card${active ? " active" : ""}" data-import-panel="${escapeAttr(type)}" type="button" aria-haspopup="dialog" aria-expanded="${active}" aria-controls="${escapeAttr(type)}ImportWorkspace">
+      <span>
+        <span class="eyebrow">${escapeHtml(eyebrow)}</span>
+        <strong>${escapeHtml(title)}</strong>
+      </span>
+      <span class="chip">${escapeHtml(status)}</span>
+    </button>
+  `;
+}
+
+function importWorkspaceOverlayHtml() {
+  if (!activeImportPanel) return "";
+  const isCsv = activeImportPanel === "csv";
+  const id = isCsv ? "csvImportWorkspace" : "amazonImportWorkspace";
+  const title = isCsv ? "CSV Import" : "Amazon Import";
+  const description = isCsv
+    ? "Upload bank and credit-card CSV exports, map columns, preview duplicates, then import transactions."
+    : "Upload Amazon order or item exports to itemize existing Amazon card transactions.";
+  return `
+    <div class="import-page-overlay" role="presentation">
+      <section id="${id}" class="import-page" role="dialog" aria-modal="true" aria-labelledby="${id}Title" aria-describedby="${id}Description">
+        <header class="import-page-header">
+          <div>
+            <span class="eyebrow">Transaction import</span>
+            <h3 id="${id}Title">${escapeHtml(title)}</h3>
+            <p id="${id}Description">${escapeHtml(description)}</p>
+          </div>
+          <button class="mini-btn import-close-button" data-close-import type="button" aria-label="Close ${escapeAttr(title)}">Close</button>
+        </header>
+        <div class="import-page-body">
+          ${isCsv ? csvImportPanelHtml() : amazonImportPanelHtml()}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function openImportPanel(type) {
+  activeImportPanel = type === "amazon" ? "amazon" : "csv";
+  renderTransactions();
+  window.setTimeout(() => document.querySelector("[data-close-import]")?.focus({ preventScroll: true }), 0);
+}
+
+function closeImportPanel() {
+  const returnPanel = activeImportPanel;
+  activeImportPanel = "";
+  document.body.classList.remove("import-overlay-open");
+  renderTransactions();
+  if (returnPanel) window.setTimeout(() => document.querySelector(`[data-import-panel="${returnPanel}"]`)?.focus({ preventScroll: true }), 0);
 }
 
 function csvImportPanelHtml() {
@@ -1175,7 +1235,7 @@ function csvImportPanelHtml() {
         <p class="status-line">Supported files: <code>.csv</code> or text CSV exports up to 5 MB. Extra columns are ignored unless mapped.</p>
         <div class="field"><label for="csvFile">CSV file or files</label><input id="csvFile" type="file" accept=".csv,text/csv" multiple></div>
         <div class="field"><label for="csvFolder">CSV folder, including subfolders</label><input id="csvFolder" type="file" accept=".csv,text/csv" webkitdirectory multiple></div>
-        <div id="importStatus" class="status-line">No file selected.</div>
+        <div id="importStatus" class="status-line">${pendingImport ? `${escapeHtml(pendingImport.fileName)} ready for mapping and preview.` : "No file selected."}</div>
         ${pendingImport ? mappingForm(headers) : ""}
       </section>
       <aside class="panel import-preview-panel">
@@ -1187,6 +1247,11 @@ function csvImportPanelHtml() {
 }
 
 function bindImportControls(root = document) {
+  root.querySelectorAll("[data-import-panel]").forEach((button) => button.addEventListener("click", () => openImportPanel(button.dataset.importPanel)));
+  root.querySelectorAll("[data-close-import]").forEach((button) => button.addEventListener("click", closeImportPanel));
+  root.querySelector(".import-page-overlay")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeImportPanel();
+  });
   root.querySelector("#csvFile")?.addEventListener("change", handleFile);
   root.querySelector("#csvFolder")?.addEventListener("change", handleFile);
   root.querySelector("#amazonFile")?.addEventListener("change", handleAmazonFile);
@@ -1272,6 +1337,7 @@ async function handleFile(event) {
   if (!bodyRows.length) return showStatus("No transaction rows were detected in the selected CSV files.");
   const accountNames = Array.from(new Set(bodyRows.map((row) => row.__sourceAccountName)));
   pendingImport = { fileName: files.length === 1 ? files[0].name : `${files.length} CSV files`, headers, rows: bodyRows, mapping: autoMap(headers), accountName: accountNames.length === 1 ? accountNames[0] : "Multiple source accounts", accountNames, institution: "" };
+  activeImportPanel = "csv";
   renderTransactions();
 }
 
@@ -1315,6 +1381,7 @@ function importTransactions() {
   state.transactions.push(...imported);
   state.imports.push({ id: importId, fileName: pendingImport.fileName, accountName: preview.accountName, count: imported.length, importedAt: new Date().toISOString(), duplicateCount: imported.filter((tx) => tx.flags.includes("possible_duplicate")).length });
   pendingImport = null;
+  activeImportPanel = "";
   state.selectedMonth = latestMonth(state.transactions) || state.selectedMonth;
   renderAll();
   showStatus(`${imported.length} transactions imported. Low-confidence and possible duplicate items were added to the review queue. Use Analyze Transactions to run AI.`);
@@ -1336,6 +1403,7 @@ async function handleAmazonFile(event) {
       groups,
       matches: groups.filter((group) => group.match?.transaction)
     };
+    activeImportPanel = "amazon";
     renderTransactions();
     showStatus(`Amazon preview ready: ${pendingAmazonImport.matches.length} of ${groups.length} order groups can be itemized automatically.`);
   } catch (error) {
@@ -1459,6 +1527,7 @@ function applyAmazonItemization() {
     applied += 1;
   });
   pendingAmazonImport = null;
+  activeImportPanel = "";
   renderAll();
   showStatus(`Applied Amazon itemization to ${applied} transaction${applied === 1 ? "" : "s"}.`);
 }
@@ -1503,7 +1572,7 @@ function renderAccounts() {
         ${summaryCard("Linked transactions", rows.reduce((sum, row) => sum + row.transactionCount, 0), "warn", "Count")}
         ${summaryCard("Latest activity", latest, "")}
       </div>
-      ${rows.length ? `<div class="accounts-grid">${rows.map(accountCard).join("")}</div>${accountsTable(rows)}` : `<div class="empty-state">No accounts yet. Expand CSV import at the top of Transactions and import a CSV to create accounts automatically.</div>`}
+      ${rows.length ? `<div class="accounts-grid">${rows.map(accountCard).join("")}</div>${accountsTable(rows)}` : `<div class="empty-state">No accounts yet. Open CSV Import from the Transactions title row and import a CSV to create accounts automatically.</div>`}
     </section>
   `;
   bindAccountControls(tab);
@@ -1584,21 +1653,25 @@ function renderTransactions() {
   const tab = document.getElementById("transactionsTab");
   const rows = filteredTransactions();
   const activeFilter = captureActiveFilter();
+  if (activeImportPanel && !["csv", "amazon"].includes(activeImportPanel)) activeImportPanel = "";
+  document.body.classList.toggle("import-overlay-open", Boolean(activeImportPanel));
   tab.innerHTML = `
     <section class="panel transactions-panel">
       <div class="section-heading transaction-heading">
-        <div>
+        <div class="transaction-title-copy">
           <p class="eyebrow">Transaction center</p>
           <h3>Transactions</h3>
           <p class="status-line">Review, recategorize, and annotate imported activity without losing sight of cash flow.</p>
         </div>
-        <div class="transaction-count-pill" aria-label="Filtered transaction count">
-          <strong>${rows.length}</strong>
-          <span>of ${state.transactions.length} shown</span>
+        <div class="transaction-heading-actions">
+          ${transactionImportActionsHtml()}
+          <div class="transaction-count-pill" aria-label="Filtered transaction count">
+            <strong>${rows.length}</strong>
+            <span>of ${state.transactions.length} shown</span>
+          </div>
         </div>
       </div>
-      ${csvImportDetailsHtml()}
-      ${amazonImportDetailsHtml()}
+      ${importWorkspaceOverlayHtml()}
       ${transactionInsightsHtml(rows)}
       ${aiAnalysisPanelHtml(rows)}
       ${filtersHtml()}
@@ -1766,35 +1839,24 @@ function clearAiAnalysisStatus() {
   }
 }
 
-function amazonImportDetailsHtml() {
+function amazonImportPanelHtml() {
   return `
-    <details class="import-disclosure amazon-import-disclosure" ${pendingAmazonImport ? "open" : ""}>
-      <summary>
-        <span class="import-summary-copy">
-          <span class="eyebrow">Amazon itemization</span>
-          <strong>Import Amazon purchase items</strong>
-          <small>Upload Amazon order/item CSV or JSON to match item lines to existing Amazon card transactions.</small>
-        </span>
-        <span class="chip">${pendingAmazonImport ? "Preview ready" : "Expand import"}</span>
-      </summary>
-      <div class="import-disclosure-body">
-        <div class="split-panel amazon-import-grid">
-          <section class="panel import-upload-panel">
-            <h3>Upload Amazon order data</h3>
-            <p class="status-line">This does not log into Amazon or create new bank transactions. It itemizes existing Amazon transactions when one clear amount/date match is found.</p>
-            <div class="field"><label for="amazonFile">Amazon CSV or JSON file</label><input id="amazonFile" type="file" accept=".csv,.json,text/csv,application/json"></div>
-            <div class="form-actions" style="margin-top:1rem">
-              <button id="applyAmazonItemizationButton" class="btn btn-primary" type="button" ${pendingAmazonImport?.matches?.length ? "" : "disabled"}>Apply Matched Itemization</button>
-              <button id="clearAmazonImportButton" class="btn btn-secondary" type="button" ${pendingAmazonImport ? "" : "disabled"}>Clear Preview</button>
-            </div>
-          </section>
-          <aside class="panel import-preview-panel">
-            <h3>Amazon preview</h3>
-            <div id="amazonPreview">${pendingAmazonImport ? amazonImportPreviewHtml() : `<div class="empty-state">Upload an Amazon order/item export after importing your card transactions. Exact one-to-one matches can be itemized automatically; ambiguous matches stay in review.</div>`}</div>
-          </aside>
+    <div class="split-panel amazon-import-grid">
+      <section class="panel import-upload-panel">
+        <h3>Upload Amazon order data</h3>
+        <p class="status-line">This does not log into Amazon or create new bank transactions. It itemizes existing Amazon transactions when one clear amount/date match is found.</p>
+        <div class="field"><label for="amazonFile">Amazon CSV or JSON file</label><input id="amazonFile" type="file" accept=".csv,.json,text/csv,application/json"></div>
+        <div id="importStatus" class="status-line">${pendingAmazonImport ? `${escapeHtml(pendingAmazonImport.fileName)} preview ready.` : "No file selected."}</div>
+        <div class="form-actions" style="margin-top:1rem">
+          <button id="applyAmazonItemizationButton" class="btn btn-primary" type="button" ${pendingAmazonImport?.matches?.length ? "" : "disabled"}>Apply Matched Itemization</button>
+          <button id="clearAmazonImportButton" class="btn btn-secondary" type="button" ${pendingAmazonImport ? "" : "disabled"}>Clear Preview</button>
         </div>
-      </div>
-    </details>
+      </section>
+      <aside class="panel import-preview-panel">
+        <h3>Amazon preview</h3>
+        <div id="amazonPreview">${pendingAmazonImport ? amazonImportPreviewHtml() : `<div class="empty-state">Upload an Amazon order/item export after importing your card transactions. Exact one-to-one matches can be itemized automatically; ambiguous matches stay in review.</div>`}</div>
+      </aside>
+    </div>
   `;
 }
 
