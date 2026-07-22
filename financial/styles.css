@@ -3684,3 +3684,319 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-dark .import-page-body {
   background: rgba(2, 6, 23, 0.24);
 }
+
+
+/* Mobile transaction ledger cards */
+@media (max-width: 768px) {
+  .transactions-panel {
+    padding: clamp(0.75rem, 4vw, 1rem);
+  }
+
+  .transaction-table-shell {
+    border-radius: 22px;
+    overflow: visible;
+  }
+
+  .transaction-table-header {
+    border-radius: 22px 22px 0 0;
+    padding: 1rem;
+  }
+
+  .transaction-table-header strong {
+    font-size: clamp(1.15rem, 6vw, 1.4rem);
+  }
+
+  .transaction-table-header p {
+    font-size: 0.95rem;
+    line-height: 1.55;
+  }
+
+  .table-legend {
+    justify-content: flex-start;
+  }
+
+  .table-legend span {
+    flex: 1 1 145px;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .table-wrap.transaction-table-wrap {
+    background: transparent;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .transaction-table {
+    border-collapse: separate;
+    display: block;
+    min-width: 0 !important;
+    table-layout: auto;
+    width: 100%;
+  }
+
+  .transaction-table thead {
+    border: 0;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+  }
+
+  .transaction-table tbody {
+    display: block;
+    padding: 0.85rem;
+  }
+
+  .transaction-table tbody tr {
+    display: grid;
+    width: 100%;
+  }
+
+  .transaction-table tbody .tx-row,
+  .transaction-table tbody .tx-row:nth-child(odd),
+  .transaction-table tbody .tx-row:nth-child(even) {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94)),
+      radial-gradient(circle at 100% 0, rgba(37, 99, 235, 0.08), transparent 12rem);
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-bottom: 0;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.1);
+    gap: 0.72rem;
+    margin: 0;
+    padding: 0.95rem;
+  }
+
+  .transaction-table tbody .tx-row.needs-review {
+    box-shadow:
+      inset 4px 0 0 var(--finance-amber),
+      0 16px 34px rgba(15, 23, 42, 0.1);
+  }
+
+  .transaction-table tbody .tx-action-row,
+  .transaction-table tbody .tx-action-row:nth-child(odd),
+  .transaction-table tbody .tx-action-row:nth-child(even) {
+    background: linear-gradient(180deg, rgba(239, 246, 255, 0.86), rgba(255, 255, 255, 0.96));
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 0 0 20px 20px;
+    border-top: 0;
+    box-shadow: 0 18px 32px rgba(15, 23, 42, 0.08);
+    margin: 0 0 1rem;
+    padding: 0;
+  }
+
+  .transaction-table tbody tr:hover {
+    transform: none;
+  }
+
+  .transaction-table .tx-row td {
+    align-items: center;
+    border-bottom: 0;
+    display: grid;
+    gap: 0.35rem 0.65rem;
+    grid-template-columns: minmax(5.65rem, auto) minmax(0, 1fr);
+    min-width: 0;
+    padding: 0;
+    width: 100%;
+  }
+
+  .transaction-table .tx-row td::before {
+    color: #64748b;
+    content: attr(data-label);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .transaction-table .tx-row .tx-description-cell {
+    display: block;
+    padding-bottom: 0.2rem;
+  }
+
+  .transaction-table .tx-row .tx-description-cell::before {
+    display: none;
+  }
+
+  .transaction-table .tx-row .date-cell,
+  .transaction-table .tx-row .account-cell,
+  .transaction-table .tx-row .amount-cell {
+    background: rgba(241, 245, 249, 0.86);
+    border: 1px solid rgba(226, 232, 240, 0.92);
+    border-radius: 15px;
+    padding: 0.65rem !important;
+  }
+
+  .merchant-control {
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  .merchant-avatar {
+    flex-basis: 38px;
+    height: 38px;
+    width: 38px;
+  }
+
+  .merchant-copy input,
+  .merchant-copy .vendor-input,
+  .transaction-table td input,
+  .transaction-table td select,
+  .category-combobox-toggle {
+    font-size: 1rem;
+    min-height: 44px;
+  }
+
+  .merchant-copy p {
+    font-size: 0.9rem;
+    line-height: 1.45;
+  }
+
+  .category-combobox,
+  .category-select,
+  .type-select,
+  .note-input {
+    width: 100%;
+  }
+
+  .category-combobox-menu {
+    min-width: min(100%, 280px);
+    width: 100%;
+  }
+
+  .date-value,
+  .account-pill,
+  .amount-cell span,
+  .amount-cell small,
+  .category-combobox,
+  .flow-status,
+  .confidence-meter,
+  .confidence-meta,
+  .type-select,
+  .note-input {
+    grid-column: 2;
+  }
+
+  .date-value,
+  .account-pill {
+    justify-self: start;
+  }
+
+  .amount-cell span,
+  .amount-cell small {
+    justify-self: end;
+    text-align: right;
+  }
+
+  .amount-cell span {
+    font-size: 1.08rem;
+  }
+
+  .flow-status {
+    justify-items: start;
+  }
+
+  .confidence-cell {
+    align-items: start !important;
+  }
+
+  .confidence-meta {
+    width: 100%;
+  }
+
+  .transaction-table .table-action-cell {
+    border-bottom: 0;
+    display: block;
+    padding: 0.85rem 0.95rem 0.95rem !important;
+    width: 100%;
+  }
+
+  .transaction-table .table-action-cell::before {
+    display: none;
+  }
+
+  .row-action-buttons {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .row-action-buttons .mini-btn {
+    min-height: 44px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .row-action-buttons .save-row-btn {
+    grid-column: 1 / -1;
+  }
+
+  .transaction-load-more {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.95rem;
+  }
+
+  .transaction-load-more .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .transaction-table tbody {
+    padding: 0.65rem;
+  }
+
+  .transaction-table tbody .tx-row {
+    padding: 0.8rem;
+  }
+
+  .row-action-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .table-legend span {
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .financial-dark .transaction-table tbody .tx-row,
+  .financial-dark .transaction-table tbody .tx-row:nth-child(odd),
+  .financial-dark .transaction-table tbody .tx-row:nth-child(even) {
+    background:
+      linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.92)),
+      radial-gradient(circle at 100% 0, rgba(37, 99, 235, 0.2), transparent 12rem);
+    border-color: rgba(148, 163, 184, 0.24);
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.28);
+  }
+
+  .financial-dark .transaction-table tbody .tx-row.needs-review {
+    box-shadow:
+      inset 4px 0 0 var(--finance-amber),
+      0 16px 34px rgba(0, 0, 0, 0.28);
+  }
+
+  .financial-dark .transaction-table tbody .tx-action-row,
+  .financial-dark .transaction-table tbody .tx-action-row:nth-child(odd),
+  .financial-dark .transaction-table tbody .tx-action-row:nth-child(even) {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.92));
+    border-color: rgba(148, 163, 184, 0.24);
+    box-shadow: 0 18px 32px rgba(0, 0, 0, 0.24);
+  }
+
+  .financial-dark .transaction-table .tx-row td::before {
+    color: #93c5fd;
+  }
+
+  .financial-dark .transaction-table .tx-row .date-cell,
+  .financial-dark .transaction-table .tx-row .account-cell,
+  .financial-dark .transaction-table .tx-row .amount-cell {
+    background: rgba(2, 6, 23, 0.42);
+    border-color: rgba(148, 163, 184, 0.22);
+  }
+}

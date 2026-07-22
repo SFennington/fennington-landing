@@ -2277,8 +2277,8 @@ function transactionRow(tx) {
   const internalActive = isInternalFlow(tx);
   const externalActive = isReportableIncome(tx) || isReportableExpense(tx);
   return `<tr data-id="${escapeAttr(tx.id)}" class="tx-row ${tx.needsReview ? "needs-review" : ""}">
-    <td class="date-cell"><span class="date-value" aria-label="Imported transaction date">${escapeHtml(tx.date || "")}</span></td>
-    <td class="tx-description-cell">
+    <td class="date-cell" data-label="Date"><span class="date-value" aria-label="Imported transaction date">${escapeHtml(tx.date || "")}</span></td>
+    <td class="tx-description-cell" data-label="Merchant">
       <div class="merchant-control">
         <span class="merchant-avatar" aria-hidden="true">${initial}</span>
         <div class="merchant-copy">
@@ -2289,16 +2289,16 @@ function transactionRow(tx) {
       </div>
       <div class="tx-tag-row">${reviewTag}${splitTag}${flagTags}</div>
     </td>
-    <td><span class="account-pill">${escapeHtml(accountName(tx.accountId))}</span></td>
-    <td class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}"><span>${money(tx.amount)}</span><small>${tx.amount >= 0 ? "Money in" : "Money out"}</small></td>
-    <td class="category-cell">${transactionCategoryCombobox(tx)}</td>
-    <td>${flowStatusHtml(tx)}</td>
-    <td class="confidence-cell"><div class="confidence-meter" aria-label="${confidence} percent confidence"><span style="width:${confidence}%"></span></div><div class="confidence-meta"><strong>${confidence}%</strong><small>${escapeHtml(source)}</small></div></td>
-    <td><select class="type-select type-${escapeAttr(type)}" data-field="type" aria-label="Transaction type">${typeOptions}</select></td>
-    <td><input class="note-input" data-field="notes" aria-label="Transaction notes" value="${escapeAttr(tx.notes || "")}" placeholder="Add note"></td>
+    <td class="account-cell" data-label="Account"><span class="account-pill">${escapeHtml(accountName(tx.accountId))}</span></td>
+    <td class="amount-cell ${tx.amount >= 0 ? "positive" : "negative"}" data-label="Amount"><span>${money(tx.amount)}</span><small>${tx.amount >= 0 ? "Money in" : "Money out"}</small></td>
+    <td class="category-cell" data-label="Category">${transactionCategoryCombobox(tx)}</td>
+    <td class="flow-cell" data-label="Flow">${flowStatusHtml(tx)}</td>
+    <td class="confidence-cell" data-label="Confidence"><div class="confidence-meter" aria-label="${confidence} percent confidence"><span style="width:${confidence}%"></span></div><div class="confidence-meta"><strong>${confidence}%</strong><small>${escapeHtml(source)}</small></div></td>
+    <td class="type-cell" data-label="Type"><select class="type-select type-${escapeAttr(type)}" data-field="type" aria-label="Transaction type">${typeOptions}</select></td>
+    <td class="notes-cell" data-label="Notes"><input class="note-input" data-field="notes" aria-label="Transaction notes" value="${escapeAttr(tx.notes || "")}" placeholder="Add note"></td>
   </tr>
   <tr data-id="${escapeAttr(tx.id)}" class="tx-action-row ${tx.needsReview ? "needs-review" : ""}">
-    <td class="table-action-cell" colspan="9"><div class="row-action-buttons"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Create Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn flow-toggle ${internalActive ? "active" : ""}" data-action="mark-internal" type="button" aria-pressed="${internalActive ? "true" : "false"}">Internal</button><button class="mini-btn flow-toggle ${externalActive ? "active" : ""}" data-action="mark-external" type="button" aria-pressed="${externalActive ? "true" : "false"}">External</button></div></td>
+    <td class="table-action-cell" colspan="9" data-label="Actions"><div class="row-action-buttons"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Create Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn flow-toggle ${internalActive ? "active" : ""}" data-action="mark-internal" type="button" aria-pressed="${internalActive ? "true" : "false"}">Internal</button><button class="mini-btn flow-toggle ${externalActive ? "active" : ""}" data-action="mark-external" type="button" aria-pressed="${externalActive ? "true" : "false"}">External</button></div></td>
   </tr>`;
 }
 
