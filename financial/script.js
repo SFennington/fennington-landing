@@ -3504,6 +3504,7 @@ function renderIncome() {
   const projection = incomeProjection();
   const tab = document.getElementById("incomeTab");
   tab.innerHTML = `
+    ${incomeTotalHighlightsHtml(projection)}
     <div class="income-grid">
       ${summaryCard("Current Year Total Income", projection.currentYearTotal, "good")}
       ${summaryCard("Current Month Total Income", projection.currentMonthTotal, "good")}
@@ -3544,6 +3545,23 @@ function renderIncome() {
     });
     renderAll();
   });
+}
+
+function incomeTotalHighlightsHtml(projection) {
+  return `
+    <div class="income-total-grid" aria-label="Projected income totals">
+      ${incomeTotalCard("End of Year Total", projection.endOfYearTotal, "Actual year income plus estimated remaining income.")}
+      ${incomeTotalCard("End of Month Total", projection.endOfMonthTotal, "Actual month income plus estimated remaining income.")}
+    </div>`;
+}
+
+function incomeTotalCard(title, value, note) {
+  return `
+    <article class="income-total-card">
+      <span>${escapeHtml(title)}</span>
+      <strong>${money(value)}</strong>
+      <small>${escapeHtml(note)}</small>
+    </article>`;
 }
 
 function incomeModeToggle(mode) {
@@ -4676,16 +4694,22 @@ function incomeProjection(referenceDate = new Date()) {
   const remainingYearPayDates = active.payDates.filter((date) => date > today);
   const remainingMonthPayDates = remainingYearPayDates.filter((date) => date.startsWith(currentMonth));
   const estimatedPaycheckAmount = round(active.estimatedPaycheckAmount);
+  const currentYearTotal = round(incomeRows.reduce((sum, tx) => sum + Math.max(0, Number(tx.amount || 0)), 0));
+  const currentMonthTotal = round(incomeRows.filter((tx) => tx.date?.startsWith(currentMonth)).reduce((sum, tx) => sum + Math.max(0, Number(tx.amount || 0)), 0));
+  const estimatedRemainingYear = round(estimatedPaycheckAmount * remainingYearPayDates.length);
+  const estimatedRemainingMonth = round(estimatedPaycheckAmount * remainingMonthPayDates.length);
   return {
     mode,
     year,
     today,
     currentMonth,
-    currentYearTotal: round(incomeRows.reduce((sum, tx) => sum + Math.max(0, Number(tx.amount || 0)), 0)),
-    currentMonthTotal: round(incomeRows.filter((tx) => tx.date?.startsWith(currentMonth)).reduce((sum, tx) => sum + Math.max(0, Number(tx.amount || 0)), 0)),
+    currentYearTotal,
+    currentMonthTotal,
     estimatedPaycheckAmount,
-    estimatedRemainingYear: round(estimatedPaycheckAmount * remainingYearPayDates.length),
-    estimatedRemainingMonth: round(estimatedPaycheckAmount * remainingMonthPayDates.length),
+    estimatedRemainingYear,
+    estimatedRemainingMonth,
+    endOfYearTotal: round(currentYearTotal + estimatedRemainingYear),
+    endOfMonthTotal: round(currentMonthTotal + estimatedRemainingMonth),
     remainingYearPayDateCount: remainingYearPayDates.length,
     remainingMonthPayDateCount: remainingMonthPayDates.length,
     scheduleLabel: active.scheduleLabel,

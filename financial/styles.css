@@ -518,6 +518,70 @@ body {
   margin: 0;
 }
 
+.income-total-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-bottom: 1rem;
+}
+
+.income-total-card {
+  background:
+    radial-gradient(circle at 100% 0, rgba(34, 211, 238, 0.28), transparent 13rem),
+    linear-gradient(135deg, #0f172a 0%, #1d4ed8 58%, #0e7490 100%);
+  border: 1px solid rgba(125, 211, 252, 0.48);
+  border-radius: 24px;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
+  color: #fff;
+  overflow: hidden;
+  padding: 1.25rem;
+  position: relative;
+}
+
+.income-total-card::after {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  content: "";
+  height: 132px;
+  position: absolute;
+  right: -42px;
+  top: -54px;
+  width: 132px;
+}
+
+.income-total-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.income-total-card span,
+.income-total-card small {
+  color: rgba(255, 255, 255, 0.78);
+  display: block;
+}
+
+.income-total-card span {
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.income-total-card strong {
+  color: #fff;
+  display: block;
+  font-size: clamp(2rem, 4vw, 3.15rem);
+  letter-spacing: -0.06em;
+  line-height: 1;
+  margin: 0.7rem 0 0.5rem;
+}
+
+.income-total-card small {
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .income-mode-toggle,
 .income-auto-panel,
 .income-estimate-grid,
@@ -4508,6 +4572,15 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-app-page .import-summary-copy small,
 .financial-app-page .import-page-header p {
   color: var(--finance-muted);
+}
+
+.financial-app-page .income-total-card strong {
+  color: #fff;
+}
+
+.financial-app-page .income-total-card span,
+.financial-app-page .income-total-card small {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .financial-app-page .summary-card.good {
