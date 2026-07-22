@@ -2278,27 +2278,27 @@ function topCategoryMiniList(entries) {
 }
 
 function bindTransactionTable(root) {
-  root.querySelectorAll("[data-action='save-row']").forEach((button) => button.addEventListener("click", () => {
+  root.querySelectorAll("[data-action='save-row']").forEach((button) => button.addEventListener("click", async () => {
     const tr = transactionDataRowForAction(button);
     const { tx, previousCategory, previousVendor } = saveTransactionRow(tr);
     if (!tx) return;
     let statusMessage = "";
     if (previousCategory !== tx.category && tx.merchant) {
-      const result = createReviewRuleAndApplyToMatches(tx);
+      const result = await createReviewRuleAndApplyToMatches(tx);
       statusMessage = ruleCreationStatusText(result, "Rule", "matching transactions were categorized");
     }
     if (previousVendor !== tx.vendor && tx.vendor) {
-      const result = createVendorRuleAndApplyToMatches(tx);
+      const result = await createVendorRuleAndApplyToMatches(tx);
       statusMessage = ruleCreationStatusText(result, "Vendor rule", "matching transactions were updated");
     }
     renderAll();
     if (statusMessage) showStatus(statusMessage);
   }));
-  root.querySelectorAll("[data-action='apply-rule']").forEach((button) => button.addEventListener("click", () => {
+  root.querySelectorAll("[data-action='apply-rule']").forEach((button) => button.addEventListener("click", async () => {
     const tr = transactionDataRowForAction(button);
     const { tx } = saveTransactionRow(tr);
     if (!tx) return;
-    const result = createReviewRuleAndApplyToMatches(tx);
+    const result = await createReviewRuleAndApplyToMatches(tx);
     renderAll();
     const statusMessage = ruleCreationStatusText(result, "Rule", "matching transactions were categorized");
     if (statusMessage) showStatus(statusMessage);
@@ -2517,7 +2517,7 @@ function splitReviewHtml(tx) {
 
 function bindReviewActions(root) {
   bindReviewReasonFilters(root);
-  root.querySelectorAll("[data-review='confirm']").forEach((button) => button.addEventListener("click", () => {
+  root.querySelectorAll("[data-review='confirm']").forEach((button) => button.addEventListener("click", async () => {
     const card = button.closest("article");
     const tx = state.transactions.find((item) => item.id === card.dataset.id);
     tx.category = card.querySelector("[data-review-category]").value;
@@ -2529,7 +2529,7 @@ function bindReviewActions(root) {
     tx.flags = [];
     resolveRecurringReview(tx, "confirmed");
     if (card.querySelector("[data-apply-rule]").checked) {
-      const result = createReviewRuleAndApplyToMatches(tx);
+      const result = await createReviewRuleAndApplyToMatches(tx);
       const statusMessage = ruleCreationStatusText(result, "Rule", "matching transactions were categorized");
       if (statusMessage) showStatus(statusMessage);
     }
@@ -2594,15 +2594,12 @@ function resolveRecurringReview(tx, status) {
   state.transactions.filter((item) => item.merchant === recurring.merchant).forEach((item) => { item.recurringStatus = status === "confirmed" ? "confirmed" : "rejected"; });
 }
 
-function createReviewRuleAndApplyToMatches(sourceTx) {
+async function createReviewRuleAndApplyToMatches(sourceTx) {
   const match = categoryRuleMatchText(sourceTx);
   if (!match) return { updatedCount: 0, created: false, duplicate: false, cancelled: false };
-  const amount = promptRuleAmountForTransaction(sourceTx, "categorization");
-  if (amount === null) return { updatedCount: 0, created: false, duplicate: false, cancelled: true };
-  const rule = normalizeRuleAmount({ id: uniqueId("rule"), type: "merchant", match, amount, category: sourceTx.category, createdAt: new Date().toISOString() });
+  const rule = await editRuleBeforeCreation({ id: uniqueId("rule"), type: "merchant", match, amount: Math.abs(Number(sourceTx.amount || 0)), category: sourceTx.category, createdAt: new Date().toISOString() }, sourceTx);
+  if (!rule) return { updatedCount: 0, created: false, duplicate: false, cancelled: true };
   const existingRule = matchingCategoryRule(rule);
-  const matchCount = ruleMatchCount(existingRule || rule);
-  if (!confirmRuleCreation(rule, { duplicate: Boolean(existingRule), matchCount })) return { updatedCount: 0, created: false, duplicate: Boolean(existingRule), cancelled: true };
   if (!existingRule) state.rules.push(rule);
   return { updatedCount: applyCategoryRuleToTransactions(existingRule || rule, state.transactions), created: !existingRule, duplicate: Boolean(existingRule), cancelled: false };
 }
@@ -2612,7 +2609,7 @@ function matchingCategoryRule(rule) {
 }
 
 function categoryRuleMatchText(tx) {
-  return paypalVendorToken(tx.description) || stableDescriptionRuleMatch(tx.description) || sanitize(tx.merchant || tx.vendor || tx.description);
+  return sanitize(tx.description || tx.merchant || tx.vendor);
 }
 
 function stableDescriptionRuleMatch(description) {
@@ -2659,15 +2656,12 @@ function categoryRuleMatches(rule, tx) {
   return description.includes(match) || merchant.includes(match) || vendor.includes(match);
 }
 
-function createVendorRuleAndApplyToMatches(sourceTx) {
+async function createVendorRuleAndApplyToMatches(sourceTx) {
   const match = vendorRuleMatch(sourceTx);
   if (!match || !sourceTx.vendor) return { updatedCount: 0, created: false, duplicate: false, cancelled: false };
-  const amount = promptRuleAmountForTransaction(sourceTx, "vendor cleanup");
-  if (amount === null) return { updatedCount: 0, created: false, duplicate: false, cancelled: true };
-  const rule = normalizeRuleAmount({ id: uniqueId("rule"), type: "vendor", match, amount, vendor: sourceTx.vendor, createdAt: new Date().toISOString() });
+  const rule = await editRuleBeforeCreation({ id: uniqueId("rule"), type: "vendor", match, amount: Math.abs(Number(sourceTx.amount || 0)), vendor: sourceTx.vendor, createdAt: new Date().toISOString() }, sourceTx);
+  if (!rule) return { updatedCount: 0, created: false, duplicate: false, cancelled: true };
   const existingRule = matchingVendorRule(rule);
-  const matchCount = vendorRuleMatchCount(existingRule || rule);
-  if (!confirmRuleCreation(rule, { duplicate: Boolean(existingRule), matchCount })) return { updatedCount: 0, created: false, duplicate: Boolean(existingRule), cancelled: true };
   if (!existingRule) state.rules.push(rule);
   return { updatedCount: applyVendorRulesToTransactions(state.transactions, state), created: !existingRule, duplicate: Boolean(existingRule), cancelled: false };
 }
@@ -2710,39 +2704,78 @@ function rulesByAmountSpecificity(rules, specificFirst = true) {
   return rules.slice().sort((a, b) => (Boolean(ruleAmountValue(a)) - Boolean(ruleAmountValue(b))) * direction);
 }
 
-function promptRuleAmountForTransaction(tx, ruleLabel) {
-  const transactionAmount = round(Math.abs(Number(tx.amount || 0)));
-  const input = window.prompt([
-    `Optional amount limit for this ${ruleLabel} rule.`,
-    `Transaction amount: ${money(transactionAmount)}`,
-    "Leave blank to match this vendor or criteria at any amount.",
-    "Enter an amount to require both the vendor/criteria and this price.",
-    "Cancel to stop creating the rule."
-  ].join("\n"), "");
-  if (input === null) return null;
-  const amount = round(Math.abs(parseMoney(input)));
-  return amount > 0 ? amount : 0;
+function editRuleBeforeCreation(initialRule, sourceTx) {
+  if (!document.body || typeof HTMLDialogElement === "undefined") return editRuleBeforeCreationFallback(initialRule, sourceTx);
+  return new Promise((resolve) => {
+    const isVendorRule = initialRule.type === "vendor";
+    const dialog = document.createElement("dialog");
+    dialog.setAttribute("aria-label", isVendorRule ? "Edit vendor rule before creating" : "Edit categorization rule before creating");
+    dialog.innerHTML = `
+      <form method="dialog" style="min-width:min(560px, calc(100vw - 2rem));max-width:680px">
+        <h3 style="margin-top:0">${isVendorRule ? "Create Vendor Cleanup Rule" : "Create Categorization Rule"}</h3>
+        <p class="status-line">Edit the rule before it is created. The criteria starts with the full transaction description.</p>
+        <div class="field"><label for="ruleCreateCriteria">Criteria</label><textarea id="ruleCreateCriteria" rows="4" style="width:100%">${escapeHtml(initialRule.match)}</textarea></div>
+        ${isVendorRule ? `<div class="field"><label for="ruleCreateVendor">Vendor</label><input id="ruleCreateVendor" value="${escapeAttr(initialRule.vendor || "")}"></div>` : `<div class="field"><label for="ruleCreateType">Match field</label><select id="ruleCreateType"><option value="merchant" ${initialRule.type === "merchant" ? "selected" : ""}>Merchant or vendor</option><option value="description" ${initialRule.type === "description" ? "selected" : ""}>Description</option></select></div><div class="field"><label for="ruleCreateCategory">Category</label><select id="ruleCreateCategory">${categoryOptions(initialRule.category || "")}</select></div>`}
+        <div class="field"><label for="ruleCreateAmount">Amount</label><input id="ruleCreateAmount" inputmode="decimal" value="${escapeAttr(ruleAmountInputValue(initialRule) || round(Math.abs(Number(sourceTx.amount || 0))).toFixed(2))}"></div>
+        <label style="display:flex;gap:.5rem;align-items:center;margin:.5rem 0 1rem"><input id="ruleCreateRequireAmount" type="checkbox"> Require this exact amount too</label>
+        <div class="empty-state compact" id="ruleCreatePreview" style="text-align:left;margin-bottom:1rem"></div>
+        <div class="form-actions" style="justify-content:flex-end"><button class="btn btn-secondary" value="cancel" type="submit">Cancel</button><button class="btn btn-primary" value="create" type="submit">Create Rule</button></div>
+      </form>
+    `;
+    document.body.appendChild(dialog);
+    const form = dialog.querySelector("form");
+    const preview = dialog.querySelector("#ruleCreatePreview");
+    const criteriaInput = dialog.querySelector("#ruleCreateCriteria");
+    const amountInput = dialog.querySelector("#ruleCreateAmount");
+    const requireAmountInput = dialog.querySelector("#ruleCreateRequireAmount");
+    const draftRule = () => normalizeRuleAmount(isVendorRule ? {
+      ...initialRule,
+      match: sanitize(criteriaInput.value),
+      vendor: sanitize(dialog.querySelector("#ruleCreateVendor")?.value || ""),
+      amount: requireAmountInput.checked ? amountInput.value : ""
+    } : {
+      ...initialRule,
+      type: dialog.querySelector("#ruleCreateType")?.value || "merchant",
+      match: sanitize(criteriaInput.value),
+      category: dialog.querySelector("#ruleCreateCategory")?.value || initialRule.category,
+      amount: requireAmountInput.checked ? amountInput.value : ""
+    });
+    const renderPreview = () => {
+      const rule = draftRule();
+      const existingRule = isVendorRule ? matchingVendorRule(rule) : matchingCategoryRule(rule);
+      const matchCount = isVendorRule ? vendorRuleMatchCount(existingRule || rule) : ruleMatchCount(existingRule || rule);
+      const duplicateText = existingRule ? `<p><strong>${isVendorRule ? "A vendor cleanup rule" : "A categorization rule"} with the same criteria${ruleAmountValue(rule) ? ", amount," : ""} and target already exists.</strong></p>` : "";
+      preview.innerHTML = `${duplicateText}<p><strong>Criteria:</strong> ${escapeHtml(rule.match || "None")}</p><p><strong>${isVendorRule ? "Vendor" : "Category"}:</strong> ${escapeHtml(isVendorRule ? rule.vendor : rule.category)}</p><p><strong>Amount:</strong> ${escapeHtml(ruleAmountLabel(rule))}</p><p><strong>Matching transactions:</strong> ${escapeHtml(plural(matchCount, "transaction"))}</p>`;
+    };
+    dialog.querySelectorAll("input, textarea, select").forEach((input) => input.addEventListener("input", renderPreview));
+    dialog.querySelectorAll("select, input[type='checkbox']").forEach((input) => input.addEventListener("change", renderPreview));
+    form.addEventListener("submit", (event) => {
+      if (event.submitter?.value !== "create") return;
+      event.preventDefault();
+      const rule = draftRule();
+      if (!rule.match || isVendorRule && !rule.vendor || !isVendorRule && !rule.category) {
+        showStatus("Rule criteria and target are required.");
+        return;
+      }
+      resolve(rule);
+      dialog.close("create");
+    });
+    dialog.addEventListener("close", () => {
+      const created = dialog.returnValue === "create";
+      dialog.remove();
+      if (!created) resolve(null);
+    }, { once: true });
+    renderPreview();
+    dialog.showModal();
+  });
 }
 
-function confirmRuleCreation(rule, { duplicate, matchCount }) {
-  const lines = rule.type === "vendor" ? [
-    duplicate ? "A vendor cleanup rule with the same criteria and vendor already exists." : "Create this vendor cleanup rule?",
-    "",
-    `Criteria: ${rule.match}`,
-    `Vendor: ${rule.vendor}`,
-    `Amount: ${ruleAmountLabel(rule)}`,
-    `Matching transactions: ${plural(matchCount, "transaction")}`
-  ] : [
-    duplicate ? "A categorization rule with the same criteria and category already exists." : "Create this categorization rule?",
-    "",
-    `Match field: ${rule.type === "description" ? "Description" : "Merchant or vendor"}`,
-    `Criteria: ${rule.match}`,
-    `Amount: ${ruleAmountLabel(rule)}`,
-    `Category: ${rule.category}`,
-    `Matching transactions: ${plural(matchCount, "transaction")}`
-  ];
-  lines.push("", duplicate ? "No duplicate rule will be created. Apply the existing rule now?" : "Create and apply this rule now?");
-  return window.confirm(lines.join("\n"));
+function editRuleBeforeCreationFallback(initialRule, sourceTx) {
+  const amount = round(Math.abs(Number(sourceTx.amount || 0))).toFixed(2);
+  const match = sanitize(window.prompt("Rule criteria:", initialRule.match) || "");
+  if (!match) return Promise.resolve(null);
+  const useAmount = window.confirm(`Require exact amount ${money(amount)} too?`);
+  return Promise.resolve(normalizeRuleAmount({ ...initialRule, match, amount: useAmount ? amount : "" }));
 }
 
 function ruleCreationStatusText(result, label, appliedText) {
@@ -2753,7 +2786,7 @@ function ruleCreationStatusText(result, label, appliedText) {
 }
 
 function vendorRuleMatch(tx) {
-  return paypalVendorToken(tx.description) || sanitize(tx.description || tx.merchant || tx.vendor);
+  return sanitize(tx.description || tx.merchant || tx.vendor);
 }
 
 function applyVendorRulesToTransactions(transactions, sourceState) {
