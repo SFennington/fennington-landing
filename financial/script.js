@@ -190,6 +190,7 @@ function setupTabs() {
     if (tabName !== "transactions" && activeImportPanel) {
       activeImportPanel = "";
       document.body.classList.remove("import-overlay-open");
+      renderImportWorkspaceOverlay();
     }
     document.querySelectorAll(".app-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tabName));
     document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.remove("active"));
@@ -1214,6 +1215,24 @@ function importWorkspaceOverlayHtml() {
   `;
 }
 
+function importOverlayRoot() {
+  let root = document.getElementById("financialImportOverlayRoot");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "financialImportOverlayRoot";
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
+function renderImportWorkspaceOverlay() {
+  if (!isAppPage) return null;
+  const root = importOverlayRoot();
+  root.innerHTML = importWorkspaceOverlayHtml();
+  root.hidden = !activeImportPanel;
+  return root;
+}
+
 function openImportPanel(type) {
   activeImportPanel = type === "amazon" ? "amazon" : "csv";
   renderTransactions();
@@ -1674,7 +1693,6 @@ function renderTransactions() {
           </div>
         </div>
       </div>
-      ${importWorkspaceOverlayHtml()}
       ${transactionInsightsHtml(rows)}
       ${aiAnalysisPanelHtml(rows)}
       ${filtersHtml()}
@@ -1694,7 +1712,9 @@ function renderTransactions() {
       </div>
     </section>
   `;
+  const overlayRoot = renderImportWorkspaceOverlay();
   bindImportControls(tab);
+  if (overlayRoot) bindImportControls(overlayRoot);
   bindAiAnalysisControls(tab);
   bindFilters();
   bindTransactionTable(tab);
