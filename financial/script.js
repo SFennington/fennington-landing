@@ -119,6 +119,7 @@ let saveTimer = null;
 let state = emptyState();
 const pendingCategoryDeletes = new Set();
 const pendingRuleDeletes = new Set();
+const ruleActionFeedbackTimers = new Map();
 const categoryExpandedIds = new Set();
 const dashboardCategoryExpandedKeys = new Set();
 const recurringTransactionExpandedIds = new Set();
@@ -3394,7 +3395,17 @@ function rulesTable(rules) {
 }
 
 function categoryRuleRow(rule) {
-  return `<tr data-rule-id="${escapeAttr(rule.id)}"><td class="rule-match-field-cell"><select data-rule-field="type" aria-label="Rule match field"><option value="merchant" ${rule.type === "merchant" ? "selected" : ""}>Merchant or vendor</option><option value="description" ${rule.type === "description" ? "selected" : ""}>Description</option></select></td><td class="rule-criteria-cell"><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Rule match criteria"></td><td class="rule-amount-cell"><input data-rule-field="amount" value="${escapeAttr(ruleAmountInputValue(rule))}" placeholder="Any" inputmode="decimal" aria-label="Optional rule amount"></td><td class="rule-target-cell">${categoryRuleTargetPanel(rule)}</td><td class="rule-matches-cell">${ruleMatchCount(rule)}</td><td class="rule-created-cell">${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell rule-actions-cell"><button class="mini-btn" data-rule-action="save" type="button">Save</button><button class="mini-btn" data-rule-action="rerun" type="button">Rerun</button><button class="mini-btn danger" data-rule-action="delete" type="button">Delete</button></td></tr>`;
+  return `<tr data-rule-id="${escapeAttr(rule.id)}"><td class="rule-match-field-cell"><select data-rule-field="type" aria-label="Rule match field"><option value="merchant" ${rule.type === "merchant" ? "selected" : ""}>Merchant or vendor</option><option value="description" ${rule.type === "description" ? "selected" : ""}>Description</option></select></td><td class="rule-criteria-cell"><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Rule match criteria"></td><td class="rule-amount-cell"><input data-rule-field="amount" value="${escapeAttr(ruleAmountInputValue(rule))}" placeholder="Any" inputmode="decimal" aria-label="Optional rule amount"></td><td class="rule-target-cell">${categoryRuleTargetPanel(rule)}</td><td class="rule-matches-cell">${ruleMatchCount(rule)}</td><td class="rule-created-cell">${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell rule-actions-cell">${ruleActionButtonsHtml()}</td></tr>`;
+}
+
+function ruleActionButtonsHtml() {
+  return `${ruleActionButton("save", "Save")}${ruleActionButton("rerun", "Rerun")}${ruleActionButton("delete", "Delete", "danger")}`;
+}
+
+function ruleActionButton(action, labelText, extraClass = "") {
+  const buttonClass = `mini-btn${extraClass ? ` ${extraClass}` : ""}`;
+  const feedback = action === "save" || action === "rerun" ? `<span class="rule-inline-status" data-rule-action-status="${escapeAttr(action)}" role="status" aria-live="polite" aria-atomic="true"></span>` : "";
+  return `<span class="rule-action-control"><button class="${buttonClass}" data-rule-action="${escapeAttr(action)}" type="button">${escapeHtml(labelText)}</button>${feedback}</span>`;
 }
 
 function categoryRuleTargetPanel(rule) {
@@ -3435,7 +3446,7 @@ function ruleApplyFieldsLabel(rule) {
 
 function vendorRulesTable(rules) {
   const sortedRules = sortedRulesForTable(rules, "vendor");
-  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable vendor rules table"><table class="rules-table"><thead><tr>${ruleSortHeader("vendor", "match", "Criteria")}${ruleSortHeader("vendor", "amount", "Amount")}${ruleSortHeader("vendor", "vendor", "Vendor")}${ruleSortHeader("vendor", "matches", "Matches")}${ruleSortHeader("vendor", "createdAt", "Created")}<th>Actions</th></tr></thead><tbody>${sortedRules.map((rule) => `<tr data-rule-id="${escapeAttr(rule.id)}"><td><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Vendor rule match criteria"></td><td><input data-rule-field="amount" value="${escapeAttr(ruleAmountInputValue(rule))}" placeholder="Any" inputmode="decimal" aria-label="Optional vendor rule amount"></td><td><input data-rule-field="vendor" value="${escapeAttr(rule.vendor || "")}" aria-label="Vendor name"></td><td>${vendorRuleMatchCount(rule)}</td><td>${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell"><button class="mini-btn" data-rule-action="save" type="button">Save</button><button class="mini-btn" data-rule-action="rerun" type="button">Rerun</button><button class="mini-btn danger" data-rule-action="delete" type="button">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable vendor rules table"><table class="rules-table"><thead><tr>${ruleSortHeader("vendor", "match", "Criteria")}${ruleSortHeader("vendor", "amount", "Amount")}${ruleSortHeader("vendor", "vendor", "Vendor")}${ruleSortHeader("vendor", "matches", "Matches")}${ruleSortHeader("vendor", "createdAt", "Created")}<th>Actions</th></tr></thead><tbody>${sortedRules.map((rule) => `<tr data-rule-id="${escapeAttr(rule.id)}"><td><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Vendor rule match criteria"></td><td><input data-rule-field="amount" value="${escapeAttr(ruleAmountInputValue(rule))}" placeholder="Any" inputmode="decimal" aria-label="Optional vendor rule amount"></td><td><input data-rule-field="vendor" value="${escapeAttr(rule.vendor || "")}" aria-label="Vendor name"></td><td>${vendorRuleMatchCount(rule)}</td><td>${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell rule-actions-cell">${ruleActionButtonsHtml()}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 function ruleSortHeader(table, key, label) {
@@ -3499,11 +3510,18 @@ function bindRuleControls(root) {
       showStatus("Rule deleted.");
       return;
     }
+    const action = button.dataset.ruleAction;
+    const ruleId = rule.id;
     updateRuleFromRow(row);
-    const updated = rule.type === "vendor" ? applyVendorRulesToTransactions(state.transactions, state) : button.dataset.ruleAction === "rerun" ? applyCategoryRuleToTransactions(rule, state.transactions) : 0;
+    const updated = rule.type === "vendor" ? applyVendorRulesToTransactions(state.transactions, state) : action === "rerun" ? applyCategoryRuleToTransactions(rule, state.transactions) : 0;
     renderAll({ save: false });
-    if (!await saveStateImmediately()) return;
-    showStatus(button.dataset.ruleAction === "rerun" ? `Rule rerun. ${updated} transaction matches updated.` : "Rule saved.");
+    if (!await saveStateImmediately()) {
+      showRuleActionFeedback(ruleId, action, "Failed", "Rule save failed. See the status summary for details.", "danger");
+      return;
+    }
+    const statusMessage = action === "rerun" ? `Rule rerun. ${updated} transaction matches updated.` : "Rule saved.";
+    showRuleActionFeedback(ruleId, action, action === "rerun" ? "Ran" : "Saved", statusMessage);
+    showStatus(statusMessage);
   }));
   root.querySelectorAll("[data-rule-sort-key]").forEach((button) => button.addEventListener("click", () => {
     root.querySelectorAll("[data-rule-id]").forEach(updateRuleFromRow);
@@ -3517,6 +3535,38 @@ function bindRuleControls(root) {
     }
     renderRules();
   }));
+}
+
+function showRuleActionFeedback(ruleId, action, labelText, detailText = labelText, tone = "success") {
+  const row = Array.from(document.querySelectorAll("#rulesTab [data-rule-id]")).find((item) => item.dataset.ruleId === ruleId);
+  const button = row?.querySelector(`[data-rule-action="${action}"]`);
+  const status = button?.parentElement?.querySelector(`[data-rule-action-status="${action}"]`);
+  if (!status) return;
+  row.querySelectorAll(".rule-inline-status.is-visible").forEach((item) => {
+    if (item === status) return;
+    item.classList.remove("is-visible");
+    item.textContent = "";
+    item.removeAttribute("aria-label");
+    delete item.dataset.tone;
+  });
+  status.textContent = labelText;
+  status.setAttribute("aria-label", detailText);
+  status.dataset.tone = tone;
+  status.classList.add("is-visible");
+  try {
+    button.focus({ preventScroll: true });
+  } catch (error) {
+    button.focus();
+  }
+  const key = `${ruleId}:${action}`;
+  clearTimeout(ruleActionFeedbackTimers.get(key));
+  ruleActionFeedbackTimers.set(key, window.setTimeout(() => {
+    status.classList.remove("is-visible");
+    status.textContent = "";
+    status.removeAttribute("aria-label");
+    delete status.dataset.tone;
+    ruleActionFeedbackTimers.delete(key);
+  }, 2400));
 }
 
 function ruleMatchCount(rule) {

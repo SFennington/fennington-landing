@@ -5472,3 +5472,66 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-app-page.financial-dark .rule-target-title {
   color: #fed7aa;
 }
+
+
+/* Inline rule action feedback: floats inside the existing Actions column without widening it. */
+.financial-app-page .rule-action-control {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  margin-inline: 0.05rem;
+  position: relative;
+  vertical-align: middle;
+}
+
+.financial-app-page .rule-action-control .mini-btn {
+  margin-inline: 0;
+}
+
+.financial-app-page .rule-inline-status {
+  background: rgba(4, 120, 87, 0.12);
+  border: 1px solid rgba(4, 120, 87, 0.28);
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+  color: var(--financial-good);
+  font-size: 0.66rem;
+  font-weight: 900;
+  left: calc(100% - 0.32rem);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  max-width: 3.8rem;
+  opacity: 0;
+  overflow: hidden;
+  padding: 0.22rem 0.42rem;
+  pointer-events: none;
+  position: absolute;
+  text-overflow: ellipsis;
+  top: 50%;
+  transform: translateY(-50%) scale(0.96);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  white-space: nowrap;
+  z-index: 4;
+}
+
+.financial-app-page .rule-inline-status.is-visible {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+.financial-app-page .rule-inline-status[data-tone="danger"] {
+  background: rgba(185, 28, 28, 0.12);
+  border-color: rgba(185, 28, 28, 0.3);
+  color: var(--financial-danger);
+}
+
+.financial-app-page.financial-dark .rule-inline-status {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(110, 231, 183, 0.5);
+  color: #a7f3d0;
+}
+
+.financial-app-page.financial-dark .rule-inline-status[data-tone="danger"] {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(252, 165, 165, 0.58);
+  color: #fecaca;
+}
