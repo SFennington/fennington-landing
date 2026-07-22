@@ -4000,3 +4000,920 @@ summary.category-tree-summary::-webkit-details-marker {
     border-color: rgba(148, 163, 184, 0.22);
   }
 }
+
+/* ========================================
+   FINANCIAL APP CONTRAST + THEME COHESION AUDIT
+   ======================================== */
+.financial-app-page {
+  --finance-canvas-start: #edf4ff;
+  --finance-canvas-mid: #e7eef8;
+  --finance-canvas-end: #f8fbff;
+  --finance-app-surface: rgba(247, 250, 255, 0.97);
+  --finance-app-border: rgba(71, 85, 105, 0.42);
+  --finance-surface: #ffffff;
+  --finance-surface-soft: #f8fafc;
+  --finance-surface-contrast: #eef4ff;
+  --finance-surface-inset: #e7eef8;
+  --finance-border: rgba(100, 116, 139, 0.36);
+  --finance-border-strong: rgba(71, 85, 105, 0.5);
+  --finance-heading: #0f172a;
+  --finance-text: #1e293b;
+  --finance-muted: #475569;
+  --finance-chip-bg: #e0ecff;
+  --finance-chip-border: rgba(37, 99, 235, 0.28);
+  --finance-chip-text: #1e3a8a;
+  --finance-input-bg: #ffffff;
+  --finance-input-border: rgba(71, 85, 105, 0.46);
+  --finance-input-text: #0f172a;
+  --finance-table-head: linear-gradient(180deg, #f8fafc 0%, #e9f1ff 100%);
+  --finance-row: #ffffff;
+  --finance-row-alt: #f4f7fb;
+  --finance-row-hover: #eaf2ff;
+  --finance-action-row: #edf4ff;
+  --finance-card-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+  --finance-card-shadow-strong: 0 24px 70px rgba(15, 23, 42, 0.14);
+  --finance-good-card: linear-gradient(145deg, #dcfce7 0%, #f0fdf4 100%);
+  --finance-good-border: rgba(22, 163, 74, 0.5);
+  --finance-good-heading: #064e3b;
+  --finance-good-text: #14532d;
+  --finance-good-value: #047857;
+  --finance-warn-card: linear-gradient(145deg, #fef3c7 0%, #fffbeb 100%);
+  --finance-warn-border: rgba(217, 119, 6, 0.52);
+  --finance-warn-heading: #78350f;
+  --finance-warn-text: #92400e;
+  --finance-warn-value: #92400e;
+  --finance-danger-card: linear-gradient(145deg, #fee2e2 0%, #fff5f5 100%);
+  --finance-danger-border: rgba(220, 38, 38, 0.48);
+  --finance-danger-heading: #7f1d1d;
+  --finance-danger-text: #991b1b;
+  --finance-danger-value: #b91c1c;
+  --financial-line: var(--finance-border);
+  --financial-panel: var(--finance-surface);
+  --financial-ink: var(--finance-heading);
+  --financial-good: var(--finance-good-value);
+  --financial-warn: var(--finance-warn-value);
+  --financial-danger: var(--finance-danger-value);
+  --text: var(--finance-text);
+  --muted: var(--finance-muted);
+  background:
+    radial-gradient(circle at 10% 10%, rgba(34, 211, 238, 0.16), transparent 28rem),
+    radial-gradient(circle at 92% 16%, rgba(124, 58, 237, 0.12), transparent 30rem),
+    linear-gradient(180deg, var(--finance-canvas-start) 0%, var(--finance-canvas-mid) 46%, var(--finance-canvas-end) 100%);
+  color: var(--finance-text);
+}
+
+.financial-app-page.financial-dark {
+  --finance-canvas-start: #020617;
+  --finance-canvas-mid: #07111f;
+  --finance-canvas-end: #0f172a;
+  --finance-app-surface: rgba(11, 18, 32, 0.98);
+  --finance-app-border: rgba(148, 163, 184, 0.36);
+  --finance-surface: #111827;
+  --finance-surface-soft: #0f172a;
+  --finance-surface-contrast: #020617;
+  --finance-surface-inset: #0b1220;
+  --finance-border: rgba(148, 163, 184, 0.34);
+  --finance-border-strong: rgba(148, 163, 184, 0.52);
+  --finance-heading: #f8fafc;
+  --finance-text: #e2e8f0;
+  --finance-muted: #cbd5e1;
+  --finance-chip-bg: rgba(96, 165, 250, 0.2);
+  --finance-chip-border: rgba(147, 197, 253, 0.36);
+  --finance-chip-text: #dbeafe;
+  --finance-input-bg: #020617;
+  --finance-input-border: rgba(148, 163, 184, 0.52);
+  --finance-input-text: #f8fafc;
+  --finance-table-head: linear-gradient(180deg, #111827 0%, #0f1b33 100%);
+  --finance-row: #0f172a;
+  --finance-row-alt: #111827;
+  --finance-row-hover: rgba(30, 64, 175, 0.26);
+  --finance-action-row: #1e293b;
+  --finance-card-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+  --finance-card-shadow-strong: 0 26px 80px rgba(0, 0, 0, 0.46);
+  --finance-good-card: linear-gradient(145deg, rgba(6, 78, 59, 0.96) 0%, rgba(20, 83, 45, 0.78) 100%);
+  --finance-good-border: rgba(52, 211, 153, 0.56);
+  --finance-good-heading: #ecfdf5;
+  --finance-good-text: #bbf7d0;
+  --finance-good-value: #86efac;
+  --finance-warn-card: linear-gradient(145deg, rgba(120, 53, 15, 0.96) 0%, rgba(113, 63, 18, 0.78) 100%);
+  --finance-warn-border: rgba(251, 191, 36, 0.58);
+  --finance-warn-heading: #fffbeb;
+  --finance-warn-text: #fde68a;
+  --finance-warn-value: #fde68a;
+  --finance-danger-card: linear-gradient(145deg, rgba(127, 29, 29, 0.96) 0%, rgba(153, 27, 27, 0.78) 100%);
+  --finance-danger-border: rgba(248, 113, 113, 0.6);
+  --finance-danger-heading: #fff1f2;
+  --finance-danger-text: #fecaca;
+  --finance-danger-value: #fecaca;
+  --financial-good: var(--finance-good-value);
+  --financial-warn: var(--finance-warn-value);
+  --financial-danger: var(--finance-danger-value);
+  --brand: #60a5fa;
+  --brand-dark: #bfdbfe;
+  --accent: #22d3ee;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(37, 99, 235, 0.24), transparent 28rem),
+    radial-gradient(circle at 90% 14%, rgba(124, 58, 237, 0.2), transparent 30rem),
+    linear-gradient(180deg, var(--finance-canvas-start) 0%, var(--finance-canvas-mid) 48%, var(--finance-canvas-end) 100%);
+}
+
+.financial-app-page .financial-app,
+.financial-app-page .auth-gate {
+  background:
+    linear-gradient(135deg, var(--finance-app-surface), rgba(239, 246, 255, 0.9)),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 24rem);
+  border-color: var(--finance-app-border);
+  box-shadow: var(--finance-card-shadow-strong);
+  color: var(--finance-text);
+}
+
+.financial-app-page.financial-dark .financial-app,
+.financial-app-page.financial-dark .auth-gate {
+  background:
+    linear-gradient(135deg, var(--finance-app-surface), rgba(15, 23, 42, 0.94)),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.18), transparent 24rem);
+}
+
+.financial-app-page .app-topbar,
+.financial-app-page .app-tabs,
+.financial-app-page .panel,
+.financial-app-page .chart-card,
+.financial-app-page .summary-card,
+.financial-app-page .recurring-card,
+.financial-app-page .category-card,
+.financial-app-page .account-card,
+.financial-app-page .filters-card,
+.financial-app-page .ai-analysis-card,
+.financial-app-page .import-disclosure,
+.financial-app-page .insight-card:not(.hero-insight),
+.financial-app-page .privacy-card,
+.financial-app-page .feature-card,
+.financial-app-page .steps-grid article,
+.financial-app-page .import-action-card,
+.financial-app-page .import-page,
+.financial-app-page .import-page-header {
+  background: var(--finance-surface);
+  border-color: var(--finance-border);
+  box-shadow: var(--finance-card-shadow);
+  color: var(--finance-text);
+}
+
+.financial-app-page .app-topbar,
+.financial-app-page .filters-card,
+.financial-app-page .import-disclosure,
+.financial-app-page .import-page-header {
+  background:
+    linear-gradient(135deg, var(--finance-surface) 0%, var(--finance-surface-soft) 100%),
+    radial-gradient(circle at 0 0, rgba(6, 182, 212, 0.12), transparent 18rem);
+}
+
+.financial-app-page.financial-dark .app-topbar,
+.financial-app-page.financial-dark .filters-card,
+.financial-app-page.financial-dark .import-disclosure,
+.financial-app-page.financial-dark .import-page-header {
+  background:
+    linear-gradient(135deg, var(--finance-surface) 0%, var(--finance-surface-soft) 100%),
+    radial-gradient(circle at 0 0, rgba(6, 182, 212, 0.16), transparent 18rem);
+}
+
+.financial-app-page .financial-app-section h1,
+.financial-app-page .financial-app-section h2,
+.financial-app-page .financial-app-section h3,
+.financial-app-page .financial-app-section h4,
+.financial-app-page .financial-app-section strong,
+.financial-app-page .section-heading h3,
+.financial-app-page .filters-header strong,
+.financial-app-page .transaction-table-header strong,
+.financial-app-page .import-action-card strong,
+.financial-app-page .account-card-heading h4,
+.financial-app-page .recurring-card-heading strong,
+.financial-app-page .category-card-heading strong,
+.financial-app-page .dashboard-category-label strong,
+.financial-app-page .dashboard-transaction-item strong,
+.financial-app-page .import-page-header h3 {
+  color: var(--finance-heading);
+}
+
+.financial-app-page .financial-app-section p,
+.financial-app-page .financial-app-section small,
+.financial-app-page .financial-app-section label,
+.financial-app-page .status-line,
+.financial-app-page .muted,
+.financial-app-page .field label,
+.financial-app-page .account-card-heading p,
+.financial-app-page .recurring-card-heading p,
+.financial-app-page .dashboard-category-label small,
+.financial-app-page .dashboard-transaction-item em,
+.financial-app-page .dashboard-transaction-item small,
+.financial-app-page .merchant-copy p,
+.financial-app-page .amount-cell small,
+.financial-app-page .flow-status small,
+.financial-app-page .confidence-meta small,
+.financial-app-page .tree-count,
+.financial-app-page .tree-parent,
+.financial-app-page .import-summary-copy small,
+.financial-app-page .import-page-header p {
+  color: var(--finance-muted);
+}
+
+.financial-app-page .summary-card.good {
+  background: var(--finance-good-card);
+  border-color: var(--finance-good-border);
+}
+
+.financial-app-page .summary-card.good span,
+.financial-app-page .summary-card.good small,
+.financial-app-page .summary-card.good p {
+  color: var(--finance-good-text);
+}
+
+.financial-app-page .summary-card.good strong {
+  color: var(--finance-good-value);
+}
+
+.financial-app-page .summary-card.warn {
+  background: var(--finance-warn-card);
+  border-color: var(--finance-warn-border);
+}
+
+.financial-app-page .summary-card.warn span,
+.financial-app-page .summary-card.warn small,
+.financial-app-page .summary-card.warn p {
+  color: var(--finance-warn-text);
+}
+
+.financial-app-page .summary-card.warn strong {
+  color: var(--finance-warn-value);
+}
+
+.financial-app-page .summary-card.danger {
+  background: var(--finance-danger-card);
+  border-color: var(--finance-danger-border);
+}
+
+.financial-app-page .summary-card.danger span,
+.financial-app-page .summary-card.danger small,
+.financial-app-page .summary-card.danger p {
+  color: var(--finance-danger-text);
+}
+
+.financial-app-page .summary-card.danger strong {
+  color: var(--finance-danger-value);
+}
+
+.financial-app-page .summary-card.good::after {
+  background: radial-gradient(circle, rgba(22, 163, 74, 0.22), transparent 68%);
+}
+
+.financial-app-page .summary-card.warn::after {
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.22), transparent 68%);
+}
+
+.financial-app-page .summary-card.danger::after {
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.2), transparent 68%);
+}
+
+.financial-app-page .summary-card:not(.good):not(.warn):not(.danger),
+.financial-app-page .chart-card,
+.financial-app-page .insight-card:not(.hero-insight),
+.financial-app-page .account-card,
+.financial-app-page .recurring-card,
+.financial-app-page .category-card,
+.financial-app-page .review-card {
+  background:
+    linear-gradient(145deg, var(--finance-surface) 0%, var(--finance-surface-soft) 100%),
+    radial-gradient(circle at 100% 0, rgba(37, 99, 235, 0.08), transparent 12rem);
+}
+
+.financial-app-page .bar-row,
+.financial-app-page .dashboard-category-node,
+.financial-app-page .dashboard-transaction-group,
+.financial-app-page .recurring-summary div,
+.financial-app-page .recurring-transactions,
+.financial-app-page .category-tree,
+.financial-app-page .category-drilldown,
+.financial-app-page .drilldown-row,
+.financial-app-page .account-metrics div,
+.financial-app-page .split-summary,
+.financial-app-page .ai-analysis-estimate,
+.financial-app-page .empty-state,
+.financial-app-page .preview-list div {
+  background: var(--finance-surface-soft);
+  border-color: var(--finance-border);
+  color: var(--finance-text);
+}
+
+.financial-app-page .category-tree-branch,
+.financial-app-page .category-tree-leaf,
+.financial-app-page .category-tree-branch.depth-1,
+.financial-app-page .category-tree-leaf.depth-1,
+.financial-app-page .category-tree-branch.depth-2,
+.financial-app-page .category-tree-leaf.depth-2,
+.financial-app-page .category-tree-branch.depth-3,
+.financial-app-page .category-tree-leaf.depth-3,
+.financial-app-page .category-tree-branch.depth-4,
+.financial-app-page .category-tree-leaf.depth-4,
+.financial-app-page .category-tree-branch.depth-5,
+.financial-app-page .category-tree-leaf.depth-5,
+.financial-app-page .dashboard-transaction-item,
+.financial-app-page .dashboard-category-panel .dashboard-category-node {
+  background: var(--finance-surface);
+  border-color: var(--finance-border);
+  color: var(--finance-text);
+}
+
+.financial-app-page .dashboard-category-panel,
+.financial-app-page .category-tree-children {
+  border-left-color: var(--finance-border-strong);
+}
+
+.financial-app-page .dashboard-category-amount,
+.financial-app-page .bar-label,
+.financial-app-page .mini-category-row span,
+.financial-app-page .mini-category-row strong,
+.financial-app-page .date-value,
+.financial-app-page .confidence-meta strong,
+.financial-app-page .recurring-summary dd,
+.financial-app-page .account-metrics dd,
+.financial-app-page .category-inline-input,
+.financial-app-page .category-parent-select {
+  color: var(--finance-heading);
+}
+
+.financial-app-page .dashboard-transaction-item > span:last-child {
+  color: var(--finance-danger-value);
+}
+
+.financial-app-page .bar-track,
+.financial-app-page .mini-category-row em,
+.financial-app-page .confidence-meter {
+  background: var(--finance-surface-inset);
+}
+
+.financial-app-page .app-tabs {
+  background: var(--finance-surface-inset);
+  border-color: var(--finance-border-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.financial-app-page.financial-dark .app-tabs {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.financial-app-page .app-tabs button {
+  color: var(--finance-muted);
+}
+
+.financial-app-page .app-tabs button:hover,
+.financial-app-page .app-tabs button:focus-visible {
+  background: var(--finance-surface-soft);
+  color: var(--finance-heading);
+}
+
+.financial-app-page .app-tabs button.active {
+  background: var(--finance-surface);
+  border-color: var(--finance-border-strong);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.16);
+  color: var(--brand-dark);
+}
+
+.financial-app-page.financial-dark .app-tabs button.active {
+  color: #dbeafe;
+}
+
+.financial-app-page .field input,
+.financial-app-page .field select,
+.financial-app-page .field textarea,
+.financial-app-page td input,
+.financial-app-page td select,
+.financial-app-page .category-inline-input,
+.financial-app-page .category-parent-select,
+.financial-app-page .category-combobox-toggle,
+.financial-app-page .note-input,
+.financial-app-page .category-select,
+.financial-app-page .type-select,
+.financial-app-page .merchant-copy input {
+  background-color: var(--finance-input-bg);
+  border-color: var(--finance-input-border);
+  color: var(--finance-input-text);
+}
+
+.financial-app-page.financial-dark .field input,
+.financial-app-page.financial-dark .field select,
+.financial-app-page.financial-dark .field textarea,
+.financial-app-page.financial-dark td input,
+.financial-app-page.financial-dark td select,
+.financial-app-page.financial-dark .category-inline-input,
+.financial-app-page.financial-dark .category-parent-select,
+.financial-app-page.financial-dark .category-combobox-toggle,
+.financial-app-page.financial-dark .note-input,
+.financial-app-page.financial-dark .category-select,
+.financial-app-page.financial-dark .type-select,
+.financial-app-page.financial-dark .merchant-copy input {
+  background-color: var(--finance-input-bg) !important;
+  border-color: var(--finance-input-border) !important;
+  color: var(--finance-input-text) !important;
+}
+
+.financial-app-page .field input::placeholder,
+.financial-app-page .field textarea::placeholder,
+.financial-app-page .note-input::placeholder {
+  color: var(--finance-muted);
+  opacity: 1;
+}
+
+.financial-app-page.financial-dark .field select,
+.financial-app-page.financial-dark td select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, #93c5fd 50%),
+    linear-gradient(135deg, #93c5fd 50%, transparent 50%),
+    linear-gradient(to right, rgba(96, 165, 250, 0.32), rgba(96, 165, 250, 0.32));
+}
+
+.financial-app-page .checkbox-field {
+  background: var(--finance-surface-soft);
+  border-color: var(--finance-border);
+}
+
+.financial-app-page .checkbox-field span,
+.financial-app-page .review-actions label {
+  color: var(--finance-text);
+}
+
+.financial-app-page .btn-secondary,
+.financial-app-page .mini-btn,
+.financial-app-page .review-reason-filter {
+  background: var(--finance-surface);
+  border-color: var(--finance-border-strong);
+  color: var(--brand-dark);
+}
+
+.financial-app-page .btn-secondary:hover,
+.financial-app-page .mini-btn:hover,
+.financial-app-page .review-reason-filter:hover {
+  background: var(--finance-row-hover);
+  color: var(--brand-dark);
+}
+
+.financial-app-page .danger-btn,
+.financial-app-page .mini-btn.danger {
+  background: var(--finance-danger-card);
+  border-color: var(--finance-danger-border);
+  color: var(--finance-danger-value);
+}
+
+.financial-app-page .danger-btn:hover,
+.financial-app-page .mini-btn.danger:hover {
+  background: #fee2e2;
+  color: #7f1d1d;
+}
+
+.financial-app-page.financial-dark .danger-btn:hover,
+.financial-app-page.financial-dark .mini-btn.danger:hover {
+  background: rgba(153, 27, 27, 0.86);
+  color: #fff1f2;
+}
+
+.financial-app-page .chip,
+.financial-app-page .tag,
+.financial-app-page .tag.subtle,
+.financial-app-page .filters-card .chip,
+.financial-app-page .import-action-card .chip {
+  background: var(--finance-chip-bg);
+  border: 1px solid var(--finance-chip-border);
+  color: var(--finance-chip-text);
+}
+
+.financial-app-page .tag.good {
+  background: rgba(22, 163, 74, 0.13);
+  border-color: rgba(22, 163, 74, 0.3);
+  color: #047857;
+}
+
+.financial-app-page .tag.warn {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(217, 119, 6, 0.32);
+  color: #92400e;
+}
+
+.financial-app-page .tag.danger {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: #991b1b;
+}
+
+.financial-app-page.financial-dark .tag.good {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(52, 211, 153, 0.34);
+  color: #bbf7d0;
+}
+
+.financial-app-page.financial-dark .tag.warn {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(251, 191, 36, 0.36);
+  color: #fde68a;
+}
+
+.financial-app-page.financial-dark .tag.danger {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(248, 113, 113, 0.38);
+  color: #fecaca;
+}
+
+.financial-app-page .tree-icon,
+.financial-app-page .tree-file,
+.financial-app-page .dashboard-category-caret,
+.financial-app-page .account-pill {
+  background: var(--finance-chip-bg);
+  border: 1px solid var(--finance-chip-border);
+  color: var(--finance-chip-text);
+}
+
+.financial-app-page .merchant-avatar {
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  color: #ffffff;
+}
+
+.financial-app-page .table-wrap,
+.financial-app-page table,
+.financial-app-page .transaction-table-shell {
+  background: var(--finance-surface);
+  border-color: var(--finance-border-strong);
+  color: var(--finance-text);
+}
+
+.financial-app-page .table-wrap {
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.financial-app-page.financial-dark .table-wrap {
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+}
+
+.financial-app-page th,
+.financial-app-page .transaction-table thead th {
+  background: var(--finance-table-head);
+  border-bottom-color: var(--finance-border-strong);
+  color: var(--finance-muted);
+}
+
+.financial-app-page td,
+.financial-app-page .transaction-table th,
+.financial-app-page .transaction-table td {
+  border-bottom-color: var(--finance-border);
+  color: var(--finance-text);
+}
+
+.financial-app-page tbody tr,
+.financial-app-page tbody tr:nth-child(odd) {
+  background: var(--finance-row);
+}
+
+.financial-app-page tbody tr:nth-child(even) {
+  background: var(--finance-row-alt);
+}
+
+.financial-app-page .transactions-panel {
+  background:
+    linear-gradient(180deg, var(--finance-surface) 0%, var(--finance-surface-soft) 100%),
+    radial-gradient(circle at 8% 0, rgba(6, 182, 212, 0.12), transparent 22rem);
+  border-color: var(--finance-border-strong);
+}
+
+.financial-app-page .transaction-table-shell {
+  box-shadow: var(--finance-card-shadow-strong);
+}
+
+.financial-app-page .transaction-table tbody tr,
+.financial-app-page .transaction-table tbody tr:nth-child(odd) {
+  background: var(--finance-row);
+}
+
+.financial-app-page .transaction-table tbody tr:nth-child(even) {
+  background: var(--finance-row-alt);
+}
+
+.financial-app-page .transaction-table tbody tr:hover {
+  background: var(--finance-row-hover);
+  box-shadow: inset 4px 0 0 rgba(37, 99, 235, 0.64);
+}
+
+.financial-app-page .transaction-table .table-action-cell,
+.financial-app-page .tx-action-row,
+.financial-app-page .tx-action-row:hover {
+  background: var(--finance-action-row) !important;
+  box-shadow: none !important;
+}
+
+.financial-app-page .transaction-load-more {
+  background: var(--finance-surface-soft);
+  border-top-color: var(--finance-border);
+}
+
+.financial-app-page .transaction-load-more p,
+.financial-app-page .table-legend span {
+  color: var(--finance-text);
+}
+
+.financial-app-page .transaction-table-header strong,
+.financial-app-page .transaction-table-header p,
+.financial-app-page .transaction-table-header .eyebrow,
+.financial-app-page .hero-insight strong,
+.financial-app-page .hero-insight p,
+.financial-app-page .hero-insight span:first-child,
+.financial-app-page .transaction-count-pill,
+.financial-app-page .transaction-count-pill strong,
+.financial-app-page .transaction-count-pill span {
+  color: #ffffff;
+}
+
+.financial-app-page .table-legend span {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.financial-app-page .donut-stat::after {
+  background: var(--finance-surface);
+}
+
+.financial-app-page.financial-dark .donut-stat {
+  background: conic-gradient(#fb7185 0 var(--expense-share), #334155 var(--expense-share) 100%);
+}
+
+.financial-app-page .category-combobox-menu {
+  background: var(--finance-surface);
+  border-color: var(--finance-border-strong);
+  box-shadow: var(--finance-card-shadow-strong);
+}
+
+.financial-app-page .category-combobox-option,
+.financial-app-page .category-combobox-create {
+  color: var(--finance-heading);
+}
+
+.financial-app-page .category-combobox-option:hover,
+.financial-app-page .category-combobox-create:hover {
+  background: var(--finance-row-hover);
+}
+
+.financial-app-page .category-combobox-option small,
+.financial-app-page .category-combobox-empty {
+  color: var(--finance-muted);
+}
+
+.financial-app-page .category-combobox-create {
+  border-top-color: var(--finance-border);
+  color: var(--brand-dark);
+}
+
+.financial-app-page .ai-analysis-result.good {
+  background: rgba(22, 163, 74, 0.12);
+  border: 1px solid rgba(22, 163, 74, 0.32);
+  color: #14532d;
+}
+
+.financial-app-page .ai-analysis-result.warn {
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(217, 119, 6, 0.34);
+  color: #78350f;
+}
+
+.financial-app-page .ai-analysis-result.danger {
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(220, 38, 38, 0.32);
+  color: #7f1d1d;
+}
+
+.financial-app-page.financial-dark .ai-analysis-result.good {
+  background: rgba(6, 95, 70, 0.34);
+  border-color: rgba(52, 211, 153, 0.44);
+  color: #d1fae5;
+}
+
+.financial-app-page.financial-dark .ai-analysis-result.warn {
+  background: rgba(120, 53, 15, 0.38);
+  border-color: rgba(251, 191, 36, 0.46);
+  color: #fef3c7;
+}
+
+.financial-app-page.financial-dark .ai-analysis-result.danger {
+  background: rgba(127, 29, 29, 0.42);
+  border-color: rgba(248, 113, 113, 0.46);
+  color: #fecaca;
+}
+
+.financial-app-page.financial-dark .ai-analysis-result strong,
+.financial-app-page.financial-dark .ai-analysis-result p {
+  color: inherit;
+}
+
+.financial-app-page .positive,
+.financial-app-page .amount-cell.positive span {
+  color: var(--financial-good);
+}
+
+.financial-app-page .negative,
+.financial-app-page .amount-cell.negative span {
+  color: var(--financial-danger);
+}
+
+.financial-app-page .warn-text {
+  color: var(--financial-warn);
+}
+
+.financial-app-page .review-reason-filter.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #ffffff;
+}
+
+.financial-app-page.financial-dark .review-reason-filter.active {
+  background: #93c5fd;
+  border-color: #93c5fd;
+  color: #0f172a;
+}
+
+.financial-app-page .import-page-body {
+  background: var(--finance-surface-soft);
+}
+
+.financial-app-page.financial-dark .import-page-body {
+  background: rgba(2, 6, 23, 0.36);
+}
+
+.financial-app-page .warning {
+  background: var(--finance-warn-card);
+  border-color: var(--finance-warn-border);
+  color: var(--finance-warn-heading);
+}
+
+.financial-app-page.financial-dark .warning,
+.financial-app-page.financial-dark .app-alert,
+.financial-app-page.financial-dark .app-alert code {
+  color: var(--finance-warn-heading);
+}
+
+@media (max-width: 768px) {
+  .financial-app-page .transaction-table tbody {
+    background: var(--finance-surface-inset);
+  }
+
+  .financial-app-page .transaction-table tbody .tx-row,
+  .financial-app-page .transaction-table tbody .tx-row:nth-child(odd),
+  .financial-app-page .transaction-table tbody .tx-row:nth-child(even) {
+    background:
+      linear-gradient(180deg, var(--finance-surface) 0%, var(--finance-surface-soft) 100%),
+      radial-gradient(circle at 100% 0, rgba(37, 99, 235, 0.08), transparent 12rem);
+    border-color: var(--finance-border-strong);
+    box-shadow: var(--finance-card-shadow);
+  }
+
+  .financial-app-page .transaction-table tbody .tx-action-row,
+  .financial-app-page .transaction-table tbody .tx-action-row:nth-child(odd),
+  .financial-app-page .transaction-table tbody .tx-action-row:nth-child(even) {
+    background: var(--finance-action-row) !important;
+    border-color: var(--finance-border-strong);
+    box-shadow: var(--finance-card-shadow);
+  }
+
+  .financial-app-page .transaction-table .tx-row td::before {
+    color: var(--finance-muted);
+  }
+
+  .financial-app-page .transaction-table .tx-row .date-cell,
+  .financial-app-page .transaction-table .tx-row .account-cell,
+  .financial-app-page .transaction-table .tx-row .amount-cell {
+    background: var(--finance-surface-contrast);
+    border-color: var(--finance-border);
+  }
+
+  .financial-app-page.financial-dark .transaction-table tbody .tx-row,
+  .financial-app-page.financial-dark .transaction-table tbody .tx-row:nth-child(odd),
+  .financial-app-page.financial-dark .transaction-table tbody .tx-row:nth-child(even) {
+    background:
+      linear-gradient(180deg, var(--finance-surface) 0%, var(--finance-surface-soft) 100%),
+      radial-gradient(circle at 100% 0, rgba(37, 99, 235, 0.18), transparent 12rem);
+  }
+
+  .financial-app-page.financial-dark .transaction-table .tx-row td::before {
+    color: #93c5fd;
+  }
+}
+
+/* Keep transaction legend labels readable on the dark ledger header. */
+.financial-app-page .transaction-table-header .table-legend span {
+  color: #ffffff;
+}
+
+/* Final legibility refinements discovered during tab-by-tab color audit. */
+.financial-app-page .eyebrow,
+.financial-app-page .filters-header .eyebrow,
+.financial-app-page .insight-card span:first-child,
+.financial-app-page .transaction-table-header .eyebrow {
+  color: var(--brand-dark);
+}
+
+.financial-app-page.financial-dark .eyebrow,
+.financial-app-page.financial-dark .filters-header .eyebrow,
+.financial-app-page.financial-dark .insight-card span:first-child,
+.financial-app-page.financial-dark .transaction-table-header .eyebrow {
+  color: #93c5fd;
+}
+
+.financial-app-page .transaction-table-header .eyebrow,
+.financial-app-page .transaction-table-header .table-legend span,
+.financial-app-page .hero-insight span:first-child {
+  color: #ffffff;
+}
+
+.financial-app-page .split-summary ul,
+.financial-app-page .split-summary li {
+  color: var(--finance-text);
+}
+
+/* High-contrast interactive controls and modal surfaces. */
+.financial-app-page .btn-primary,
+.financial-app-page .financial-app-section .btn-primary,
+.financial-app-page .financial-header .btn-primary {
+  background: linear-gradient(135deg, #1d4ed8, #0e7490);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.financial-app-page .btn-primary:hover,
+.financial-app-page .financial-app-section .btn-primary:hover,
+.financial-app-page .financial-header .btn-primary:hover {
+  background: linear-gradient(135deg, #1e40af, #155e75);
+  color: #ffffff;
+}
+
+.financial-app-page.financial-dark .btn-primary,
+.financial-app-page.financial-dark .financial-app-section .btn-primary,
+.financial-app-page.financial-dark .financial-header .btn-primary {
+  background: linear-gradient(135deg, #2563eb, #0e7490);
+  color: #ffffff;
+}
+
+.financial-app-page.financial-dark .btn-primary:hover,
+.financial-app-page.financial-dark .financial-app-section .btn-primary:hover,
+.financial-app-page.financial-dark .financial-header .btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8, #155e75);
+}
+
+.financial-app-page .merchant-avatar {
+  background: linear-gradient(135deg, #1d4ed8, #0e7490);
+  text-shadow: 0 1px 2px rgba(2, 6, 23, 0.38);
+}
+
+.financial-app-page .row-action-buttons .flow-toggle.active,
+.financial-app-page.financial-dark .row-action-buttons .flow-toggle.active {
+  background: linear-gradient(135deg, #065f46, #047857);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.financial-app-page .row-action-buttons .flow-toggle.active:hover,
+.financial-app-page.financial-dark .row-action-buttons .flow-toggle.active:hover {
+  background: linear-gradient(135deg, #064e3b, #065f46);
+  color: #ffffff;
+}
+
+.financial-app-page .review-reason-filter span {
+  opacity: 0.92;
+}
+
+.financial-app-page .review-reason-filter.active span {
+  opacity: 1;
+}
+
+.financial-app-page dialog {
+  background: var(--finance-surface);
+  border: 1px solid var(--finance-border-strong);
+  border-radius: 24px;
+  box-shadow: var(--finance-card-shadow-strong);
+  color: var(--finance-text);
+  padding: 0;
+}
+
+.financial-app-page dialog::backdrop {
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(10px);
+}
+
+.financial-app-page.financial-dark dialog::backdrop {
+  background: rgba(2, 6, 23, 0.72);
+}
+
+.financial-app-page dialog form {
+  padding: clamp(1rem, 2.5vw, 1.35rem);
+}
+
+.financial-app-page dialog h3,
+.financial-app-page dialog strong {
+  color: var(--finance-heading);
+}
+
+.financial-app-page dialog p,
+.financial-app-page dialog label {
+  color: var(--finance-muted);
+}
