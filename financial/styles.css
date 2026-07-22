@@ -507,6 +507,105 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
+.income-settings-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.income-settings-heading h3 {
+  margin: 0;
+}
+
+.income-mode-toggle,
+.income-auto-panel,
+.income-estimate-grid,
+.income-schedule-list {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-top: 1rem;
+}
+
+.income-mode-option,
+.income-auto-panel div,
+.income-estimate-grid div,
+.income-schedule-row {
+  background: var(--finance-surface-soft, rgba(255, 255, 255, 0.72));
+  border: 1px solid var(--finance-border, rgba(148, 163, 184, 0.28));
+  border-radius: 16px;
+  color: var(--finance-text, var(--financial-ink));
+  padding: 0.85rem;
+}
+
+.income-mode-option {
+  align-items: flex-start;
+  cursor: pointer;
+  display: flex;
+  gap: 0.65rem;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.income-mode-option:hover,
+.income-mode-option.active {
+  border-color: var(--finance-control-accent-border, rgba(37, 99, 235, 0.35));
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+  transform: translateY(-1px);
+}
+
+.income-mode-option input {
+  accent-color: var(--finance-control-accent, var(--brand));
+  flex: 0 0 auto;
+  margin-top: 0.25rem;
+}
+
+.income-mode-option span,
+.income-auto-panel div,
+.income-estimate-grid div,
+.income-schedule-row div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.income-mode-option small,
+.income-auto-panel span,
+.income-estimate-grid span,
+.income-schedule-row small {
+  color: var(--finance-muted, var(--muted));
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.income-auto-panel strong,
+.income-estimate-grid strong,
+.income-schedule-row strong {
+  color: var(--finance-heading, var(--financial-ink));
+}
+
+.income-manual-fields {
+  margin-top: 1rem;
+}
+
+.income-schedule-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  justify-content: space-between;
+}
+
+.income-schedule-row.current {
+  border-color: var(--finance-control-accent-border, rgba(180, 83, 9, 0.45));
+  box-shadow: inset 4px 0 0 var(--finance-control-accent, var(--financial-warn));
+}
+
+.income-schedule-row > span {
+  color: var(--finance-text, var(--financial-ink));
+  font-weight: 750;
+}
+
 .toolbar {
   margin-bottom: 1rem;
 }

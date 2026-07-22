@@ -22,6 +22,7 @@ const TRANSFER_MATCH_WINDOW_DAYS = 3;
 const TRANSFER_MATCH_THRESHOLD = 80;
 const TRANSFER_AMBIGUITY_GAP = 8;
 const SPLIT_TOLERANCE = 0.01;
+const ASSUMED_PAY_INTERVAL_DAYS = 14;
 const DEMO_IMPORT_ID = "demo-import";
 const DEMO_ACCOUNT_IDS = new Set(["checking-main", "checking-side", "credit-card"]);
 const DEMO_RECURRING_IDS = new Set(["sunrise-apartments-monthly", "city-electric-monthly", "netflix-monthly"]);
@@ -54,7 +55,7 @@ const FEATURES = [
   "Manual review for uncertain transactions",
   "Monthly spending by category",
   "Recurring bill and subscription detection",
-  "Income and overtime projections",
+  "Manual and automatic income projections",
   "Spending trends over time",
   "Merchant and category rules that improve with use",
   "Multiple bank and credit-card accounts"
@@ -88,7 +89,8 @@ const sharedWorkspaceConfig = config.sharedWorkspace || {};
 const financialApiBaseUrl = String(config.financialApiBaseUrl || config.apiBaseUrl || (window.location.hostname === "fennington.com" ? "https://fennington-financial.web.app/api" : "")).replace(/\/+$/, "");
 const sharedWorkspaceId = sanitizeDocId(sharedWorkspaceConfig.id || config.financialWorkspaceId || "fennington-household");
 const shouldAutoMigrateLegacyProfile = sharedWorkspaceConfig.autoMigrateLegacy === true;
-const profileCollectionNames = ["accounts", "imports", "mappings", "categories", "transactions", "merchantMappings", "rules", "recurring", "overtimeScenarios", "monthlySummaries"];
+const profileCollectionNames = ["accounts", "imports", "mappings", "categories", "transactions", "merchantMappings", "rules", "recurring", "monthlySummaries"];
+const legacyProfileCollectionNames = ["overtimeScenarios"];
 const FIRESTORE_BATCH_WRITE_LIMIT = 450;
 const els = {
   featureGrid: document.getElementById("featureGrid"),
@@ -159,16 +161,36 @@ function emptyState() {
     merchantMappings: [],
     rules: [],
     recurring: [],
-    incomeSettings: { hourlyRate: 28, normalWeeklyHours: 40, payFrequency: "biweekly", typicalNetPaycheck: 1850, expectedMonthlyIncome: 4000, overtimeHours: 8, overtimeMultiplier: 1.5, additionalExpectedIncome: 0, scenario: "expected" },
-    overtimeScenarios: [
-      { id: "none", name: "No overtime", hours: 0, multiplier: 1.5 },
-      { id: "expected", name: "Expected overtime", hours: 8, multiplier: 1.5 },
-      { id: "maximum", name: "Maximum realistic overtime", hours: 20, multiplier: 1.5 }
-    ],
+    incomeSettings: incomeSettingsDefaults(),
     monthlySummaries: [],
     filters: {},
     selectedMonth: monthKey(new Date())
   };
+}
+
+function incomeSettingsDefaults() {
+  return { mode: "automatic", firstPayDate: "", lowestNetPaycheck: 0, highestNetPaycheck: 0 };
+}
+
+function normalizeIncomeSettings(settings = {}) {
+  const defaults = incomeSettingsDefaults();
+  const legacyPaycheck = Number(settings.typicalNetPaycheck || 0);
+  const lowest = Number(settings.lowestNetPaycheck ?? legacyPaycheck ?? 0);
+  const highest = Number(settings.highestNetPaycheck ?? legacyPaycheck ?? 0);
+  return {
+    ...defaults,
+    mode: settings.mode === "manual" ? "manual" : "automatic",
+    firstPayDate: normalizeIncomeDate(settings.firstPayDate),
+    lowestNetPaycheck: round(Math.max(0, Number.isFinite(lowest) ? lowest : 0)),
+    highestNetPaycheck: round(Math.max(0, Number.isFinite(highest) ? highest : 0))
+  };
+}
+
+function normalizeIncomeDate(value) {
+  const text = sanitize(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return "";
+  const parsed = parseIsoDate(text);
+  return parsed ? parsed.toISOString().slice(0, 10) : "";
 }
 
 function renderFeatures() {
@@ -326,7 +348,8 @@ async function loadUserState() {
   state.categories = uniqueCategoriesById(state.categories);
   resetPersistedCollectionSnapshots();
   const incomeSnap = await getDoc(doc(profileRef, "settings", "income"));
-  if (incomeSnap.exists()) state.incomeSettings = { ...state.incomeSettings, ...incomeSnap.data() };
+  if (incomeSnap.exists()) state.incomeSettings = normalizeIncomeSettings({ ...state.incomeSettings, ...incomeSnap.data() });
+  else state.incomeSettings = normalizeIncomeSettings(state.incomeSettings);
   if (!state.categories.length) state.categories = defaultCategories();
   state.selectedMonth = latestMonth(state.transactions) || monthKey(new Date());
   resetCategoryExpansion();
@@ -451,7 +474,7 @@ async function persistStateNow() {
   const profileRef = sharedProfileRef();
   await setDoc(doc(db, "users", currentUser.uid), { email: currentUser.email || "", householdId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
   await setDoc(profileRef, { ...stripId(state.profile), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
-  await setDoc(doc(profileRef, "settings", "income"), { ...state.incomeSettings, workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() }, { merge: true });
+  await setDoc(doc(profileRef, "settings", "income"), { ...normalizeIncomeSettings(state.incomeSettings), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() });
   const currentCategoryIds = new Set(state.categories.map((category) => category.id));
   const currentRuleIds = new Set(state.rules.map((rule) => rule.id));
   const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !currentCategoryIds.has(id));
@@ -1149,6 +1172,7 @@ function renderDashboard() {
   const tab = document.getElementById("dashboardTab");
   const months = monthOptions();
   const summary = monthlySummary(state.selectedMonth);
+  const income = incomeProjection();
   tab.innerHTML = `
     <div class="toolbar">
       <div class="field"><label for="dashboardMonth">Dashboard month</label><select id="dashboardMonth">${months.map((m) => `<option value="${m}" ${m === state.selectedMonth ? "selected" : ""}>${m}</option>`).join("")}</select></div>
@@ -1159,7 +1183,7 @@ function renderDashboard() {
       ${summaryCard("Net external cash flow", summary.netCashFlow, summary.netCashFlow >= 0 ? "good" : "danger")}
       ${summaryCard("Internal transfer volume", summary.internalTransferVolume, "warn", "Not counted as income or spending.")}
       ${summaryCard("Credit-card payments", summary.creditCardPayments, "warn", "Internal movement when cards are tracked.")}
-      ${summaryCard("Projected income including potential overtime", projectedIncome(), "warn", "Potential overtime is not received income.")}
+      ${summaryCard("Estimated Remaining Income (Month)", income.estimatedRemainingMonth, "warn", "Current month projection.")}
       ${summaryCard("Recurring monthly expenses", summary.recurring, "danger")}
       ${summaryCard("Transactions requiring review", summary.reviewCount, "warn")}
     </div>
@@ -3240,50 +3264,115 @@ function renderReports() {
 }
 
 function renderIncome() {
-  const s = state.incomeSettings;
-  const actual = monthlySummary(state.selectedMonth).actualIncome;
-  const overtime = overtimeIncome();
-  const total = Number(s.expectedMonthlyIncome || 0) + overtime + Number(s.additionalExpectedIncome || 0);
+  state.incomeSettings = normalizeIncomeSettings(state.incomeSettings);
+  const projection = incomeProjection();
   const tab = document.getElementById("incomeTab");
   tab.innerHTML = `
     <div class="income-grid">
-      ${summaryCard("Actual imported income", actual, "good")}
-      ${summaryCard("Expected base income", Number(s.expectedMonthlyIncome || 0), "good")}
-      ${summaryCard("Potential overtime income", overtime, "warn", "Scenario only, not received.")}
-      ${summaryCard("Total projected income", total, "warn")}
+      ${summaryCard("Current Year Total Income", projection.currentYearTotal, "good")}
+      ${summaryCard("Current Month Total Income", projection.currentMonthTotal, "good")}
+      ${summaryCard("Estimated Remaining Income (Year)", projection.estimatedRemainingYear, "warn")}
+      ${summaryCard("Estimated Remaining Income (Month)", projection.estimatedRemainingMonth, "warn")}
     </div>
-    <section class="panel" style="margin-top:1rem"><h3>Income settings and overtime scenarios</h3>
-      <div class="settings-grid">
-        ${incomeField("hourlyRate", "Regular hourly rate", "number")}
-        ${incomeField("normalWeeklyHours", "Normal weekly hours", "number")}
-        <div class="field"><label for="income-payFrequency">Pay frequency</label><select id="income-payFrequency"><option ${s.payFrequency === "weekly" ? "selected" : ""}>weekly</option><option ${s.payFrequency === "biweekly" ? "selected" : ""}>biweekly</option><option ${s.payFrequency === "semimonthly" ? "selected" : ""}>semimonthly</option><option ${s.payFrequency === "monthly" ? "selected" : ""}>monthly</option></select></div>
-        ${incomeField("typicalNetPaycheck", "Typical net paycheck", "number")}
-        ${incomeField("expectedMonthlyIncome", "Expected monthly income", "number")}
-        ${incomeField("overtimeHours", "Potential overtime hours", "number")}
-        ${incomeField("overtimeMultiplier", "Overtime multiplier", "number", "0.1")}
-        ${incomeField("additionalExpectedIncome", "Additional expected income", "number")}
-        <div class="field"><label for="income-scenario">Scenario</label><select id="income-scenario">${state.overtimeScenarios.map((scenario) => `<option value="${scenario.id}" ${s.scenario === scenario.id ? "selected" : ""}>${escapeHtml(scenario.name)}</option>`).join("")}</select></div>
+    <section class="panel income-settings-panel" style="margin-top:1rem">
+      <div class="income-settings-heading">
+        <div>
+          <h3>Income Calculation Mode</h3>
+          <p class="status-line">Choose manual paycheck estimates or let the app calculate from current-year paycheck income transactions.</p>
+        </div>
+        <span class="tag warn">${escapeHtml(projection.mode === "manual" ? "Manual" : "Automatic")}</span>
       </div>
+      ${incomeModeToggle(projection.mode)}
+      ${projection.mode === "manual" ? manualIncomeSettingsHtml(projection) : automaticIncomeSettingsHtml(projection)}
+      ${incomeEstimateSummaryHtml(projection)}
       <div class="form-actions" style="margin-top:1rem"><button id="saveIncome" class="btn btn-primary" type="button">Save Income Settings</button></div>
     </section>
+    <section class="panel income-schedule-panel" style="margin-top:1rem"><h3>Pay Schedule</h3>${incomeScheduleHtml(projection)}</section>
   `;
-  document.getElementById("saveIncome").addEventListener("click", () => {
-    Object.keys(s).forEach((key) => {
-      const el = document.getElementById(`income-${key}`);
-      if (!el) return;
-      s[key] = el.type === "number" ? Number(el.value || 0) : el.value;
+  tab.querySelectorAll('input[name="income-mode"]').forEach((input) => {
+    input.addEventListener("change", (event) => {
+      state.incomeSettings = normalizeIncomeSettings({ ...state.incomeSettings, mode: event.target.value === "manual" ? "manual" : "automatic" });
+      renderIncome();
     });
-    const scenario = state.overtimeScenarios.find((item) => item.id === s.scenario);
-    if (scenario) {
-      s.overtimeHours = scenario.hours;
-      s.overtimeMultiplier = scenario.multiplier;
-    }
+  });
+  document.getElementById("saveIncome").addEventListener("click", () => {
+    const mode = document.querySelector('input[name="income-mode"]:checked')?.value === "manual" ? "manual" : "automatic";
+    const firstPayDateEl = document.getElementById("income-firstPayDate");
+    const lowestNetPaycheckEl = document.getElementById("income-lowestNetPaycheck");
+    const highestNetPaycheckEl = document.getElementById("income-highestNetPaycheck");
+    state.incomeSettings = normalizeIncomeSettings({
+      mode,
+      firstPayDate: firstPayDateEl ? firstPayDateEl.value : state.incomeSettings.firstPayDate,
+      lowestNetPaycheck: lowestNetPaycheckEl ? parseMoney(lowestNetPaycheckEl.value || 0) : state.incomeSettings.lowestNetPaycheck,
+      highestNetPaycheck: highestNetPaycheckEl ? parseMoney(highestNetPaycheckEl.value || 0) : state.incomeSettings.highestNetPaycheck
+    });
     renderAll();
   });
 }
 
-function incomeField(key, labelText, type, step = "1") {
-  return `<div class="field"><label for="income-${key}">${labelText}</label><input id="income-${key}" type="${type}" step="${step}" value="${escapeAttr(state.incomeSettings[key])}"></div>`;
+function incomeModeToggle(mode) {
+  return `
+    <div class="income-mode-toggle" role="radiogroup" aria-label="Income calculation mode">
+      ${incomeModeOption("automatic", "Automatic", "Average current-year paycheck income transactions.", mode)}
+      ${incomeModeOption("manual", "Manual", "Use your first pay date and low/high net paycheck range.", mode)}
+    </div>`;
+}
+
+function incomeModeOption(value, title, description, selectedMode) {
+  const checked = value === selectedMode;
+  return `
+    <label class="income-mode-option${checked ? " active" : ""}">
+      <input type="radio" name="income-mode" value="${escapeAttr(value)}" ${checked ? "checked" : ""}>
+      <span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(description)}</small></span>
+    </label>`;
+}
+
+function manualIncomeSettingsHtml(projection) {
+  const s = state.incomeSettings;
+  const year = projection.year;
+  const firstPayDate = s.firstPayDate?.startsWith(`${year}-`) ? s.firstPayDate : "";
+  return `
+    <div class="settings-grid income-manual-fields">
+      <div class="field"><label for="income-firstPayDate">First Pay Date</label><input id="income-firstPayDate" type="date" min="${year}-01-01" max="${year}-12-31" value="${escapeAttr(firstPayDate)}"></div>
+      ${incomeCurrencyField("lowestNetPaycheck", "Lowest Net Paycheck")}
+      ${incomeCurrencyField("highestNetPaycheck", "Highest Net Paycheck")}
+    </div>
+    <p class="status-line">Manual mode estimates each paycheck as the average of the low and high net paycheck values, then counts biweekly pay dates from the first pay date.</p>`;
+}
+
+function automaticIncomeSettingsHtml(projection) {
+  const auto = projection.automatic;
+  return `
+    <div class="income-auto-panel">
+      <div><span>Paycheck transactions found</span><strong>${auto.paycheckCount}</strong></div>
+      <div><span>Average paycheck income</span><strong>${money(auto.averagePaycheckAmount)}</strong></div>
+      <div><span>Inferred pay cadence</span><strong>${auto.paycheckCount ? `${auto.intervalDays} days` : "No data"}</strong></div>
+      <div><span>Next estimated pay date</span><strong>${escapeHtml(auto.nextPayDate || "None")}</strong></div>
+    </div>
+    <p class="status-line">Automatic mode scans current-year transactions categorized or labeled as Paycheck Income, including imported payroll, salary, wages, and direct-deposit paycheck entries.</p>`;
+}
+
+function incomeCurrencyField(key, labelText) {
+  return `<div class="field"><label for="income-${key}">${labelText}</label><input id="income-${key}" type="number" inputmode="decimal" min="0" step="0.01" value="${escapeAttr(state.incomeSettings[key])}"></div>`;
+}
+
+function incomeEstimateSummaryHtml(projection) {
+  return `
+    <div class="income-estimate-grid" aria-label="Income estimate details">
+      <div><span>Estimated paycheck amount</span><strong>${money(projection.estimatedPaycheckAmount)}</strong></div>
+      <div><span>Remaining pay dates this month</span><strong>${projection.remainingMonthPayDateCount}</strong></div>
+      <div><span>Remaining pay dates this year</span><strong>${projection.remainingYearPayDateCount}</strong></div>
+      <div><span>Schedule</span><strong>${escapeHtml(projection.scheduleLabel)}</strong></div>
+    </div>`;
+}
+
+function incomeScheduleHtml(projection) {
+  if (!projection.monthlyPayDates.some((item) => item.dates.length)) return `<div class="empty-state compact">Enter manual paycheck details or categorize paycheck transactions to build a current-year pay schedule.</div>`;
+  return `
+    <p class="status-line">Pay dates per month are recalculated from the ${projection.mode === "manual" ? "first pay date" : "inferred paycheck cadence"}. Past dates are shown for schedule context; remaining estimates count future dates only.</p>
+    <div class="income-schedule-list">
+      ${projection.monthlyPayDates.map((item) => `<div class="income-schedule-row${item.month === projection.currentMonth ? " current" : ""}"><div><strong>${escapeHtml(item.month)}</strong><small>${item.dates.length} ${item.dates.length === 1 ? "pay date" : "pay dates"}</small></div><span>${item.dates.length ? item.dates.map((date) => escapeHtml(date.slice(5))).join(", ") : "None"}</span></div>`).join("")}
+    </div>`;
 }
 
 function renderRecurring() {
@@ -3746,7 +3835,7 @@ async function deleteProfileData() {
   if (!window.confirm("Confirm permanent deletion of Fennington Financial shared workspace data.")) return;
   if (mode === "user" && currentUser && db) {
     const profileRef = sharedProfileRef();
-    for (const name of profileCollectionNames) {
+    for (const name of [...profileCollectionNames, ...legacyProfileCollectionNames]) {
       const snap = await getDocs(collection(profileRef, name));
       await Promise.all(snap.docs.map((item) => deleteDoc(item.ref)));
     }
@@ -4331,13 +4420,114 @@ function monthIncreaseList() {
   return increases.map(([month, value]) => `<p><strong>${month}</strong>: ${value >= 0 ? "+" : ""}${money(value)}</p>`).join("");
 }
 
-function projectedIncome() {
-  return Number(state.incomeSettings.expectedMonthlyIncome || 0) + overtimeIncome() + Number(state.incomeSettings.additionalExpectedIncome || 0);
+function incomeProjection(referenceDate = new Date()) {
+  const today = localDateKey(referenceDate);
+  const currentMonth = localMonthKey(referenceDate);
+  const year = referenceDate.getFullYear();
+  const incomeRows = incomeTransactionsForYear(year);
+  const settings = normalizeIncomeSettings(state.incomeSettings);
+  const manual = manualIncomeProjectionData(settings, year);
+  const automatic = automaticIncomeProjectionData(year, today);
+  const mode = settings.mode === "manual" ? "manual" : "automatic";
+  const active = mode === "manual" ? manual : automatic;
+  const remainingYearPayDates = active.payDates.filter((date) => date > today);
+  const remainingMonthPayDates = remainingYearPayDates.filter((date) => date.startsWith(currentMonth));
+  const estimatedPaycheckAmount = round(active.estimatedPaycheckAmount);
+  return {
+    mode,
+    year,
+    today,
+    currentMonth,
+    currentYearTotal: round(incomeRows.reduce((sum, tx) => sum + Math.max(0, Number(tx.amount || 0)), 0)),
+    currentMonthTotal: round(incomeRows.filter((tx) => tx.date?.startsWith(currentMonth)).reduce((sum, tx) => sum + Math.max(0, Number(tx.amount || 0)), 0)),
+    estimatedPaycheckAmount,
+    estimatedRemainingYear: round(estimatedPaycheckAmount * remainingYearPayDates.length),
+    estimatedRemainingMonth: round(estimatedPaycheckAmount * remainingMonthPayDates.length),
+    remainingYearPayDateCount: remainingYearPayDates.length,
+    remainingMonthPayDateCount: remainingMonthPayDates.length,
+    scheduleLabel: active.scheduleLabel,
+    monthlyPayDates: monthsInYear(year).map((month) => ({ month, dates: active.payDates.filter((date) => date.startsWith(month)) })),
+    manual,
+    automatic
+  };
 }
 
-function overtimeIncome() {
-  const s = state.incomeSettings;
-  return round(Number(s.hourlyRate || 0) * Number(s.overtimeHours || 0) * Number(s.overtimeMultiplier || 1));
+function manualIncomeProjectionData(settings, year) {
+  const payDates = settings.firstPayDate?.startsWith(`${year}-`) ? biweeklyPayDatesForYear(settings.firstPayDate, year) : [];
+  return {
+    estimatedPaycheckAmount: round((Number(settings.lowestNetPaycheck || 0) + Number(settings.highestNetPaycheck || 0)) / 2),
+    payDates,
+    scheduleLabel: "Biweekly"
+  };
+}
+
+function automaticIncomeProjectionData(year, today) {
+  const paychecks = paycheckIncomeTransactionsForYear(year).sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  const averagePaycheckAmount = paychecks.length ? round(paychecks.reduce((sum, tx) => sum + Math.max(0, Number(tx.amount || 0)), 0) / paychecks.length) : 0;
+  const paycheckDates = Array.from(new Set(paychecks.map((tx) => tx.date).filter(Boolean))).sort();
+  const intervalDays = inferPaycheckIntervalDays(paycheckDates);
+  const projectedDates = projectedAutomaticPayDates(paycheckDates, year, today, intervalDays);
+  const payDates = Array.from(new Set([...paycheckDates, ...projectedDates])).filter((date) => date.startsWith(`${year}-`)).sort();
+  return {
+    paycheckCount: paychecks.length,
+    averagePaycheckAmount,
+    estimatedPaycheckAmount: averagePaycheckAmount,
+    intervalDays,
+    nextPayDate: payDates.find((date) => date > today) || "",
+    payDates,
+    scheduleLabel: paychecks.length ? `${intervalDays}-day cadence` : "No schedule"
+  };
+}
+
+function incomeTransactionsForYear(year) {
+  return state.transactions.filter((tx) => isReportableIncome(tx) && tx.date?.startsWith(`${year}-`));
+}
+
+function paycheckIncomeTransactionsForYear(year) {
+  return incomeTransactionsForYear(year).filter(isPaycheckIncomeTransaction);
+}
+
+function isPaycheckIncomeTransaction(tx) {
+  const category = String(tx.category || "").trim().toLowerCase();
+  const text = `${tx.category || ""} ${tx.description || ""} ${tx.merchant || ""} ${tx.vendor || ""} ${tx.notes || ""}`;
+  return category === "paycheck income" || /\bpaycheck income\b/i.test(text) || /\b(payroll|direct deposit|salary|paycheck|wages)\b/i.test(text);
+}
+
+function biweeklyPayDatesForYear(firstPayDate, year) {
+  if (!parseIsoDate(firstPayDate)) return [];
+  const dates = [];
+  let cursor = firstPayDate;
+  while (cursor < `${year}-01-01`) cursor = addDays(cursor, ASSUMED_PAY_INTERVAL_DAYS);
+  while (cursor.startsWith(`${year}-`)) {
+    dates.push(cursor);
+    cursor = addDays(cursor, ASSUMED_PAY_INTERVAL_DAYS);
+  }
+  return dates;
+}
+
+function projectedAutomaticPayDates(paycheckDates, year, today, intervalDays) {
+  if (!paycheckDates.length) return [];
+  const projectedDates = [];
+  let cursor = paycheckDates[paycheckDates.length - 1];
+  while (cursor < `${year}-12-31`) {
+    cursor = addDays(cursor, intervalDays);
+    if (!cursor.startsWith(`${year}-`)) break;
+    if (cursor > today) projectedDates.push(cursor);
+  }
+  return projectedDates;
+}
+
+function inferPaycheckIntervalDays(paycheckDates) {
+  const gaps = paycheckDates.slice(1)
+    .map((date, index) => Math.round(daysBetween(paycheckDates[index], date)))
+    .filter((gap) => gap >= 5 && gap <= 45);
+  if (!gaps.length) return ASSUMED_PAY_INTERVAL_DAYS;
+  const sorted = gaps.sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)] || ASSUMED_PAY_INTERVAL_DAYS;
+}
+
+function monthsInYear(year) {
+  return Array.from({ length: 12 }, (_, index) => `${year}-${String(index + 1).padStart(2, "0")}`);
 }
 
 function categoryOptions(selected) {
@@ -4560,6 +4750,22 @@ function normalizeDate(value) {
     return `${year}-${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}`;
   }
   return new Date().toISOString().slice(0, 10);
+}
+
+function parseIsoDate(value) {
+  const text = sanitize(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const parsed = new Date(`${text}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== text) return null;
+  return parsed;
+}
+
+function localDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function localMonthKey(date = new Date()) {
+  return localDateKey(date).slice(0, 7);
 }
 
 function parseMoney(value) {
