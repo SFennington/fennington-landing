@@ -3346,7 +3346,7 @@ function renderRules() {
 
 function rulesTable(rules) {
   const sortedRules = sortedRulesForTable(rules, "category");
-  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable categorization rules table"><table class="rules-table"><thead><tr>${ruleSortHeader("category", "type", "Match Field")}${ruleSortHeader("category", "match", "Criteria")}${ruleSortHeader("category", "amount", "Amount")}${ruleSortHeader("category", "category", "Rule Target")}${ruleSortHeader("category", "matches", "Matches")}${ruleSortHeader("category", "createdAt", "Created")}<th>Actions</th></tr></thead><tbody>${sortedRules.map(categoryRuleRow).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable categorization rules table"><table class="rules-table"><colgroup><col class="rule-col-match-field"><col class="rule-col-criteria"><col class="rule-col-amount"><col class="rule-col-target"><col class="rule-col-matches"><col class="rule-col-created"><col class="rule-col-actions"></colgroup><thead><tr>${ruleSortHeader("category", "type", "Match Field")}${ruleSortHeader("category", "match", "Criteria")}${ruleSortHeader("category", "amount", "Amount")}${ruleSortHeader("category", "category", "Rule Target")}${ruleSortHeader("category", "matches", "Matches")}${ruleSortHeader("category", "createdAt", "Created")}<th>Actions</th></tr></thead><tbody>${sortedRules.map(categoryRuleRow).join("")}</tbody></table></div>`;
 }
 
 function categoryRuleRow(rule) {

@@ -5226,3 +5226,179 @@ summary.category-tree-summary::-webkit-details-marker {
     grid-template-columns: minmax(210px, 1.3fr) minmax(120px, 0.7fr) minmax(160px, 0.9fr) minmax(150px, 1fr);
   }
 }
+
+/* Rules spreadsheet column alignment refinements */
+.financial-app-page .rules-table {
+  table-layout: fixed;
+  min-width: 1500px;
+  width: 100%;
+}
+
+.financial-app-page .rules-table .rule-col-match-field { width: 12%; }
+.financial-app-page .rules-table .rule-col-criteria { width: 22%; }
+.financial-app-page .rules-table .rule-col-amount { width: 9%; }
+.financial-app-page .rules-table .rule-col-target { width: 36%; }
+.financial-app-page .rules-table .rule-col-matches { width: 6%; }
+.financial-app-page .rules-table .rule-col-created { width: 7%; }
+.financial-app-page .rules-table .rule-col-actions { width: 8%; }
+
+.financial-app-page .rules-table th,
+.financial-app-page .rules-table td {
+  padding: 0.32rem 0.38rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.financial-app-page .rules-table .table-sort-button {
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+}
+
+.financial-app-page .rules-table > tbody > tr > td > input,
+.financial-app-page .rules-table > tbody > tr > td > select {
+  text-align: center;
+  text-align-last: center;
+}
+
+.financial-app-page .rule-target-cell {
+  min-width: 0;
+  width: auto;
+}
+
+.financial-app-page .rule-target-panel {
+  margin-inline: auto;
+  max-width: 620px;
+  min-width: 0;
+  padding: 0.42rem 0.45rem;
+  width: fit-content;
+}
+
+.financial-app-page .rule-target-fields,
+.financial-app-page .rule-apply-fields,
+.financial-app-page .rule-target-cell .rule-target-fields,
+.financial-app-page .rule-target-cell .rule-apply-fields {
+  gap: 0.28rem;
+  grid-template-columns: repeat(4, minmax(0, 145px));
+  justify-content: center;
+}
+
+.financial-app-page .rule-target-fields label {
+  gap: 0.16rem;
+  min-width: 0;
+  text-align: center;
+}
+
+.financial-app-page .rule-target-fields span {
+  text-align: center;
+}
+
+.financial-app-page .rule-target-fields input,
+.financial-app-page .rule-target-fields select {
+  font-size: 0.82rem;
+  min-height: 32px;
+  min-width: 0;
+  padding-block: 0.35rem;
+  text-align: center;
+  text-align-last: center;
+  width: 100%;
+}
+
+.financial-app-page .rule-target-fields select,
+.financial-app-page .rules-table > tbody > tr > td > select {
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 9px) 50%,
+    calc(100% - 2rem) 50%;
+  padding-right: 2.35rem;
+}
+
+.financial-app-page .rule-apply-fields label {
+  gap: 0;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0.16rem 0.22rem;
+  width: 100%;
+}
+
+.financial-app-page .rule-apply-fields input[type="checkbox"] {
+  height: 13px;
+  margin: 0;
+  width: 13px;
+}
+
+.financial-app-page .rule-apply-label {
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.financial-app-page .rule-created-cell,
+.financial-app-page .rule-actions-cell {
+  white-space: nowrap;
+}
+
+.financial-app-page .rule-created-cell {
+  min-width: 112px;
+}
+
+.financial-app-page .rule-actions-cell {
+  min-width: 132px;
+  text-align: center;
+}
+
+.financial-app-page .rule-actions-cell .mini-btn {
+  display: inline-flex;
+  margin-inline: 0.05rem;
+  min-height: 32px;
+  padding: 0.28rem 0.48rem;
+}
+
+@media (max-width: 900px) {
+  .financial-app-page .rules-table {
+    min-width: 1400px;
+  }
+
+  .financial-app-page .rule-target-fields,
+  .financial-app-page .rule-apply-fields,
+  .financial-app-page .rule-target-cell .rule-target-fields,
+  .financial-app-page .rule-target-cell .rule-apply-fields {
+    grid-template-columns: repeat(4, minmax(0, 135px));
+  }
+
+  .financial-app-page .rule-target-panel {
+    max-width: 580px;
+  }
+}
+
+/* Final rules table proportions */
+.financial-app-page .rules-table {
+  min-width: 1700px;
+}
+
+.financial-app-page .rules-table .rule-col-match-field { width: 11%; }
+.financial-app-page .rules-table .rule-col-criteria { width: 22%; }
+.financial-app-page .rules-table .rule-col-amount { width: 8%; }
+.financial-app-page .rules-table .rule-col-target { width: 35%; }
+.financial-app-page .rules-table .rule-col-matches { width: 5%; }
+.financial-app-page .rules-table .rule-col-created { width: 8%; }
+.financial-app-page .rules-table .rule-col-actions { width: 11%; }
+
+.financial-app-page .rule-target-fields,
+.financial-app-page .rule-apply-fields,
+.financial-app-page .rule-target-cell .rule-target-fields,
+.financial-app-page .rule-target-cell .rule-apply-fields {
+  grid-template-columns: repeat(4, minmax(0, 135px));
+}
+
+.financial-app-page .rule-target-panel {
+  max-width: 585px;
+}
+
+.financial-app-page .rule-apply-fields label {
+  gap: 0;
+}
+
+.financial-app-page .rule-apply-label {
+  margin-left: 0;
+}
