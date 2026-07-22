@@ -1172,11 +1172,14 @@ function renderDashboard() {
 }
 
 
-function transactionImportActionsHtml() {
+function transactionImportActionsHtml(rows = filteredTransactions()) {
+  const aiPlan = buildAiAnalysisPlan(rows);
+  const aiStatus = aiAnalysisRunning ? "Running" : aiPlan.groups.length ? "Open" : "No matches";
   return `
     <div class="import-action-row" aria-label="Transaction import actions">
       ${importActionButtonHtml("csv", "CSV import", "CSV Import", pendingImport ? "Preview ready" : "Open")}
       ${importActionButtonHtml("amazon", "Amazon import", "Amazon Import", pendingAmazonImport ? "Preview ready" : "Open")}
+      ${importActionButtonHtml("ai", "OpenAI analysis", "Analyze Transactions", aiStatus)}
     </div>
   `;
 }
@@ -1196,29 +1199,56 @@ function importActionButtonHtml(type, eyebrow, title, status) {
 
 function importWorkspaceOverlayHtml() {
   if (!activeImportPanel) return "";
-  const isCsv = activeImportPanel === "csv";
-  const id = isCsv ? "csvImportWorkspace" : "amazonImportWorkspace";
-  const title = isCsv ? "CSV Import" : "Amazon Import";
-  const description = isCsv
-    ? "Upload bank and credit-card CSV exports, map columns, preview duplicates, then import transactions."
-    : "Upload Amazon order or item exports to itemize existing Amazon card transactions.";
+  const panel = importWorkspacePanelConfig(activeImportPanel);
+  if (!panel) return "";
   return `
     <div class="import-page-overlay" role="presentation">
-      <section id="${id}" class="import-page" role="dialog" aria-modal="true" aria-labelledby="${id}Title" aria-describedby="${id}Description">
+      <section id="${panel.id}" class="import-page" role="dialog" aria-modal="true" aria-labelledby="${panel.id}Title" aria-describedby="${panel.id}Description">
         <header class="import-page-header">
           <div>
-            <span class="eyebrow">Transaction import</span>
-            <h3 id="${id}Title">${escapeHtml(title)}</h3>
-            <p id="${id}Description">${escapeHtml(description)}</p>
+            <span class="eyebrow">${escapeHtml(panel.eyebrow)}</span>
+            <h3 id="${panel.id}Title">${escapeHtml(panel.title)}</h3>
+            <p id="${panel.id}Description">${escapeHtml(panel.description)}</p>
           </div>
-          <button class="mini-btn import-close-button" data-close-import type="button" aria-label="Close ${escapeAttr(title)}">Close</button>
+          <button class="mini-btn import-close-button" data-close-import type="button" aria-label="Close ${escapeAttr(panel.title)}">Close</button>
         </header>
         <div class="import-page-body">
-          ${isCsv ? csvImportPanelHtml() : amazonImportPanelHtml()}
+          ${panel.body}
         </div>
       </section>
     </div>
   `;
+}
+
+function importWorkspacePanelConfig(type) {
+  if (type === "csv") {
+    return {
+      id: "csvImportWorkspace",
+      title: "CSV Import",
+      eyebrow: "Transaction import",
+      description: "Upload bank and credit-card CSV exports, map columns, preview duplicates, then import transactions.",
+      body: csvImportPanelHtml()
+    };
+  }
+  if (type === "amazon") {
+    return {
+      id: "amazonImportWorkspace",
+      title: "Amazon Import",
+      eyebrow: "Transaction import",
+      description: "Upload Amazon order or item exports to itemize existing Amazon card transactions.",
+      body: amazonImportPanelHtml()
+    };
+  }
+  if (type === "ai") {
+    return {
+      id: "aiAnalysisWorkspace",
+      title: "Analyze Transactions",
+      eyebrow: "OpenAI analysis",
+      description: "Review AI analysis scope, estimated usage, and run transaction categorization after confirmation.",
+      body: aiAnalysisPanelHtml(filteredTransactions())
+    };
+  }
+  return null;
 }
 
 function importOverlayRoot() {
@@ -1240,7 +1270,7 @@ function renderImportWorkspaceOverlay() {
 }
 
 function openImportPanel(type) {
-  activeImportPanel = type === "amazon" ? "amazon" : "csv";
+  activeImportPanel = ["csv", "amazon", "ai"].includes(type) ? type : "csv";
   renderTransactions();
   window.setTimeout(() => document.querySelector("[data-close-import]")?.focus({ preventScroll: true }), 0);
 }
@@ -1681,7 +1711,7 @@ function renderTransactions() {
   const rows = filteredTransactions();
   const visibleRows = rows.slice(0, transactionRowsShown);
   const activeFilter = captureActiveFilter();
-  if (activeImportPanel && !["csv", "amazon"].includes(activeImportPanel)) activeImportPanel = "";
+  if (activeImportPanel && !["csv", "amazon", "ai"].includes(activeImportPanel)) activeImportPanel = "";
   document.body.classList.toggle("import-overlay-open", Boolean(activeImportPanel));
   tab.innerHTML = `
     <section class="panel transactions-panel">
@@ -1692,7 +1722,7 @@ function renderTransactions() {
           <p class="status-line">Review, recategorize, and annotate imported activity without losing sight of cash flow.</p>
         </div>
         <div class="transaction-heading-actions">
-          ${transactionImportActionsHtml()}
+          ${transactionImportActionsHtml(rows)}
           <div class="transaction-count-pill" aria-label="Filtered transaction count">
             <strong>${rows.length}</strong>
             <span>of ${state.transactions.length} shown</span>
@@ -1700,7 +1730,6 @@ function renderTransactions() {
         </div>
       </div>
       ${transactionInsightsHtml(rows)}
-      ${aiAnalysisPanelHtml(rows)}
       ${filtersHtml()}
       <div class="transaction-table-shell">
         <div class="transaction-table-header">
@@ -1721,7 +1750,7 @@ function renderTransactions() {
   const overlayRoot = renderImportWorkspaceOverlay();
   bindImportControls(tab);
   if (overlayRoot) bindImportControls(overlayRoot);
-  bindAiAnalysisControls(tab);
+  if (overlayRoot) bindAiAnalysisControls(overlayRoot);
   bindFilters();
   bindTransactionTable(tab);
   restoreActiveFilter(activeFilter);
