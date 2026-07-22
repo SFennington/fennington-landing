@@ -2475,11 +2475,21 @@ function bindFilters() {
   ["Search", "Start", "End", "Month", "Account", "Category", "Merchant", "Vendor", "Type", "Flow", "AiStatus"].forEach((name) => {
     const el = document.getElementById(`filter${name}`);
     if (!el) return;
+    if (name === "Search") {
+      el.addEventListener("keydown", (event) => {
+        if ((event.key === " " || event.key === "Spacebar") && !event.ctrlKey && !event.altKey && !event.metaKey) {
+          event.preventDefault();
+          event.stopPropagation();
+          el.setRangeText(" ", el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length, "end");
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      });
+    }
     el.addEventListener("input", () => {
       const key = name === "AiStatus" ? "aiStatus" : name.toLowerCase();
       state.filters[key] = el.value;
       resetTransactionRowsShown();
-      renderTransactions();
+      window.requestAnimationFrame(renderTransactions);
     });
   });
   const hideCredits = document.getElementById("filterHideCredits");
