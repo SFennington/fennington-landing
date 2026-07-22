@@ -5496,7 +5496,7 @@ summary.category-tree-summary::-webkit-details-marker {
   color: var(--financial-good);
   font-size: 0.66rem;
   font-weight: 900;
-  left: calc(100% - 0.32rem);
+  left: 50%;
   letter-spacing: 0.02em;
   line-height: 1;
   max-width: 3.8rem;
@@ -5506,8 +5506,8 @@ summary.category-tree-summary::-webkit-details-marker {
   pointer-events: none;
   position: absolute;
   text-overflow: ellipsis;
-  top: 50%;
-  transform: translateY(-50%) scale(0.96);
+  top: calc(100% + 0.22rem);
+  transform: translateX(-50%) translateY(-0.08rem) scale(0.96);
   transition: opacity 0.18s ease, transform 0.18s ease;
   white-space: nowrap;
   z-index: 4;
@@ -5515,7 +5515,7 @@ summary.category-tree-summary::-webkit-details-marker {
 
 .financial-app-page .rule-inline-status.is-visible {
   opacity: 1;
-  transform: translateY(-50%) scale(1);
+  transform: translateX(-50%) translateY(0) scale(1);
 }
 
 .financial-app-page .rule-inline-status[data-tone="danger"] {
