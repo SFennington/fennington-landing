@@ -3354,7 +3354,11 @@ function categoryRuleRow(rule) {
 }
 
 function categoryRuleTargetPanel(rule) {
-  return `<div class="rule-target-panel"><div class="rule-target-fields"><label><span>Category</span><select data-rule-field="category" aria-label="Rule category">${categoryOptions(rule.category || "")}</select></label><label><span>Type</span><select data-rule-field="transactionType" aria-label="Rule transaction type">${ruleTransactionTypeOptions(rule)}</select></label><label><span>Flow</span><select data-rule-field="flowType" aria-label="Rule flow">${ruleFlowTypeOptions(rule)}</select></label><label><span>Note</span><input data-rule-field="notes" value="${escapeAttr(rule.notes || "")}" aria-label="Rule note" placeholder="Optional note"></label></div><div class="rule-apply-group" aria-label="Fields this rule applies">${ruleApplyFieldsHtml(rule)}</div></div>`;
+  return `<div class="rule-target-panel"><div class="rule-target-fields"><div class="rule-target-field">${ruleTargetTitle(rule, "category", "Category")}<select data-rule-field="category" aria-label="Rule category">${categoryOptions(rule.category || "")}</select></div><div class="rule-target-field">${ruleTargetTitle(rule, "transactionType", "Type")}<select data-rule-field="transactionType" aria-label="Rule transaction type">${ruleTransactionTypeOptions(rule)}</select></div><div class="rule-target-field">${ruleTargetTitle(rule, "flowType", "Flow")}<select data-rule-field="flowType" aria-label="Rule flow">${ruleFlowTypeOptions(rule)}</select></div><div class="rule-target-field">${ruleTargetTitle(rule, "notes", "Note")}<input data-rule-field="notes" value="${escapeAttr(rule.notes || "")}" aria-label="Rule note" placeholder="Optional note"></div></div></div>`;
+}
+
+function ruleTargetTitle(rule, field, labelText) {
+  return `<div class="rule-target-title"><input class="rule-target-apply-checkbox" data-rule-apply-field="${field}" type="checkbox" aria-label="Apply ${escapeAttr(labelText)}" ${ruleAppliesField(rule, field) ? "checked" : ""}><span>${escapeHtml(labelText)}</span></div>`;
 }
 
 function ruleTransactionTypeOptions(rule) {

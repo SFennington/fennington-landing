@@ -5402,3 +5402,56 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-app-page .rule-apply-label {
   margin-left: 0;
 }
+
+/* Rule target title-row checkbox placement */
+.financial-app-page .rule-target-field {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  text-align: center;
+}
+
+.financial-app-page .rule-target-title {
+  align-items: center;
+  color: var(--finance-muted);
+  display: inline-flex;
+  font-size: 0.66rem;
+  font-weight: 900;
+  gap: 0;
+  justify-content: center;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  min-height: 14px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.financial-app-page .rule-target-title span {
+  color: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+
+.financial-app-page .rule-target-fields .rule-target-apply-checkbox,
+.financial-app-page.financial-dark .rule-target-fields .rule-target-apply-checkbox {
+  appearance: auto;
+  accent-color: var(--finance-control-accent);
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  flex: 0 0 auto;
+  height: 13px !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  width: 13px !important;
+}
+
+.financial-app-page.financial-dark .rule-target-title {
+  color: #fed7aa;
+}
