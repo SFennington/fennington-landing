@@ -2786,8 +2786,10 @@ async function createReviewRuleAndApplyToMatches(sourceTx) {
     match,
     amount: Math.abs(Number(sourceTx.amount || 0)),
     category: sourceTx.category,
+    notes: sourceTx.notes || "",
     transactionType: sourceTx.type || typeForCategory(sourceTx.category, sourceTx.amount),
     flowType: FLOW_TYPES.includes(sourceTx.flowType) ? sourceTx.flowType : deriveTransactionFlowType(sourceTx),
+    applyFields: { category: true, transactionType: true, flowType: true, notes: Boolean(sourceTx.notes) },
     createdAt: new Date().toISOString()
   }, sourceTx);
   if (!rule) return { updatedCount: 0, created: false, duplicate: false, cancelled: true };
@@ -2835,11 +2837,13 @@ function applyCategoryRuleToUncategorizedTransactions(rule, transactions) {
 }
 
 function backfillCategoryRuleTargets() {
-  state.rules.filter((rule) => rule.type !== "vendor" && (!ruleTransactionType(rule) || !ruleFlowType(rule))).forEach((rule) => {
+  state.rules.filter((rule) => rule.type !== "vendor" && (!ruleTransactionType(rule) || !ruleFlowType(rule) || rule.applyFields === undefined)).forEach((rule) => {
     const matches = state.transactions.filter((tx) => categoryRuleMatches(rule, tx));
     const target = preferredRuleTargetTransaction(rule, matches);
     if (!ruleTransactionType(rule)) rule.transactionType = inferRuleTransactionType(rule, target);
     if (!ruleFlowType(rule)) rule.flowType = inferRuleFlowType(rule, target);
+    if (!rule.notes && target?.notes) rule.notes = target.notes;
+    if (!rule.applyFields) rule.applyFields = defaultRuleApplyFields(rule);
   });
 }
 
@@ -2873,9 +2877,10 @@ function isUncategorizedRuleTarget(tx) {
 
 function applyCategoryRuleToMatchedTransactions(rule, matches) {
   matches.forEach((tx) => {
-    tx.category = rule.category;
-    tx.type = ruleTransactionType(rule) || typeForCategory(rule.category, tx.amount);
-    applyRuleFlowToTransaction(rule, tx);
+    if (ruleAppliesField(rule, "category")) tx.category = rule.category;
+    if (ruleAppliesField(rule, "transactionType")) tx.type = ruleTransactionType(rule) || typeForCategory(tx.category, tx.amount);
+    if (ruleAppliesField(rule, "flowType")) applyRuleFlowToTransaction(rule, tx);
+    if (ruleAppliesField(rule, "notes")) tx.notes = rule.notes || "";
     tx.needsReview = false;
     tx.confidence = 100;
     tx.source = "User rule";
@@ -2883,6 +2888,16 @@ function applyCategoryRuleToMatchedTransactions(rule, matches) {
     tx.flags = (tx.flags || []).filter((flag) => !["low_confidence", "uncategorized"].includes(flag));
   });
   return matches.length;
+}
+
+function defaultRuleApplyFields(rule) {
+  return { category: true, transactionType: Boolean(ruleTransactionType(rule)), flowType: Boolean(ruleFlowType(rule)), notes: Boolean(rule?.notes) };
+}
+
+function ruleAppliesField(rule, field) {
+  if (!rule || rule.type === "vendor") return false;
+  if (!rule.applyFields) return defaultRuleApplyFields(rule)[field] !== false;
+  return rule.applyFields[field] === true;
 }
 
 function ruleTransactionType(rule) {
@@ -2993,7 +3008,7 @@ function editRuleBeforeCreation(initialRule, sourceTx) {
         <h3 style="margin-top:0">${isVendorRule ? "Create Vendor Cleanup Rule" : "Create Categorization Rule"}</h3>
         <p class="status-line">Edit the rule before it is created. The criteria starts with the full transaction description.</p>
         <div class="field"><label for="ruleCreateCriteria">Criteria</label><textarea id="ruleCreateCriteria" rows="4" style="width:100%">${escapeHtml(initialRule.match)}</textarea></div>
-        ${isVendorRule ? `<div class="field"><label for="ruleCreateVendor">Vendor</label><input id="ruleCreateVendor" value="${escapeAttr(initialRule.vendor || "")}"></div>` : `<div class="field"><label for="ruleCreateType">Match field</label><select id="ruleCreateType"><option value="merchant" ${initialRule.type === "merchant" ? "selected" : ""}>Merchant or vendor</option><option value="description" ${initialRule.type === "description" ? "selected" : ""}>Description</option></select></div><div class="field"><label for="ruleCreateCategory">Category</label><select id="ruleCreateCategory">${categoryOptions(initialRule.category || "")}</select></div>`}
+        ${isVendorRule ? `<div class="field"><label for="ruleCreateVendor">Vendor</label><input id="ruleCreateVendor" value="${escapeAttr(initialRule.vendor || "")}"></div>` : `<div class="field"><label for="ruleCreateType">Match field</label><select id="ruleCreateType"><option value="merchant" ${initialRule.type === "merchant" ? "selected" : ""}>Merchant or vendor</option><option value="description" ${initialRule.type === "description" ? "selected" : ""}>Description</option></select></div><div class="field"><label for="ruleCreateCategory">Category</label><select id="ruleCreateCategory">${categoryOptions(initialRule.category || "")}</select></div><div class="field"><label for="ruleCreateTransactionType">Transaction type</label><select id="ruleCreateTransactionType">${ruleTransactionTypeOptions(initialRule)}</select></div><div class="field"><label for="ruleCreateFlowType">Flow</label><select id="ruleCreateFlowType">${ruleFlowTypeOptions(initialRule)}</select></div><div class="field"><label for="ruleCreateNotes">Note</label><input id="ruleCreateNotes" value="${escapeAttr(initialRule.notes || "")}" placeholder="Optional note to apply"></div><div class="field"><label>Fields to apply</label>${ruleApplyFieldsHtml(initialRule)}</div>`}
         <div class="field"><label for="ruleCreateAmount">Amount</label><input id="ruleCreateAmount" inputmode="decimal" value="${escapeAttr(ruleAmountInputValue(initialRule) || round(Math.abs(Number(sourceTx.amount || 0))).toFixed(2))}"></div>
         <label style="display:flex;gap:.5rem;align-items:center;margin:.5rem 0 1rem"><input id="ruleCreateRequireAmount" type="checkbox"> Require this exact amount too</label>
         <div class="empty-state compact" id="ruleCreatePreview" style="text-align:left;margin-bottom:1rem"></div>
@@ -3016,6 +3031,10 @@ function editRuleBeforeCreation(initialRule, sourceTx) {
       type: dialog.querySelector("#ruleCreateType")?.value || "merchant",
       match: sanitize(criteriaInput.value),
       category: dialog.querySelector("#ruleCreateCategory")?.value || initialRule.category,
+      transactionType: dialog.querySelector("#ruleCreateTransactionType")?.value || initialRule.transactionType,
+      flowType: dialog.querySelector("#ruleCreateFlowType")?.value || initialRule.flowType,
+      notes: sanitize(dialog.querySelector("#ruleCreateNotes")?.value || ""),
+      applyFields: ruleApplyFieldsFromContainer(dialog),
       amount: requireAmountInput.checked ? amountInput.value : ""
     });
     const renderPreview = () => {
@@ -3023,7 +3042,7 @@ function editRuleBeforeCreation(initialRule, sourceTx) {
       const existingRule = isVendorRule ? matchingVendorRule(rule) : matchingCategoryRule(rule);
       const matchCount = isVendorRule ? vendorRuleMatchCount(existingRule || rule) : ruleMatchCount(existingRule || rule);
       const duplicateText = existingRule ? `<p><strong>${isVendorRule ? "A vendor cleanup rule" : "A categorization rule"} with the same criteria${ruleAmountValue(rule) ? ", amount," : ""} and target already exists.</strong></p>` : "";
-      const targetDetails = isVendorRule ? "" : `<p><strong>Type:</strong> ${escapeHtml(label(ruleTransactionType(rule) || typeForCategory(rule.category, sourceTx.amount)))}</p><p><strong>Flow:</strong> ${escapeHtml(label((ruleFlowType(rule) || deriveTransactionFlowType(sourceTx)).replace(/_/g, " ")))}</p>`;
+      const targetDetails = isVendorRule ? "" : `<p><strong>Type:</strong> ${escapeHtml(label(ruleTransactionType(rule) || typeForCategory(rule.category, sourceTx.amount)))}</p><p><strong>Flow:</strong> ${escapeHtml(label((ruleFlowType(rule) || deriveTransactionFlowType(sourceTx)).replace(/_/g, " ")))}</p><p><strong>Note:</strong> ${escapeHtml(rule.notes || "None")}</p><p><strong>Applies:</strong> ${escapeHtml(ruleApplyFieldsLabel(rule))}</p>`;
       preview.innerHTML = `${duplicateText}<p><strong>Criteria:</strong> ${escapeHtml(rule.match || "None")}</p><p><strong>${isVendorRule ? "Vendor" : "Category"}:</strong> ${escapeHtml(isVendorRule ? rule.vendor : rule.category)}</p>${targetDetails}<p><strong>Amount:</strong> ${escapeHtml(ruleAmountLabel(rule))}</p><p><strong>Matching transactions:</strong> ${escapeHtml(plural(matchCount, "transaction"))}</p>`;
     };
     dialog.querySelectorAll("input, textarea, select").forEach((input) => input.addEventListener("input", renderPreview));
@@ -3298,7 +3317,39 @@ function renderRules() {
 
 function rulesTable(rules) {
   const sortedRules = sortedRulesForTable(rules, "category");
-  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable categorization rules table"><table class="rules-table"><thead><tr>${ruleSortHeader("category", "type", "Match Field")}${ruleSortHeader("category", "match", "Criteria")}${ruleSortHeader("category", "amount", "Amount")}${ruleSortHeader("category", "category", "Category")}${ruleSortHeader("category", "matches", "Matches")}${ruleSortHeader("category", "createdAt", "Created")}<th>Actions</th></tr></thead><tbody>${sortedRules.map((rule) => `<tr data-rule-id="${escapeAttr(rule.id)}"><td><select data-rule-field="type"><option value="merchant" ${rule.type === "merchant" ? "selected" : ""}>Merchant or vendor</option><option value="description" ${rule.type === "description" ? "selected" : ""}>Description</option></select></td><td><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Rule match criteria"></td><td><input data-rule-field="amount" value="${escapeAttr(ruleAmountInputValue(rule))}" placeholder="Any" inputmode="decimal" aria-label="Optional rule amount"></td><td><select data-rule-field="category">${categoryOptions(rule.category || "")}</select></td><td>${ruleMatchCount(rule)}</td><td>${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell"><button class="mini-btn" data-rule-action="save" type="button">Save</button><button class="mini-btn" data-rule-action="rerun" type="button">Rerun</button><button class="mini-btn danger" data-rule-action="delete" type="button">Delete</button></td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap rules-table-wrap" tabindex="0" aria-label="Scrollable categorization rules table"><table class="rules-table"><thead><tr>${ruleSortHeader("category", "type", "Match Field")}${ruleSortHeader("category", "match", "Criteria")}${ruleSortHeader("category", "amount", "Amount")}${ruleSortHeader("category", "category", "Category")}<th>Type</th><th>Flow</th><th>Note</th><th>Apply</th>${ruleSortHeader("category", "matches", "Matches")}${ruleSortHeader("category", "createdAt", "Created")}<th>Actions</th></tr></thead><tbody>${sortedRules.map(categoryRuleRow).join("")}</tbody></table></div>`;
+}
+
+function categoryRuleRow(rule) {
+  return `<tr data-rule-id="${escapeAttr(rule.id)}"><td><select data-rule-field="type"><option value="merchant" ${rule.type === "merchant" ? "selected" : ""}>Merchant or vendor</option><option value="description" ${rule.type === "description" ? "selected" : ""}>Description</option></select></td><td><input data-rule-field="match" value="${escapeAttr(rule.match)}" aria-label="Rule match criteria"></td><td><input data-rule-field="amount" value="${escapeAttr(ruleAmountInputValue(rule))}" placeholder="Any" inputmode="decimal" aria-label="Optional rule amount"></td><td><select data-rule-field="category">${categoryOptions(rule.category || "")}</select></td><td><select data-rule-field="transactionType">${ruleTransactionTypeOptions(rule)}</select></td><td><select data-rule-field="flowType">${ruleFlowTypeOptions(rule)}</select></td><td><input data-rule-field="notes" value="${escapeAttr(rule.notes || "")}" aria-label="Rule note"></td><td>${ruleApplyFieldsHtml(rule)}</td><td>${ruleMatchCount(rule)}</td><td>${escapeHtml((rule.createdAt || "").slice(0, 10) || "Unknown")}</td><td class="table-action-cell"><button class="mini-btn" data-rule-action="save" type="button">Save</button><button class="mini-btn" data-rule-action="rerun" type="button">Rerun</button><button class="mini-btn danger" data-rule-action="delete" type="button">Delete</button></td></tr>`;
+}
+
+function ruleTransactionTypeOptions(rule) {
+  const value = ruleTransactionType(rule) || "expense";
+  return ["expense", "income", "transfer"].map((option) => `<option value="${option}" ${value === option ? "selected" : ""}>${label(option)}</option>`).join("");
+}
+
+function ruleFlowTypeOptions(rule) {
+  const value = ruleFlowType(rule) || "external_expense";
+  return FLOW_TYPES.map((option) => `<option value="${option}" ${value === option ? "selected" : ""}>${escapeHtml(label(option.replace(/_/g, " ")))}</option>`).join("");
+}
+
+function ruleApplyFieldsHtml(rule) {
+  const fields = [["category", "Category"], ["transactionType", "Type"], ["flowType", "Flow"], ["notes", "Note"]];
+  return `<div class="rule-apply-fields">${fields.map(([field, labelText]) => `<label><input data-rule-apply-field="${field}" type="checkbox" ${ruleAppliesField(rule, field) ? "checked" : ""}> ${labelText}</label>`).join("")}</div>`;
+}
+
+function ruleApplyFieldsFromContainer(container) {
+  const applyFields = {};
+  container.querySelectorAll("[data-rule-apply-field]").forEach((input) => { applyFields[input.dataset.ruleApplyField] = input.checked; });
+  return applyFields;
+}
+
+function ruleApplyFieldsLabel(rule) {
+  return [["category", "Category"], ["transactionType", "Type"], ["flowType", "Flow"], ["notes", "Note"]]
+    .filter(([field]) => ruleAppliesField(rule, field))
+    .map(([, labelText]) => labelText)
+    .join(", ") || "None";
 }
 
 function vendorRulesTable(rules) {
@@ -3337,6 +3388,12 @@ function updateRuleFromRow(row) {
   const rule = state.rules.find((item) => item.id === row?.dataset.ruleId);
   if (!rule) return null;
   row.querySelectorAll("[data-rule-field]").forEach((input) => { rule[input.dataset.ruleField] = sanitize(input.value); });
+  if (rule.type !== "vendor") {
+    rule.applyFields = {};
+    row.querySelectorAll("[data-rule-apply-field]").forEach((input) => { rule.applyFields[input.dataset.ruleApplyField] = input.checked; });
+    if (!ruleTransactionType(rule)) rule.transactionType = typeForCategory(rule.category, 0);
+    if (!ruleFlowType(rule)) rule.flowType = deriveTransactionFlowType({ category: rule.category, type: rule.transactionType, amount: rule.transactionType === "income" ? 1 : -1 });
+  }
   return normalizeRuleAmount(rule);
 }
 
