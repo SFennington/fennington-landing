@@ -3354,7 +3354,7 @@ function categoryRuleRow(rule) {
 }
 
 function categoryRuleTargetPanel(rule) {
-  return `<div class="rule-target-panel"><div class="rule-target-fields"><label><span>Category</span><select data-rule-field="category" aria-label="Rule category">${categoryOptions(rule.category || "")}</select></label><label><span>Type</span><select data-rule-field="transactionType" aria-label="Rule transaction type">${ruleTransactionTypeOptions(rule)}</select></label><label><span>Flow</span><select data-rule-field="flowType" aria-label="Rule flow">${ruleFlowTypeOptions(rule)}</select></label><label><span>Note</span><input data-rule-field="notes" value="${escapeAttr(rule.notes || "")}" aria-label="Rule note" placeholder="Optional note"></label></div><div class="rule-apply-group"><span class="rule-apply-title">Apply fields</span>${ruleApplyFieldsHtml(rule)}</div></div>`;
+  return `<div class="rule-target-panel"><div class="rule-target-fields"><label><span>Category</span><select data-rule-field="category" aria-label="Rule category">${categoryOptions(rule.category || "")}</select></label><label><span>Type</span><select data-rule-field="transactionType" aria-label="Rule transaction type">${ruleTransactionTypeOptions(rule)}</select></label><label><span>Flow</span><select data-rule-field="flowType" aria-label="Rule flow">${ruleFlowTypeOptions(rule)}</select></label><label><span>Note</span><input data-rule-field="notes" value="${escapeAttr(rule.notes || "")}" aria-label="Rule note" placeholder="Optional note"></label></div><div class="rule-apply-group" aria-label="Fields this rule applies">${ruleApplyFieldsHtml(rule)}</div></div>`;
 }
 
 function ruleTransactionTypeOptions(rule) {
@@ -3369,7 +3369,7 @@ function ruleFlowTypeOptions(rule) {
 
 function ruleApplyFieldsHtml(rule) {
   const fields = [["category", "Category"], ["transactionType", "Type"], ["flowType", "Flow"], ["notes", "Note"]];
-  return `<div class="rule-apply-fields">${fields.map(([field, labelText]) => `<label><input data-rule-apply-field="${field}" type="checkbox" ${ruleAppliesField(rule, field) ? "checked" : ""}> ${labelText}</label>`).join("")}</div>`;
+  return `<div class="rule-apply-fields">${fields.map(([field, labelText]) => `<label><input data-rule-apply-field="${field}" type="checkbox" ${ruleAppliesField(rule, field) ? "checked" : ""}><span class="rule-apply-label">${escapeHtml(labelText)}</span></label>`).join("")}</div>`;
 }
 
 function ruleApplyFieldsFromContainer(container) {
