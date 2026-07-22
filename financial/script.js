@@ -1159,11 +1159,9 @@ function renderDashboard() {
       ${summaryCard("Net external cash flow", summary.netCashFlow, summary.netCashFlow >= 0 ? "good" : "danger")}
       ${summaryCard("Internal transfer volume", summary.internalTransferVolume, "warn", "Not counted as income or spending.")}
       ${summaryCard("Credit-card payments", summary.creditCardPayments, "warn", "Internal movement when cards are tracked.")}
-      ${summaryCard("Transfers needing review", String(summary.unmatchedTransfers.count), "warn", "Count")}
       ${summaryCard("Projected income including potential overtime", projectedIncome(), "warn", "Potential overtime is not received income.")}
       ${summaryCard("Recurring monthly expenses", summary.recurring, "danger")}
-      ${summaryCard("Transactions requiring review", summary.reviewCount, "warn", "Count")}
-      ${summaryCard("Split/itemization review", String(summary.splitReviewCount), "warn", "Count")}
+      ${summaryCard("Transactions requiring review", summary.reviewCount, "warn")}
     </div>
     <div class="split-panel" style="margin-top:1rem">
       <section class="panel"><h3>Monthly Spending</h3><p class="status-line">Click a category to see nested subcategories, then expand subcategories to view the transactions behind each total.</p>${dashboardCategoryBreakdown(state.selectedMonth)}</section>
@@ -3953,6 +3951,10 @@ function duplicateKey(tx) {
   return `${tx.accountId}|${tx.date}|${round(tx.amount)}|${tx.description.toLowerCase()}`;
 }
 
+function isDashboardReviewTransaction(tx) {
+  return Boolean(tx.needsReview || tx.transferStatus === "unmatched" || tx.transferStatus === "ambiguous");
+}
+
 function monthlySummary(month) {
   const txs = state.transactions.filter((tx) => transactionReportingMonth(tx) === month);
   const transferDatedTxs = state.transactions.filter((tx) => tx.date?.startsWith(month));
@@ -3967,13 +3969,14 @@ function monthlySummary(month) {
   const recurring = txs.filter((tx) => tx.recurringStatus === "confirmed" || state.recurring.some((item) => item.merchant === tx.merchant && item.status !== "rejected")).reduce((sum, tx) => isReportableExpense(tx) ? sum + reportableExpenseAmount(tx) : sum, 0);
   const byCategory = categoryTotalsForTransactions(txs);
   const splitReviewCount = txs.filter((tx) => tx.splitStatus === "needs_split_review").length;
+  const reviewCount = txs.filter(isDashboardReviewTransaction).length;
   const netCashFlow = round(actualIncome - spending);
-  return { actualIncome, spending, payments: creditCardPayments, netSpending: spending, netCashFlow, remaining: netCashFlow, internalTransfersIn, internalTransfersOut, internalTransferVolume, creditCardPayments, unmatchedTransfers, recurring: round(recurring), reviewCount: txs.filter((tx) => tx.needsReview).length, splitReviewCount, byCategory };
+  return { actualIncome, spending, payments: creditCardPayments, netSpending: spending, netCashFlow, remaining: netCashFlow, internalTransfersIn, internalTransfersOut, internalTransferVolume, creditCardPayments, unmatchedTransfers, recurring: round(recurring), reviewCount, splitReviewCount, byCategory };
 }
 
 function summaryCard(title, value, tone, note = "") {
   const display = typeof value === "number" && title.includes("Transactions") ? String(value) : typeof value === "number" ? money(value) : escapeHtml(value);
-  return `<article class="summary-card ${tone || ""}"><span>${escapeHtml(title)}</span><strong>${display}</strong>${note ? `<small class="muted">${escapeHtml(note)}</small>` : ""}</article>`;
+  return `<article class="summary-card ${tone || ""}"><div class="summary-card-copy"><span>${escapeHtml(title)}</span>${note ? `<small class="muted">${escapeHtml(note)}</small>` : ""}</div><strong>${display}</strong></article>`;
 }
 
 function categoryBars(data) {
@@ -4108,7 +4111,7 @@ function bindDashboardCategoryBreakdown(root = document) {
 }
 
 function quickStatus(summary) {
-  return `<p><span class="tag good">Outside income</span> ${money(summary.actualIncome)}</p><p><span class="tag danger">Outside spending</span> ${money(summary.spending)}</p><p><span class="tag warn">Internal movement</span> ${money(summary.internalTransferVolume)} ignored for income and spending.</p><p><span class="tag warn">Split categories</span> Reconciled split/itemized purchases feed category totals.</p><p><span class="tag warn">Card timing</span> Purchases count on purchase dates; later card payments stay internal.</p><p><span class="tag warn">Review</span> ${summary.reviewCount} transactions need attention; ${summary.splitReviewCount} split/itemized items need reconciliation.</p>`;
+  return `<p><span class="tag good">Outside income</span> ${money(summary.actualIncome)}</p><p><span class="tag danger">Outside spending</span> ${money(summary.spending)}</p><p><span class="tag warn">Internal movement</span> ${money(summary.internalTransferVolume)} ignored for income and spending.</p><p><span class="tag warn">Split categories</span> Reconciled split/itemized purchases feed category totals.</p><p><span class="tag warn">Card timing</span> Purchases count on purchase dates; later card payments stay internal.</p><p><span class="tag warn">Review</span> ${summary.reviewCount} transactions need attention, including unmatched or ambiguous transfers.</p>`;
 }
 
 function filteredTransactions() {
