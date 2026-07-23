@@ -126,6 +126,7 @@ let saveTimer = null;
 let state = emptyState();
 const pendingCategoryDeletes = new Set();
 const pendingRuleDeletes = new Set();
+const pendingTransactionDeletes = new Set();
 const ruleActionFeedbackTimers = new Map();
 const categoryExpandedIds = new Set();
 const dashboardCategoryExpandedKeys = new Set();
@@ -482,14 +483,17 @@ async function persistStateNow() {
   await setDoc(doc(profileRef, "settings", "income"), { ...normalizeIncomeSettings(state.incomeSettings), workspaceId: sharedWorkspaceId, updatedAt: serverTimestamp() });
   const currentCategoryIds = new Set(state.categories.map((category) => category.id));
   const currentRuleIds = new Set(state.rules.map((rule) => rule.id));
+  const currentTransactionIds = new Set(state.transactions.map((tx) => tx.id));
   const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !currentCategoryIds.has(id));
   const deletedRuleIds = Array.from(pendingRuleDeletes).filter((id) => !currentRuleIds.has(id));
-  await commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds);
+  const deletedTransactionIds = Array.from(pendingTransactionDeletes).filter((id) => !currentTransactionIds.has(id));
+  await commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds, deletedTransactionIds);
   deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
   deletedRuleIds.forEach((id) => pendingRuleDeletes.delete(id));
+  deletedTransactionIds.forEach((id) => pendingTransactionDeletes.delete(id));
 }
 
-async function commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds = []) {
+async function commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds = [], deletedTransactionIds = []) {
   let batch = writeBatch(db);
   let writeCount = 0;
   const commits = [];
@@ -522,6 +526,10 @@ async function commitProfileCollectionWrites(profileRef, deletedCategoryIds, del
   deletedRuleIds.forEach((id) => {
     queueWrite((currentBatch) => currentBatch.delete(doc(profileRef, "rules", id)));
     persistedUpdates.push({ name: "rules", id, snapshot: null });
+  });
+  deletedTransactionIds.forEach((id) => {
+    queueWrite((currentBatch) => currentBatch.delete(doc(profileRef, "transactions", id)));
+    persistedUpdates.push({ name: "transactions", id, snapshot: null });
   });
 
   if (writeCount) commits.push(batch.commit());
@@ -2695,7 +2703,7 @@ function transactionRow(tx) {
     <td class="notes-cell" data-label="Notes"><input class="note-input" data-field="notes" aria-label="Transaction notes" value="${escapeAttr(tx.notes || "")}" placeholder="Add note"></td>
   </tr>
   <tr data-id="${escapeAttr(tx.id)}" class="tx-action-row ${tx.needsReview ? "needs-review" : ""}">
-    <td class="table-action-cell" colspan="9" data-label="Actions"><div class="row-action-buttons"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Create Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn flow-toggle ${internalActive ? "active" : ""}" data-action="mark-internal" type="button" aria-pressed="${internalActive ? "true" : "false"}">Internal</button><button class="mini-btn flow-toggle ${externalActive ? "active" : ""}" data-action="mark-external" type="button" aria-pressed="${externalActive ? "true" : "false"}">External</button></div></td>
+    <td class="table-action-cell" colspan="9" data-label="Actions"><div class="row-action-buttons"><button class="mini-btn save-row-btn" data-action="save-row" type="button">Save</button><button class="mini-btn" data-action="apply-rule" type="button">Create Rule</button><button class="mini-btn" data-action="split" type="button">Split</button><button class="mini-btn" data-action="clear-split" type="button" ${tx.splits?.length ? "" : "disabled"}>Clear Split</button><button class="mini-btn flow-toggle ${internalActive ? "active" : ""}" data-action="mark-internal" type="button" aria-pressed="${internalActive ? "true" : "false"}">Internal</button><button class="mini-btn flow-toggle ${externalActive ? "active" : ""}" data-action="mark-external" type="button" aria-pressed="${externalActive ? "true" : "false"}">External</button><button class="mini-btn danger" data-action="delete-transaction" type="button">Delete</button></div></td>
   </tr>`;
 }
 
@@ -2837,6 +2845,11 @@ function bindTransactionTable(root) {
     clearTransactionSplits(tx);
     renderAll();
     showStatus("Split lines cleared.");
+  }));
+  root.querySelectorAll("[data-action='delete-transaction']").forEach((button) => button.addEventListener("click", () => {
+    const tx = transactionForAction(button);
+    if (!tx) return;
+    deleteTransaction(tx);
   }));
 }
 
@@ -3011,6 +3024,23 @@ function clearTransactionSplits(tx) {
   tx.itemizationSource = "";
   tx.itemizationMatchConfidence = 0;
   tx.flags = (tx.flags || []).filter((flag) => flag !== "split_review");
+}
+
+function deleteTransaction(tx) {
+  const labelText = tx.merchant || tx.description || "this transaction";
+  if (!window.confirm(`Delete ${labelText} on ${tx.date || "unknown date"} for ${money(tx.amount)}?\n\nThis cannot be undone.`)) return;
+  pendingTransactionDeletes.add(tx.id);
+  state.transactions.forEach((item) => {
+    if (item.transferPeerTransactionId !== tx.id) return;
+    item.transferPeerTransactionId = "";
+    item.transferGroupId = "";
+    item.transferStatus = "unmatched";
+    item.flowReason = "Linked transfer peer was deleted.";
+    item.needsReview = true;
+  });
+  state.transactions = state.transactions.filter((item) => item.id !== tx.id);
+  renderAll();
+  showStatus("Transaction deleted.");
 }
 
 function markExternalFlow(tx) {
