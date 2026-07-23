@@ -1464,26 +1464,26 @@ function importTransactions() {
     return;
   }
   const importId = uniqueId("import");
-  const imported = preview.rows.map((row) => {
-    let account = state.accounts.find((item) => item.name.toLowerCase() === row.accountName.toLowerCase());
-    if (!account) {
-      account = createImportedAccount(row.accountName, pendingImport.institution);
-      state.accounts.push(account);
-    }
-    return makeTransaction({ ...row, accountId: account.id, importId }, uniqueId("tx"));
-  });
-  imported.forEach((tx) => applyCategorization(tx, state));
-  imported.filter((tx) => tx.importDirection === "credit" && state.accounts.find((account) => account.id === tx.accountId)?.type === "credit").forEach((tx) => {
+  const accountPlans = buildCsvImportAccountPlans(preview.rows);
+  const prepared = preview.rows.map((row) => makeTransaction({ ...row, accountId: accountPlans.get(row.accountName).id, importId }, uniqueId("tx")));
+  const importPlan = buildCsvImportPlan(prepared);
+  const changedUpdates = importPlan.updates.filter((item) => item.changed);
+  const summary = `Add ${importPlan.adds.length} new ${pluralize("transaction", importPlan.adds.length)} and update ${changedUpdates.length} existing ${pluralize("transaction", changedUpdates.length)}?\n\nCategories and review decisions on existing transactions will not be changed.`;
+  if (!window.confirm(summary)) return;
+  Array.from(accountPlans.values()).filter((account) => account.isNew).forEach((account) => state.accounts.push(account));
+  importPlan.adds.forEach((tx) => applyCategorization(tx, state));
+  importPlan.adds.filter((tx) => tx.importDirection === "credit" && state.accounts.find((account) => account.id === tx.accountId)?.type === "credit").forEach((tx) => {
     setCategory(tx, ACCOUNT_CREDIT_CATEGORY, Math.max(90, tx.confidence || 0), "CSV credit column", "Mapped Credit column on a credit-card account was imported as a card payment or credit.", "transfer");
   });
-  flagDuplicates(imported, state.transactions);
-  state.transactions.push(...imported);
-  state.imports.push({ id: importId, fileName: pendingImport.fileName, accountName: preview.accountName, count: imported.length, importedAt: new Date().toISOString(), duplicateCount: imported.filter((tx) => tx.flags.includes("possible_duplicate")).length });
+  changedUpdates.forEach((item) => applyCsvTransactionUpdate(item.existing, item.incoming));
+  flagDuplicates(importPlan.adds, state.transactions);
+  state.transactions.push(...importPlan.adds);
+  state.imports.push({ id: importId, fileName: pendingImport.fileName, accountName: preview.accountName, count: importPlan.adds.length + changedUpdates.length, importedAt: new Date().toISOString(), duplicateCount: importPlan.adds.filter((tx) => tx.flags.includes("possible_duplicate")).length, addedCount: importPlan.adds.length, updatedCount: changedUpdates.length });
   pendingImport = null;
   activeImportPanel = "";
   state.selectedMonth = latestMonth(state.transactions) || state.selectedMonth;
   renderAll();
-  showStatus(`${imported.length} transactions imported. Low-confidence and possible duplicate items were added to the review queue. Use Analyze Transactions to run AI.`);
+  showStatus(`${importPlan.adds.length} ${pluralize("transaction", importPlan.adds.length)} added and ${changedUpdates.length} existing ${pluralize("transaction", changedUpdates.length)} updated. Existing categories were preserved.`);
 }
 
 async function handleAmazonFile(event) {
@@ -4296,6 +4296,55 @@ function flagDuplicates(imported, existing) {
       tx.needsReview = true;
     }
   });
+}
+
+function buildCsvImportAccountPlans(rows) {
+  const accountsByName = new Map(state.accounts.map((account) => [account.name.toLowerCase(), account]));
+  const plans = new Map();
+  rows.forEach((row) => {
+    if (plans.has(row.accountName)) return;
+    const existing = accountsByName.get(row.accountName.toLowerCase());
+    plans.set(row.accountName, existing || { ...createImportedAccount(row.accountName, pendingImport.institution), isNew: true });
+  });
+  return plans;
+}
+
+function buildCsvImportPlan(incomingTransactions) {
+  const existingByKey = new Map(state.transactions.map((tx) => [duplicateKey(tx), tx]));
+  const pendingKeys = new Set();
+  return incomingTransactions.reduce((plan, incoming) => {
+    const key = duplicateKey(incoming);
+    const existing = existingByKey.get(key);
+    if (existing && !pendingKeys.has(key)) {
+      pendingKeys.add(key);
+      plan.updates.push({ existing, incoming, changed: csvTransactionHasChanges(existing, incoming) });
+    } else {
+      plan.adds.push(incoming);
+    }
+    return plan;
+  }, { adds: [], updates: [] });
+}
+
+function csvTransactionHasChanges(existing, incoming) {
+  return csvTransactionUpdateFields().some((field) => !valuesMatch(existing[field], incoming[field]));
+}
+
+function applyCsvTransactionUpdate(existing, incoming) {
+  csvTransactionUpdateFields().forEach((field) => {
+    if (!valuesMatch(existing[field], incoming[field])) existing[field] = incoming[field];
+  });
+}
+
+function csvTransactionUpdateFields() {
+  return ["date", "description", "merchant", "vendor", "accountId", "amount", "importDirection", "importId"];
+}
+
+function valuesMatch(left, right) {
+  return left === right || (left == null && right === "") || (left === "" && right == null);
+}
+
+function pluralize(word, count) {
+  return count === 1 ? word : `${word}s`;
 }
 
 function isDuplicate(row, existing) {
