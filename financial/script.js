@@ -1194,8 +1194,6 @@ function renderDashboard() {
       ${summaryCard("Income from outside", summary.actualIncome, "good")}
       ${summaryCard("Spending to outside vendors", summary.spending, "danger")}
       ${summaryCard("Net external cash flow", summary.netCashFlow, summary.netCashFlow >= 0 ? "good" : "danger")}
-      ${summaryCard("Internal transfer volume", summary.internalTransferVolume, "warn", "Not counted as income or spending.")}
-      ${summaryCard("Credit-card payments", summary.creditCardPayments, "warn", "Internal movement when cards are tracked.")}
       ${summaryCard("Estimated Remaining Income (Month)", income.estimatedRemainingMonth, "warn", "Current month projection.")}
       ${summaryCard("Recurring monthly expenses", summary.recurring, "danger")}
       ${summaryCard("Transactions requiring review", summary.reviewCount, "warn")}
