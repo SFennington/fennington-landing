@@ -4346,11 +4346,11 @@ function pluralize(word, count) {
 }
 
 function isDuplicate(row, existing) {
-  return existing.some((tx) => tx.date === row.date && round(tx.amount) === round(row.amount) && tx.description.toLowerCase() === row.description.toLowerCase());
+  return existing.some((tx) => duplicateKey(tx) === duplicateKey(row));
 }
 
 function duplicateKey(tx) {
-  return `${tx.accountId}|${tx.date}|${round(tx.amount)}|${tx.description.toLowerCase()}`;
+  return `${tx.date}|${round(tx.amount)}`;
 }
 
 function isDashboardReviewTransaction(tx) {
