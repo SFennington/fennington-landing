@@ -127,6 +127,7 @@ let state = emptyState();
 const pendingCategoryDeletes = new Set();
 const pendingRuleDeletes = new Set();
 const pendingTransactionDeletes = new Set();
+const pendingAccountDeletes = new Set();
 const ruleActionFeedbackTimers = new Map();
 const categoryExpandedIds = new Set();
 const dashboardCategoryExpandedKeys = new Set();
@@ -484,16 +485,19 @@ async function persistStateNow() {
   const currentCategoryIds = new Set(state.categories.map((category) => category.id));
   const currentRuleIds = new Set(state.rules.map((rule) => rule.id));
   const currentTransactionIds = new Set(state.transactions.map((tx) => tx.id));
+  const currentAccountIds = new Set(state.accounts.map((account) => account.id));
   const deletedCategoryIds = Array.from(pendingCategoryDeletes).filter((id) => !currentCategoryIds.has(id));
   const deletedRuleIds = Array.from(pendingRuleDeletes).filter((id) => !currentRuleIds.has(id));
   const deletedTransactionIds = Array.from(pendingTransactionDeletes).filter((id) => !currentTransactionIds.has(id));
-  await commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds, deletedTransactionIds);
+  const deletedAccountIds = Array.from(pendingAccountDeletes).filter((id) => !currentAccountIds.has(id));
+  await commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds, deletedTransactionIds, deletedAccountIds);
   deletedCategoryIds.forEach((id) => pendingCategoryDeletes.delete(id));
   deletedRuleIds.forEach((id) => pendingRuleDeletes.delete(id));
   deletedTransactionIds.forEach((id) => pendingTransactionDeletes.delete(id));
+  deletedAccountIds.forEach((id) => pendingAccountDeletes.delete(id));
 }
 
-async function commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds = [], deletedTransactionIds = []) {
+async function commitProfileCollectionWrites(profileRef, deletedCategoryIds, deletedRuleIds = [], deletedTransactionIds = [], deletedAccountIds = []) {
   let batch = writeBatch(db);
   let writeCount = 0;
   const commits = [];
@@ -530,6 +534,10 @@ async function commitProfileCollectionWrites(profileRef, deletedCategoryIds, del
   deletedTransactionIds.forEach((id) => {
     queueWrite((currentBatch) => currentBatch.delete(doc(profileRef, "transactions", id)));
     persistedUpdates.push({ name: "transactions", id, snapshot: null });
+  });
+  deletedAccountIds.forEach((id) => {
+    queueWrite((currentBatch) => currentBatch.delete(doc(profileRef, "accounts", id)));
+    persistedUpdates.push({ name: "accounts", id, snapshot: null });
   });
 
   if (writeCount) commits.push(batch.commit());
@@ -1366,6 +1374,7 @@ function bindImportControls(root = document) {
     renderTransactions();
   });
   if (pendingImport) {
+    root.querySelector("#mappingTemplateSelect")?.addEventListener("change", applySelectedMappingTemplate);
     root.querySelector("#previewImportButton")?.addEventListener("click", updateImportPreview);
     root.querySelector("#importTransactionsButton")?.addEventListener("click", importTransactions);
     root.querySelector("#saveMappingButton")?.addEventListener("click", saveMappingTemplate);
@@ -1375,6 +1384,7 @@ function bindImportControls(root = document) {
 function mappingForm(headers) {
   const options = `<option value="">Not mapped</option>${headers.map((h) => `<option value="${escapeAttr(h)}">${escapeHtml(h)}</option>`).join("")}`;
   const field = (id, label, required = false) => `<div class="field"><label for="map-${id}">${label}${required ? "" : " (optional)"}</label><select id="map-${id}">${options}</select></div>`;
+  const mappingOptions = `<option value="">Auto-detected mapping</option>${state.mappings.map((item) => `<option value="${escapeAttr(item.id)}" ${pendingImport.mappingId === item.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}`;
   setTimeout(() => Object.entries(pendingImport.mapping).forEach(([key, value]) => {
     const el = document.getElementById(`map-${key}`);
     if (el) el.value = value || "";
@@ -1382,6 +1392,7 @@ function mappingForm(headers) {
     if (expensesPositive) expensesPositive.value = String(Boolean(pendingImport.expensesPositive));
   }));
   return `
+    <div class="field" style="margin-top:1rem"><label for="mappingTemplateSelect">Existing import mapping</label><select id="mappingTemplateSelect">${mappingOptions}</select></div>
     <div class="mapping-grid" style="margin-top:1rem">
       ${field("date", "Transaction date", true)}
       ${field("description", "Description", true)}
@@ -1391,14 +1402,36 @@ function mappingForm(headers) {
       ${field("account", "Account name")}
       ${field("type", "Transaction type")}
       ${field("balance", "Balance")}
-      <div class="field"><label for="selectedAccount">Selected account</label><input id="selectedAccount" value="${escapeAttr(pendingImport.accountName || "Imported Account")}"></div>
       <div class="field"><label for="institutionName">Institution template name</label><input id="institutionName" value="${escapeAttr(pendingImport.institution || "")}" placeholder="Bank or card issuer"></div>
       <div class="field"><label for="expensesPositive">Expenses are positive numbers</label><select id="expensesPositive"><option value="false">No</option><option value="true">Yes</option></select></div>
     </div>
+    ${importAccountSelectionHtml()}
     <div class="form-actions" style="margin-top:1rem">
       <button id="previewImportButton" class="btn btn-secondary" type="button">Refresh Preview</button>
       <button id="importTransactionsButton" class="btn btn-primary" type="button">Import Transactions</button>
       <button id="saveMappingButton" class="btn btn-secondary" type="button">Save Mapping Template</button>
+    </div>
+  `;
+}
+
+function importAccountSelectionHtml() {
+  const sourceNames = pendingImport.accountNames?.length ? pendingImport.accountNames : [pendingImport.accountName || "Imported Account"];
+  return `
+    <div class="settings-grid" style="margin-top:1rem">
+      ${sourceNames.map((name) => importAccountSelectionField(name)).join("")}
+    </div>
+  `;
+}
+
+function importAccountSelectionField(sourceName) {
+  const selection = pendingImport.accountSelections?.[sourceName] || suggestedImportAccountId(sourceName) || "__new__";
+  const newName = pendingImport.newAccountNames?.[sourceName] || sourceName || pendingImport.accountName || "Imported Account";
+  const accountOptions = state.accounts.slice().sort((a, b) => a.name.localeCompare(b.name)).map((account) => `<option value="${escapeAttr(account.id)}" ${selection === account.id ? "selected" : ""}>${escapeHtml(account.name || "Unnamed account")}</option>`).join("");
+  return `
+    <div class="field" data-import-account-source="${escapeAttr(sourceName)}">
+      <label>${escapeHtml(sourceName)} imports into</label>
+      <select data-import-account-select><option value="__new__" ${selection === "__new__" ? "selected" : ""}>Create new account</option>${accountOptions}</select>
+      <input data-import-account-new-name value="${escapeAttr(newName)}" placeholder="New account name">
     </div>
   `;
 }
@@ -1441,7 +1474,7 @@ async function handleFile(event) {
   const headers = Array.from(allHeaders);
   if (!bodyRows.length) return showStatus("No transaction rows were detected in the selected CSV files.");
   const accountNames = Array.from(new Set(bodyRows.map((row) => row.__sourceAccountName)));
-  pendingImport = { fileName: files.length === 1 ? files[0].name : `${files.length} CSV files`, headers, rows: bodyRows, mapping: autoMap(headers), accountName: accountNames.length === 1 ? accountNames[0] : "Multiple source accounts", accountNames, institution: "" };
+  pendingImport = { fileName: files.length === 1 ? files[0].name : `${files.length} CSV files`, headers, rows: bodyRows, mapping: autoMap(headers), mappingId: "", accountName: accountNames.length === 1 ? accountNames[0] : "Multiple source accounts", accountNames, accountSelections: defaultImportAccountSelections(accountNames), newAccountNames: Object.fromEntries(accountNames.map((name) => [name, name])), institution: "" };
   activeImportPanel = "csv";
   renderTransactions();
 }
@@ -1452,14 +1485,34 @@ function updateImportPreview() {
   if (preview) preview.innerHTML = importPreviewHtml();
 }
 
+function applySelectedMappingTemplate(event) {
+  const template = state.mappings.find((item) => item.id === event.target.value);
+  if (!template) {
+    pendingImport.mappingId = "";
+    return;
+  }
+  pendingImport.mappingId = template.id;
+  pendingImport.mapping = { ...pendingImport.mapping, ...template.mapping };
+  pendingImport.expensesPositive = Boolean(template.expensesPositive);
+  renderTransactions();
+  showStatus(`Applied import mapping: ${template.name}.`);
+}
+
 function captureMapping() {
   if (!pendingImport) return;
   ["date", "description", "amount", "debit", "credit", "account", "type", "balance"].forEach((key) => {
     pendingImport.mapping[key] = document.getElementById(`map-${key}`)?.value || "";
   });
-  pendingImport.accountName = sanitize(document.getElementById("selectedAccount")?.value || "Imported Account");
+  pendingImport.mappingId = document.getElementById("mappingTemplateSelect")?.value || pendingImport.mappingId || "";
   pendingImport.institution = sanitize(document.getElementById("institutionName")?.value || "");
   pendingImport.expensesPositive = document.getElementById("expensesPositive")?.value === "true";
+  pendingImport.accountSelections = {};
+  pendingImport.newAccountNames = {};
+  document.querySelectorAll("[data-import-account-source]").forEach((field) => {
+    const sourceName = field.dataset.importAccountSource;
+    pendingImport.accountSelections[sourceName] = field.querySelector("[data-import-account-select]")?.value || "__new__";
+    pendingImport.newAccountNames[sourceName] = sanitize(field.querySelector("[data-import-account-new-name]")?.value || sourceName || "Imported Account");
+  });
 }
 
 function importTransactions() {
@@ -1471,12 +1524,12 @@ function importTransactions() {
   }
   const importId = uniqueId("import");
   const accountPlans = buildCsvImportAccountPlans(preview.rows);
-  const prepared = preview.rows.map((row) => makeTransaction({ ...row, accountId: accountPlans.get(row.accountName).id, importId }, uniqueId("tx")));
+  const prepared = preview.rows.map((row) => makeTransaction({ ...row, accountId: accountPlans.get(row.accountId || row.accountName).id, importId }, uniqueId("tx")));
   const importPlan = buildCsvImportPlan(prepared);
   const changedUpdates = importPlan.updates.filter((item) => item.changed);
   const summary = `Add ${importPlan.adds.length} new ${pluralize("transaction", importPlan.adds.length)} and update ${changedUpdates.length} existing ${pluralize("transaction", changedUpdates.length)}?\n\nCategories and review decisions on existing transactions will not be changed.`;
   if (!window.confirm(summary)) return;
-  Array.from(accountPlans.values()).filter((account) => account.isNew).forEach((account) => state.accounts.push(account));
+  Array.from(accountPlans.values()).filter((account) => account.isNew).forEach(({ isNew, ...account }) => state.accounts.push(account));
   importPlan.adds.forEach((tx) => applyCategorization(tx, state));
   importPlan.adds.filter((tx) => tx.importDirection === "credit" && state.accounts.find((account) => account.id === tx.accountId)?.type === "credit").forEach((tx) => {
     setCategory(tx, ACCOUNT_CREDIT_CATEGORY, Math.max(90, tx.confidence || 0), "CSV credit column", "Mapped Credit column on a credit-card account was imported as a card payment or credit.", "transfer");
@@ -1708,11 +1761,14 @@ function accountCard(row) {
         <span class="tag ${account.type === "credit" ? "warn" : "good"}">${escapeHtml(label(account.type || "account"))}</span>
       </div>
       <div class="settings-grid compact-account-config">
+        <div class="field"><label>Name</label><input data-account-field="name" value="${escapeAttr(account.name || "")}" placeholder="Account name"></div>
+        <div class="field"><label>Institution</label><input data-account-field="institution" value="${escapeAttr(account.institution || "")}" placeholder="Institution"></div>
         <div class="field"><label>Type</label><select data-account-field="type"><option value="checking" ${account.type === "checking" ? "selected" : ""}>Checking</option><option value="credit" ${account.type === "credit" ? "selected" : ""}>Credit card</option></select></div>
         <div class="field"><label>Money-flow role</label><select data-account-field="flowRole">${ACCOUNT_FLOW_ROLES.map((role) => `<option value="${role}" ${account.flowRole === role ? "selected" : ""}>${escapeHtml(label(role.replace(/_/g, " ")))}</option>`).join("")}</select></div>
         <label class="field checkbox-field"><span>Include in flow</span><input data-account-field="includeInMoneyFlow" type="checkbox" ${account.includeInMoneyFlow !== false ? "checked" : ""}></label>
         <label class="field checkbox-field"><span>Match transfers</span><input data-account-field="transferMatchingEnabled" type="checkbox" ${account.transferMatchingEnabled !== false ? "checked" : ""}></label>
         <button class="mini-btn" data-account-save type="button">Save Account</button>
+        <button class="mini-btn danger" data-account-delete type="button" ${transactionCount ? "disabled" : ""}>Delete Account</button>
       </div>
       <dl class="account-metrics">
         <div><dt>Transactions</dt><dd>${transactionCount}</dd></div>
@@ -1752,6 +1808,22 @@ function bindAccountControls(root) {
     renderAll();
     showStatus("Account money-flow settings saved.");
   }));
+  root.querySelectorAll("[data-account-delete]").forEach((button) => button.addEventListener("click", () => {
+    const card = button.closest("[data-account-id]");
+    const account = state.accounts.find((item) => item.id === card?.dataset.accountId);
+    if (!account) return;
+    deleteAccount(account);
+  }));
+}
+
+function deleteAccount(account) {
+  const transactionCount = state.transactions.filter((tx) => tx.accountId === account.id).length;
+  if (transactionCount) return showStatus(`Move or delete ${transactionCount} linked transaction${transactionCount === 1 ? "" : "s"} before deleting this account.`);
+  if (!window.confirm(`Delete account ${account.name || "Unnamed account"}?\n\nThis cannot be undone.`)) return;
+  pendingAccountDeletes.add(account.id);
+  state.accounts = state.accounts.filter((item) => item.id !== account.id);
+  renderAll();
+  showStatus("Account deleted.");
 }
 
 function renderTransactions() {
@@ -4285,6 +4357,15 @@ function autoMap(headers) {
   return { date: find(/date/i, /posted/i), description: find(/description/i, /merchant/i, /name/i, /memo/i), amount: find(/^amount$/i, /transaction amount/i), debit: find(/debit/i, /withdrawal/i, /charge/i), credit: find(/credit/i, /deposit/i), account: find(/account/i), type: find(/type/i), balance: find(/balance/i) };
 }
 
+function defaultImportAccountSelections(accountNames) {
+  return Object.fromEntries(accountNames.map((name) => [name, suggestedImportAccountId(name) || "__new__"]));
+}
+
+function suggestedImportAccountId(sourceName) {
+  const normalizedSource = normalizedRuleText(sourceName);
+  return state.accounts.find((account) => normalizedRuleText(account.name) === normalizedSource)?.id || "";
+}
+
 function buildImportPreview(options = {}) {
   if (options.captureControls !== false) captureMapping();
   const rows = pendingImport.rows.map((row) => normalizeImportRow(row)).filter((row) => row.date && row.description && Number.isFinite(row.amount));
@@ -4305,7 +4386,17 @@ function normalizeImportRow(row) {
   if (Math.abs(creditAmount) > 0) importDirection = "credit";
   else if (Math.abs(debitAmount) > 0) importDirection = "debit";
   if (!hasSplitAmountColumns && pendingImport.expensesPositive && amount > 0 && !/credit|deposit|income|payroll/i.test(row[map.type] || row[map.description] || "")) amount = -amount;
-  return { date: normalizeDate(row[map.date]), description: sanitize(row[map.description]), merchant: normalizeMerchant(row[map.description]), amount: round(amount), importDirection, accountName: sanitize(row[map.account] || row.__sourceAccountName || pendingImport.accountName), sourceFileName: row.__sourceFileName || pendingImport.fileName };
+  const sourceAccountName = sanitize(row.__sourceAccountName || pendingImport.accountName);
+  const account = resolvedImportAccount(sourceAccountName);
+  return { date: normalizeDate(row[map.date]), description: sanitize(row[map.description]), merchant: normalizeMerchant(row[map.description]), amount: round(amount), importDirection, accountId: account.id, accountName: account.name, sourceAccountName, sourceFileName: row.__sourceFileName || pendingImport.fileName };
+}
+
+function resolvedImportAccount(sourceAccountName) {
+  const selection = pendingImport.accountSelections?.[sourceAccountName] || "__new__";
+  const existing = selection === "__new__" ? null : state.accounts.find((account) => account.id === selection);
+  if (existing) return existing;
+  const name = sanitize(pendingImport.newAccountNames?.[sourceAccountName] || sourceAccountName || pendingImport.accountName || "Imported Account");
+  return { id: "", name };
 }
 
 function inferAccountName(file) {
@@ -4330,9 +4421,10 @@ function buildCsvImportAccountPlans(rows) {
   const accountsByName = new Map(state.accounts.map((account) => [account.name.toLowerCase(), account]));
   const plans = new Map();
   rows.forEach((row) => {
-    if (plans.has(row.accountName)) return;
-    const existing = accountsByName.get(row.accountName.toLowerCase());
-    plans.set(row.accountName, existing || { ...createImportedAccount(row.accountName, pendingImport.institution), isNew: true });
+    const key = row.accountId || row.accountName;
+    if (plans.has(key)) return;
+    const existing = row.accountId ? state.accounts.find((account) => account.id === row.accountId) : accountsByName.get(row.accountName.toLowerCase());
+    plans.set(key, existing || { ...createImportedAccount(row.accountName, pendingImport.institution), isNew: true });
   });
   return plans;
 }
