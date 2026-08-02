@@ -5,6 +5,7 @@ functions/lib/
 # Environment variables
 .env
 .env.local
+functions/.secret.local
 
 # OS files
 .DS_Store

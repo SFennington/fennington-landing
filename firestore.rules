@@ -162,6 +162,26 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /productAssets/{assetId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /productPromises/{promiseId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /productTasks/{taskId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /productApprovals/{approvalId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /productPackages/{packageId} {
+      allow read, write: if isAdmin();
+    }
+
     match /digitalPurchases/{purchaseId} {
       allow read, write: if isAdmin();
     }

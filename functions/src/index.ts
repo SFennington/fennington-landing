@@ -22,6 +22,7 @@ const openAiApiKey = defineSecret("OPENAI_API_KEY");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripePriceChoreTracker = defineSecret("STRIPE_PRICE_CHORE_TRACKER");
+const fdPosServiceSecret = defineSecret("FD_POS_SERVICE_SECRET");
 const resendApiKey = defineSecret("RESEND_API_KEY");
 
 const REGION = "us-central1";
@@ -40,22 +41,76 @@ const FINANCIAL_WEB_SEARCH_PRICE_PER_1K = Number(process.env.FINANCIAL_WEB_SEARC
 const CHORE_TRACKER_PRODUCT_SLUG = "chore-tracker";
 const CHORE_TRACKER_PRODUCT_NAME = "14-Day Homestead Chore Tracker System";
 const CHORE_TRACKER_FULFILLMENT_VERSION = "2026-08-01";
-const CHORE_TRACKER_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+const DEFAULT_DIGITAL_PRODUCT_TOKEN_TTL_DAYS = 7;
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@fennington.com";
 const SITE_URL = (process.env.SITE_URL || process.env.PUBLIC_SITE_URL || "https://fennington.com").replace(/\/$/, "");
-const CHORE_TRACKER_FILES: Record<string, { filename: string; downloadName: string }> = {
-  screen: {
-    filename: "14-Day-Homestead-Chore-Tracker-System-screen.pdf",
-    downloadName: "14-Day-Homestead-Chore-Tracker-System-screen.pdf"
-  },
-  print: {
-    filename: "14-Day-Homestead-Chore-Tracker-System-print.pdf",
-    downloadName: "14-Day-Homestead-Chore-Tracker-System-print.pdf"
-  },
-  worksheets: {
-    filename: "Reusable-Chore-Tracker-Worksheets.pdf",
-    downloadName: "Reusable-Chore-Tracker-Worksheets.pdf"
-  }
+
+const PRODUCT_STATUSES = [
+  "IDEA", "ABK_GENERATING", "EBOOK_GENERATED", "SOURCE_REVIEW", "PROMISE_EXTRACTION", "PROMISE_APPROVAL_REQUIRED",
+  "SUPPORTING_ASSETS_GENERATING", "SUPPORTING_ASSETS_REVIEW", "PACKAGE_READY", "SALES_PAGE_DRAFT", "SALES_PAGE_APPROVAL_REQUIRED",
+  "STRIPE_DRAFT", "STRIPE_READY", "FULFILLMENT_READY", "LAUNCH_READY", "LIVE", "CONTENT_MARKETING_READY", "CONTENT_MARKETING_ACTIVE",
+  "BLOCKED", "ARCHIVED"
+] as const;
+const PUBLIC_CHECKOUT_STATUSES = new Set(["LIVE", "LAUNCH_READY"]);
+const ASSET_TYPES = new Set(["ebook", "pdf", "worksheet", "spreadsheet", "checklist", "template", "module", "cover", "zip", "sales-page", "other"]);
+const ASSET_FORMATS = new Set(["docx", "pdf", "html", "xlsx", "gsheet", "csv", "png", "zip", "md", "json", "other"]);
+const ASSET_SOURCES = new Set(["abk", "perc", "manual", "website-builder", "package-builder"]);
+const PROMISE_CATEGORIES = new Set(["deliverable", "feature", "bonus", "upsell", "outcome", "app-tie-in", "price", "support", "refund", "testimonial", "scarcity", "statistic", "other"]);
+const PROMISE_RISK_LEVELS = new Set(["low", "medium", "high", "blocked"]);
+const PROMISE_CLASSIFICATIONS = new Set(["keep", "needs_asset", "needs_evidence", "move_to_upsell", "remove", "rewrite", "ignore"]);
+
+type ProductStatus = typeof PRODUCT_STATUSES[number];
+
+type ProductManifest = {
+  schemaVersion?: string;
+  productId?: string;
+  slug?: string;
+  name?: string;
+  priceCents?: number;
+  currency?: string;
+  sourceFolder?: string;
+  primaryAsset?: {
+    name?: string;
+    pathOrUrl?: string;
+    type?: string;
+    format?: string;
+  };
+  valueEnhancer?: {
+    name?: string;
+    pathOrUrl?: string;
+    type?: string;
+    format?: string;
+  };
+  targetAudience?: string;
+  approvedImplementationPaths?: string[];
+  claimsPolicy?: Record<string, unknown>;
+  fulfillment?: {
+    deliveryMode?: string;
+    tokenTtlDays?: number;
+    files?: Record<string, { filename?: string; downloadName?: string }>;
+  };
+};
+
+type DigitalProduct = {
+  id: string;
+  productId: string;
+  slug: string;
+  name: string;
+  status: ProductStatus | string;
+  priceCents: number;
+  currency: string;
+  primaryAssetPath: string;
+  sourceFolder: string;
+  salesPagePath: string;
+  supportEmail: string;
+  stripeProductId: string;
+  stripePriceId: string;
+  fulfillmentPackageId: string;
+  fulfillmentVersion: string;
+  tokenTtlDays: number;
+  testCheckoutEnabled: boolean;
+  approvalRequired: boolean;
+  fulfillmentFiles: Record<string, { filename: string; downloadName: string }>;
 };
 
 type PurchaseEmailResult = {
@@ -245,25 +300,231 @@ function configuredChoreTrackerPriceId(): string {
   return priceId;
 }
 
-function createDownloadToken(): { token: string; tokenHash: string; expiresAt: Date } {
+function createDownloadToken(tokenTtlDays = DEFAULT_DIGITAL_PRODUCT_TOKEN_TTL_DAYS): { token: string; tokenHash: string; expiresAt: Date } {
   const token = crypto.randomBytes(32).toString("base64url");
   return {
     token,
     tokenHash: hashDownloadToken(token),
-    expiresAt: new Date(Date.now() + CHORE_TRACKER_TOKEN_TTL_MS)
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * Math.max(1, Math.min(30, tokenTtlDays)))
   };
 }
 
-function accessUrlForToken(token: string): string {
-  return `${SITE_URL}/chore-tracker/access.html?token=${encodeURIComponent(token)}`;
+function accessUrlForToken(product: DigitalProduct, token: string): string {
+  const accessPath = product.salesPagePath ? `${product.salesPagePath.replace(/\/$/, "")}/access.html` : `/digital-products/${product.slug}/access.html`;
+  return `${SITE_URL}${accessPath.startsWith("/") ? accessPath : `/${accessPath}`}?token=${encodeURIComponent(token)}`;
 }
 
-function privateProductFile(fileKey: string): { filePath: string; downloadName: string } | null {
-  const file = CHORE_TRACKER_FILES[fileKey] || CHORE_TRACKER_FILES.screen;
+function privateProductFile(product: DigitalProduct, fileKey: string): { filePath: string; downloadName: string } | null {
+  const files = product.fulfillmentFiles || {};
+  const file = files[fileKey] || files.screen || files.default;
   if (!file) return null;
   return {
-    filePath: path.resolve(__dirname, "..", "private-products", CHORE_TRACKER_PRODUCT_SLUG, file.filename),
+    filePath: path.resolve(__dirname, "..", "private-products", product.slug, file.filename),
     downloadName: file.downloadName
+  };
+}
+
+function digitalProductFromSnapshot(snapshot: DocumentSnapshot): DigitalProduct | null {
+  if (!snapshot.exists) return null;
+  const data = snapshot.data() || {};
+  const slug = safeString(data.slug || snapshot.id);
+  const name = safeString(data.name || slug);
+  if (!slug || !name) return null;
+  const rawFiles = data.fulfillmentFiles && typeof data.fulfillmentFiles === "object" ? data.fulfillmentFiles : {};
+  const fulfillmentFiles: Record<string, { filename: string; downloadName: string }> = {};
+  Object.entries(rawFiles).forEach(([key, value]: [string, any]) => {
+    const fileKey = safeString(key);
+    const filename = safeString(value?.filename);
+    const downloadName = safeString(value?.downloadName || value?.filename);
+    if (fileKey && filename && downloadName) fulfillmentFiles[fileKey] = { filename, downloadName };
+  });
+  return {
+    id: snapshot.id,
+    productId: safeString(data.productId || snapshot.id),
+    slug,
+    name,
+    status: safeString(data.status || "IDEA"),
+    priceCents: Number(data.priceCents || 0),
+    currency: safeString(data.currency || "usd").toLowerCase(),
+    primaryAssetPath: safeString(data.primaryAssetPath),
+    sourceFolder: safeString(data.sourceFolder),
+    salesPagePath: safeString(data.salesPagePath),
+    supportEmail: safeString(data.supportEmail || SUPPORT_EMAIL),
+    stripeProductId: safeString(data.stripeProductId),
+    stripePriceId: safeString(data.stripePriceId),
+    fulfillmentPackageId: safeString(data.fulfillmentPackageId),
+    fulfillmentVersion: safeString(data.fulfillmentVersion || data.packageVersion || "draft"),
+    tokenTtlDays: Math.max(1, Math.min(30, Number(data.tokenTtlDays || DEFAULT_DIGITAL_PRODUCT_TOKEN_TTL_DAYS))),
+    testCheckoutEnabled: data.testCheckoutEnabled === true,
+    approvalRequired: data.approvalRequired === true,
+    fulfillmentFiles
+  };
+}
+
+async function getDigitalProductBySlug(slug: string): Promise<DigitalProduct> {
+  const snapshot = await db.collection("digitalProducts").where("slug", "==", slug).limit(1).get();
+  const product = snapshot.empty ? null : digitalProductFromSnapshot(snapshot.docs[0]);
+  if (!product) throw Object.assign(new Error("Digital product not found."), { statusCode: 404 });
+  return product;
+}
+
+async function getDigitalProductById(productId: string): Promise<DigitalProduct> {
+  const snapshot = await db.collection("digitalProducts").doc(productId).get();
+  const product = digitalProductFromSnapshot(snapshot);
+  if (!product) throw Object.assign(new Error("Digital product not found."), { statusCode: 404 });
+  return product;
+}
+
+function assertCheckoutEnabled(product: DigitalProduct): void {
+  if (!product.stripePriceId) throw Object.assign(new Error("Product Stripe price is not configured."), { statusCode: 412 });
+  if (!PUBLIC_CHECKOUT_STATUSES.has(product.status) && !product.testCheckoutEnabled) {
+    throw Object.assign(new Error("Checkout is not enabled for this product."), { statusCode: 409 });
+  }
+}
+
+function validateProductManifest(input: unknown): ProductManifest {
+  const manifest = (input && typeof input === "object" ? input : {}) as ProductManifest;
+  const errors: string[] = [];
+  if (safeString(manifest.schemaVersion) !== "1.0") errors.push("schemaVersion must be 1.0");
+  if (!safeString(manifest.productId)) errors.push("productId is required");
+  if (!safeString(manifest.slug)) errors.push("slug is required");
+  if (!safeString(manifest.name)) errors.push("name is required");
+  if (!Number.isInteger(manifest.priceCents) || Number(manifest.priceCents) <= 0) errors.push("priceCents must be a positive integer");
+  if (!safeString(manifest.currency)) errors.push("currency is required");
+  if (!safeString(manifest.sourceFolder)) errors.push("sourceFolder is required");
+  if (!safeString(manifest.primaryAsset?.pathOrUrl)) errors.push("primaryAsset.pathOrUrl is required");
+  if (errors.length) throw Object.assign(new Error(`Invalid product manifest: ${errors.join(", ")}.`), { statusCode: 400 });
+  return manifest;
+}
+
+function productDraftFromManifest(manifest: ProductManifest) {
+  const productId = safeString(manifest.productId);
+  const slug = slugify(safeString(manifest.slug));
+  const name = safeString(manifest.name);
+  const ttlDays = Number(manifest.fulfillment?.tokenTtlDays || DEFAULT_DIGITAL_PRODUCT_TOKEN_TTL_DAYS);
+  return {
+    productId,
+    slug,
+    name,
+    status: "EBOOK_GENERATED",
+    priceCents: Number(manifest.priceCents),
+    currency: safeString(manifest.currency || "usd").toLowerCase(),
+    primaryAssetPath: safeString(manifest.primaryAsset?.pathOrUrl),
+    sourceFolder: safeString(manifest.sourceFolder),
+    salesPagePath: "",
+    supportEmail: SUPPORT_EMAIL,
+    refundPolicyStatus: "unapproved",
+    approvalRequired: true,
+    stripeProductId: "",
+    stripePriceId: "",
+    fulfillmentPackageId: "",
+    approvedClaims: [],
+    blockedClaims: [],
+    brandRulesVersion: "fd-pos-1.0",
+    targetAudience: safeString(manifest.targetAudience),
+    approvedImplementationPaths: Array.isArray(manifest.approvedImplementationPaths) ? manifest.approvedImplementationPaths.map((item) => safeString(item)).filter(Boolean) : [],
+    claimsPolicy: manifest.claimsPolicy || {},
+    fulfillment: manifest.fulfillment || {},
+    tokenTtlDays: Math.max(1, Math.min(30, ttlDays)),
+    statusHistory: FieldValue.arrayUnion({ status: "EBOOK_GENERATED", updatedBy: "register-draft", reason: "Product manifest registered.", workflow: "FD-POS register-draft", updatedAt: new Date() }),
+    updatedAt: serverTimestamp(),
+    createdAt: serverTimestamp()
+  };
+}
+
+function assetRecordFromManifest(productId: string, assetId: string, asset: ProductManifest["primaryAsset"], source: string) {
+  return {
+    productId,
+    assetId,
+    name: safeString(asset?.name || assetId),
+    type: ASSET_TYPES.has(safeString(asset?.type)) ? safeString(asset?.type) : "other",
+    format: ASSET_FORMATS.has(safeString(asset?.format)) ? safeString(asset?.format) : "other",
+    pathOrUrl: safeString(asset?.pathOrUrl),
+    source: ASSET_SOURCES.has(source) ? source : "manual",
+    status: "NEEDS_REVIEW",
+    qualityReview: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+}
+
+function normalizePromiseCategory(value: unknown, text: string): string {
+  const explicit = safeString(value);
+  if (PROMISE_CATEGORIES.has(explicit)) return explicit;
+  if (/\b(testimonial|customer said|client said|customer reviews?|user reviews?)\b/i.test(text)) return "testimonial";
+  if (/\b(limited time|only \d+ (?:copies|spots|available|left)|enrollment closes|offer expires?|fake scarcity)\b/i.test(text)) return "scarcity";
+  if (/\b\d+%|\$\d+|\bprice\b|\bcost\b/i.test(text)) return /\$\d+|\bprice\b|\bcost\b/i.test(text) ? "price" : "statistic";
+  if (/\brefund|guarantee|money back\b/i.test(text)) return "refund";
+  if (/\bLivestock Tracker|app|iOS|Android|notification|reminder|sync|export\b/i.test(text)) return "app-tie-in";
+  if (/\bbonus|upsell|upgrade\b/i.test(text)) return /\bupsell|upgrade\b/i.test(text) ? "upsell" : "bonus";
+  if (/\btemplate|worksheet|checklist|spreadsheet|pdf|module|planner|tracker|resource|printable|toolkit|reference chart\b/i.test(text)) return "deliverable";
+  if (/\bresult|outcome|save|avoid|fix|solve|build|learn\b/i.test(text)) return "outcome";
+  return "other";
+}
+
+function classifyPromise(text: string, category: string, product: DigitalProduct, explicit?: unknown) {
+  const requested = safeString(explicit);
+  if (PROMISE_CLASSIFICATIONS.has(requested)) return requested;
+  if (category === "testimonial" || category === "scarcity") return "remove";
+  if (category === "statistic" || category === "refund") return "needs_evidence";
+  if (category === "price" && !text.includes(String(product.priceCents / 100)) && !text.includes(String(product.priceCents))) return "rewrite";
+  if (category === "upsell") return "move_to_upsell";
+  if (category === "deliverable" || category === "bonus") return "needs_asset";
+  if (category === "app-tie-in" && /\bchore|task assignment|calendar assignment\b/i.test(text)) return "rewrite";
+  return "keep";
+}
+
+function riskForPromise(text: string, category: string, classification: string, explicit?: unknown): string {
+  const requested = safeString(explicit);
+  if (PROMISE_RISK_LEVELS.has(requested)) return requested;
+  if (classification === "remove" || /\bguaranteed|testimonial|limited time|only \d+|\d+%|scientifically proven\b/i.test(text)) return "high";
+  if (["needs_evidence", "rewrite", "move_to_upsell"].includes(classification) || ["refund", "price", "app-tie-in", "statistic"].includes(category)) return "medium";
+  return "low";
+}
+
+function requiredAssetTypeForPromise(text: string, category: string): string {
+  if (category !== "deliverable" && category !== "bonus") return "";
+  if (/\bspreadsheet|sheet|xlsx|csv\b/i.test(text)) return "spreadsheet";
+  if (/\bworksheet\b/i.test(text)) return "worksheet";
+  if (/\bchecklist\b/i.test(text)) return "checklist";
+  if (/\btemplate\b/i.test(text)) return "template";
+  if (/\bmodule|lesson\b/i.test(text)) return "module";
+  if (/\bpdf|printable\b/i.test(text)) return "pdf";
+  return "other";
+}
+
+function extractPromiseCandidatesFromText(sourceText: string): string[] {
+  return safeLongString(sourceText, "", 50000)
+    .split(/\r?\n|(?<=[.!?])\s+/)
+    .map((line) => safeString(line, "").replace(/^[\s>*#-]+/, ""))
+    .filter((line) => line.length >= 18)
+    .filter((line) => /\b(template|worksheet|checklist|spreadsheet|pdf|bonus|module|planner|tracker|Livestock Tracker|app|iOS|Android|refund|guarantee|limited time|only \d+|\d+%|\$\d+|included|you get|download|printable|resource|system)\b/i.test(line))
+    .slice(0, 200);
+}
+
+function promiseRecordFromInput(product: DigitalProduct, index: number, item: any, fallbackAssetId: string) {
+  const text = safeLongString(item?.text || item, "", 2000);
+  if (!text) return null;
+  const category = normalizePromiseCategory(item?.category, text);
+  const classification = classifyPromise(text, category, product, item?.classification);
+  const riskLevel = riskForPromise(text, category, classification, item?.riskLevel);
+  const promiseId = safeString(item?.promiseId || `${product.productId}_promise_${String(index + 1).padStart(3, "0")}`);
+  return {
+    productId: product.productId,
+    promiseId,
+    sourceAssetId: safeString(item?.sourceAssetId || fallbackAssetId),
+    sourceLocation: safeString(item?.sourceLocation || item?.location || "source-text"),
+    text,
+    category,
+    riskLevel,
+    classification,
+    requiredAssetType: safeString(item?.requiredAssetType || requiredAssetTypeForPromise(text, category)),
+    approvedBy: "",
+    approvalStatus: "PENDING",
+    linkedAssetIds: Array.isArray(item?.linkedAssetIds) ? item.linkedAssetIds.map((id: unknown) => safeString(id)).filter(Boolean) : [],
+    notes: safeLongString(item?.notes || "", "", 2000),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
   };
 }
 
@@ -274,15 +535,15 @@ function firestoreDate(value: any): Date | null {
   return null;
 }
 
-async function sendChoreTrackerAccessEmail(toEmail: string, accessUrl: string): Promise<PurchaseEmailResult> {
+async function sendDigitalProductAccessEmail(product: DigitalProduct, toEmail: string, accessUrl: string): Promise<PurchaseEmailResult> {
   const emailConfig = await db.collection("config").doc("email").get();
   const fromEmail = safeString(emailConfig.get("transactionalFromEmail") || emailConfig.get("fromEmail") || process.env.RESEND_FROM_EMAIL);
   const apiKey = secretValue("RESEND_API_KEY", resendApiKey);
   if (!fromEmail || !apiKey) return { status: "pending_config" };
 
-  const subject = `Your ${CHORE_TRACKER_PRODUCT_NAME} access link`;
-  const text = `Thank you for purchasing ${CHORE_TRACKER_PRODUCT_NAME}.\n\nAccess your files here: ${accessUrl}\n\nThis link is time-limited. If it expires, request a fresh link from the access page.\n\nSupport: ${SUPPORT_EMAIL}`;
-  const html = `<p>Thank you for purchasing <strong>${escapeHtml(CHORE_TRACKER_PRODUCT_NAME)}</strong>.</p><p><a href="${escapeHtml(accessUrl)}">Access your files</a></p><p>This link is time-limited. If it expires, request a fresh link from the access page.</p><p>Support: <a href="mailto:${escapeHtml(SUPPORT_EMAIL)}">${escapeHtml(SUPPORT_EMAIL)}</a></p>`;
+  const subject = `Your ${product.name} access link`;
+  const text = `Thank you for purchasing ${product.name}.\n\nAccess your files here: ${accessUrl}\n\nThis link is time-limited. If it expires, request a fresh link from the access page.\n\nSupport: ${product.supportEmail}`;
+  const html = `<p>Thank you for purchasing <strong>${escapeHtml(product.name)}</strong>.</p><p><a href="${escapeHtml(accessUrl)}">Access your files</a></p><p>This link is time-limited. If it expires, request a fresh link from the access page.</p><p>Support: <a href="mailto:${escapeHtml(product.supportEmail)}">${escapeHtml(product.supportEmail)}</a></p>`;
 
   const resendResponse = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -293,7 +554,7 @@ async function sendChoreTrackerAccessEmail(toEmail: string, accessUrl: string): 
     body: JSON.stringify({
       from: fromEmail,
       to: [toEmail],
-      reply_to: SUPPORT_EMAIL,
+      reply_to: product.supportEmail,
       subject,
       html,
       text
@@ -735,6 +996,17 @@ async function requireAdmin(req: express.Request): Promise<DecodedIdToken> {
   return decoded;
 }
 
+async function requireAdminOrServiceSecret(req: express.Request): Promise<{ uid: string; email?: string }> {
+  const configuredSecret = secretValue("FD_POS_SERVICE_SECRET", fdPosServiceSecret);
+  const providedSecret = safeString(req.header("x-fd-pos-secret") || req.header("x-webhook-secret"));
+  const provided = Buffer.from(providedSecret);
+  const expected = Buffer.from(configuredSecret);
+  if (configuredSecret && providedSecret && provided.length === expected.length && crypto.timingSafeEqual(provided, expected)) {
+    return { uid: "fd-pos-service", email: "fd-pos-service" };
+  }
+  return requireAdmin(req);
+}
+
 async function requireUser(req: express.Request): Promise<DecodedIdToken> {
   const authHeader = req.header("authorization") || "";
   const match = authHeader.match(/^Bearer (.+)$/);
@@ -1044,15 +1316,14 @@ apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1
   }
 
   const eventSession = event.data.object as Stripe.Checkout.Session;
-  if (eventSession.metadata?.product_slug !== CHORE_TRACKER_PRODUCT_SLUG) {
-    res.json({ received: true, ignored: true });
-    return;
-  }
+  const productSlug = safeString(eventSession.metadata?.product_slug);
+  const productId = safeString(eventSession.metadata?.product_id);
+  if (!productSlug && !productId) throw Object.assign(new Error("Checkout session is missing product metadata."), { statusCode: 400 });
+  const product = productId ? await getDigitalProductById(productId) : await getDigitalProductBySlug(productSlug);
 
-  const expectedPriceId = configuredChoreTrackerPriceId();
   const session = await stripe.checkout.sessions.retrieve(eventSession.id);
   const lineItems = await stripe.checkout.sessions.listLineItems(eventSession.id, { limit: 100 });
-  const hasExpectedPrice = lineItems.data.some((item) => item.price?.id === expectedPriceId);
+  const hasExpectedPrice = lineItems.data.some((item) => item.price?.id === product.stripePriceId);
   if (!hasExpectedPrice) throw Object.assign(new Error("Checkout session does not include the configured product price."), { statusCode: 400 });
   if (session.payment_status !== "paid") throw Object.assign(new Error("Checkout session is not paid."), { statusCode: 400 });
 
@@ -1062,7 +1333,7 @@ apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1
   const emailHash = hashEmail(customerEmail);
   const purchaseRef = db.collection("digitalPurchases").doc(session.id);
   const eventRef = db.collection("stripeEvents").doc(event.id);
-  const { token, tokenHash, expiresAt } = createDownloadToken();
+  const { token, tokenHash, expiresAt } = createDownloadToken(product.tokenTtlDays);
   const tokenRef = db.collection("downloadTokens").doc(tokenHash);
   let shouldSendEmail = false;
 
@@ -1074,20 +1345,23 @@ apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1
       type: event.type,
       stripeEventId: event.id,
       stripeCreatedAt: new Date(event.created * 1000),
-      productSlug: CHORE_TRACKER_PRODUCT_SLUG,
+      productId: product.productId,
+      productSlug: product.slug,
       stripeSessionId: session.id,
       status: "processing",
       createdAt: serverTimestamp()
     });
     transaction.set(purchaseRef, {
-      productSlug: CHORE_TRACKER_PRODUCT_SLUG,
-      productName: CHORE_TRACKER_PRODUCT_NAME,
-      fulfillmentVersion: CHORE_TRACKER_FULFILLMENT_VERSION,
+      productId: product.productId,
+      productSlug: product.slug,
+      productName: product.name,
+      fulfillmentPackageId: product.fulfillmentPackageId,
+      fulfillmentVersion: product.fulfillmentVersion,
       status: "fulfilled",
       stripeSessionId: session.id,
       stripePaymentIntentId: safeString(session.payment_intent as string),
       stripeCustomerId: safeString(session.customer as string),
-      stripePriceId: expectedPriceId,
+      stripePriceId: product.stripePriceId,
       amountTotal: session.amount_total || 0,
       currency: safeString(session.currency || "usd"),
       customerEmail,
@@ -1100,7 +1374,8 @@ apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1
       createdAt: serverTimestamp()
     }, { merge: true });
     transaction.create(tokenRef, {
-      productSlug: CHORE_TRACKER_PRODUCT_SLUG,
+      productId: product.productId,
+      productSlug: product.slug,
       purchaseId: purchaseRef.id,
       emailHash,
       tokenHash,
@@ -1120,7 +1395,7 @@ apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1
   });
 
   if (shouldSendEmail) {
-    const emailResult = await sendChoreTrackerAccessEmail(customerEmail, accessUrlForToken(token));
+    const emailResult = await sendDigitalProductAccessEmail(product, customerEmail, accessUrlForToken(product, token));
     await purchaseRef.set({
       fulfillmentEmailStatus: emailResult.status,
       resendEmailId: emailResult.resendEmailId || null,
@@ -1358,38 +1633,442 @@ apiApp.post("/financial/categorize", asyncRoute(async (req, res) => {
   res.json({ results, source, processed: results.length, model: FINANCIAL_AI_MODEL, usage, cost, webSearchCalls });
 }));
 
-apiApp.post("/chore-tracker/create-checkout-session", asyncRoute(async (_req, res) => {
+apiApp.post("/digital-products/register-draft", asyncRoute(async (req, res) => {
+  const actor = await requireAdminOrServiceSecret(req);
+  const manifest = validateProductManifest(req.body?.manifest || req.body);
+  const productId = safeString(manifest.productId);
+  const productRef = db.collection("digitalProducts").doc(productId);
+  const draft = productDraftFromManifest(manifest);
+  await productRef.set(draft, { merge: true });
+  await db.collection("productAssets").doc(`${productId}_primary`).set(assetRecordFromManifest(productId, `${productId}_primary`, manifest.primaryAsset, "abk"), { merge: true });
+  if (safeString(manifest.valueEnhancer?.pathOrUrl)) {
+    await db.collection("productAssets").doc(`${productId}_value_enhancer`).set(assetRecordFromManifest(productId, `${productId}_value_enhancer`, {
+      name: manifest.valueEnhancer?.name || "value-enhancer",
+      pathOrUrl: manifest.valueEnhancer?.pathOrUrl,
+      type: manifest.valueEnhancer?.type || "other",
+      format: manifest.valueEnhancer?.format || "other"
+    }, "abk"), { merge: true });
+  }
+  const taskRef = db.collection("productTasks").doc(`${productId}_promise_review`);
+  await taskRef.set({
+    productId,
+    taskId: taskRef.id,
+    title: "Run Promise Review",
+    workflow: "FD-POS - Promise Review",
+    status: "OPEN",
+    priority: "high",
+    inputRefs: { productId, manifestAssetIds: [`${productId}_primary`, `${productId}_value_enhancer`] },
+    outputRefs: {},
+    error: null,
+    createdBy: actor.uid === "fd-pos-service" ? "workflow" : "user",
+    assignedTo: "manager-ai",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  res.json({ ok: true, productId, slug: draft.slug, status: draft.status, nextRequiredApproval: "promise-list" });
+}));
+
+apiApp.post("/digital-products/:slug/promise-review", asyncRoute(async (req, res) => {
+  const actor = await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  const explicitPromises = Array.isArray(req.body?.promises) ? req.body.promises : [];
+  const sourceTexts = Array.isArray(req.body?.sourceTexts) ? req.body.sourceTexts : [];
+  const extractedPromises = sourceTexts.flatMap((source: any) => {
+    const sourceAssetId = safeString(source?.assetId || source?.sourceAssetId || `${product.productId}_source`);
+    const sourceLocation = safeString(source?.sourceLocation || source?.pathOrUrl || "source-text");
+    return extractPromiseCandidatesFromText(source?.text || "").map((text) => ({ text, sourceAssetId, sourceLocation }));
+  });
+  const promiseInputs = [...explicitPromises, ...extractedPromises].slice(0, 300);
+  if (!promiseInputs.length) throw Object.assign(new Error("Promise Review requires promises or sourceTexts."), { statusCode: 400 });
+
+  const seen = new Set<string>();
+  const promises = promiseInputs
+    .map((item, index) => promiseRecordFromInput(product, index, item, `${product.productId}_primary`))
+    .filter((record): record is NonNullable<ReturnType<typeof promiseRecordFromInput>> => {
+      if (!record) return false;
+      const key = record.text.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  if (!promises.length) throw Object.assign(new Error("No valid promise records were found."), { statusCode: 400 });
+
+  const approvalRef = db.collection("productApprovals").doc(`${product.productId}_promise_list_${Date.now()}`);
+  const batch = db.batch();
+  promises.forEach((promise) => {
+    batch.set(db.collection("productPromises").doc(promise.promiseId), promise, { merge: true });
+  });
+  const summary = {
+    total: promises.length,
+    needsAsset: promises.filter((item) => item.classification === "needs_asset").length,
+    needsEvidence: promises.filter((item) => item.classification === "needs_evidence").length,
+    rewrite: promises.filter((item) => item.classification === "rewrite").length,
+    remove: promises.filter((item) => item.classification === "remove").length,
+    moveToUpsell: promises.filter((item) => item.classification === "move_to_upsell").length,
+    highRisk: promises.filter((item) => item.riskLevel === "high" || item.riskLevel === "blocked").length
+  };
+  batch.set(approvalRef, {
+    productId: product.productId,
+    approvalId: approvalRef.id,
+    approvalType: "promise-list",
+    status: "PENDING",
+    summary,
+    items: promises.map((item) => ({
+      promiseId: item.promiseId,
+      text: item.text,
+      category: item.category,
+      riskLevel: item.riskLevel,
+      classification: item.classification,
+      requiredAssetType: item.requiredAssetType
+    })),
+    reviewerNotes: "",
+    createdAt: serverTimestamp(),
+    decidedAt: null
+  });
+  batch.set(db.collection("digitalProducts").doc(product.id), {
+    status: "PROMISE_APPROVAL_REQUIRED",
+    approvalRequired: true,
+    statusHistory: FieldValue.arrayUnion({ status: "PROMISE_APPROVAL_REQUIRED", updatedBy: actor.email || actor.uid, reason: "Promise Review created pending approval.", workflow: "FD-POS - Promise Review", updatedAt: new Date() }),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  batch.set(db.collection("productTasks").doc(`${product.productId}_promise_review`), {
+    status: "WAITING_FOR_APPROVAL",
+    outputRefs: { approvalId: approvalRef.id, promiseIds: promises.map((item) => item.promiseId) },
+    assignedTo: "user",
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  await batch.commit();
+  res.json({ ok: true, productId: product.productId, slug: product.slug, approvalId: approvalRef.id, summary });
+}));
+
+apiApp.get("/digital-products/:slug/state", asyncRoute(async (req, res) => {
+  await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  const tasks = await db.collection("productTasks").where("productId", "==", product.productId).limit(50).get();
+  const approvals = await db.collection("productApprovals").where("productId", "==", product.productId).limit(50).get();
+  const promises = await db.collection("productPromises").where("productId", "==", product.productId).limit(300).get();
+  res.json({
+    product,
+    tasks: tasks.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    approvals: approvals.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    promises: promises.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+  });
+}));
+
+apiApp.get("/digital-products/:slug/approvals/:approvalId", asyncRoute(async (req, res) => {
+  await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  const approval = await db.collection("productApprovals").doc(safeString(req.params.approvalId)).get();
+  if (!approval.exists || approval.get("productId") !== product.productId) throw Object.assign(new Error("Approval not found."), { statusCode: 404 });
+  res.json({ approval: { id: approval.id, ...approval.data() } });
+}));
+
+apiApp.post("/digital-products/:slug/approvals/:approvalId/decide", asyncRoute(async (req, res) => {
+  const actor = await requireAdminOrServiceSecret(req);
+  const reviewer = actor.uid === "fd-pos-service" ? safeString(req.body?.reviewer) : safeString(actor.email || actor.uid);
+  if (!reviewer) throw Object.assign(new Error("A named human reviewer is required."), { statusCode: 400 });
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  const approvalRef = db.collection("productApprovals").doc(safeString(req.params.approvalId));
+  const approval = await approvalRef.get();
+  if (!approval.exists || approval.get("productId") !== product.productId) throw Object.assign(new Error("Approval not found."), { statusCode: 404 });
+  if (approval.get("approvalType") !== "promise-list") throw Object.assign(new Error("Only promise-list approvals can be decided by this endpoint."), { statusCode: 400 });
+  if (approval.get("status") !== "PENDING") throw Object.assign(new Error("Approval has already been decided."), { statusCode: 409 });
+
+  const status = safeString(req.body?.status || "CHANGES_REQUESTED");
+  if (!["APPROVED", "REJECTED", "CHANGES_REQUESTED"].includes(status)) throw Object.assign(new Error("Invalid approval status."), { statusCode: 400 });
+  const decisions: any[] = Array.isArray(req.body?.decisions) ? req.body.decisions : [];
+  const decisionByPromiseId = new Map<string, any>();
+  decisions.forEach((item: any) => {
+    const promiseId = safeString(item?.promiseId);
+    if (promiseId) decisionByPromiseId.set(promiseId, item);
+  });
+  const approvalItems = Array.isArray(approval.get("items")) ? approval.get("items") : [];
+  const itemPromiseIds = approvalItems.map((item: any) => safeString(item?.promiseId)).filter(Boolean);
+  const batch = db.batch();
+
+  itemPromiseIds.forEach((promiseId: string) => {
+    const decision: any = decisionByPromiseId.get(promiseId) || {};
+    const approvalStatus = safeString(decision.approvalStatus || (status === "APPROVED" ? "APPROVED" : status === "REJECTED" ? "REJECTED" : "REWRITE_REQUIRED"));
+    if (!["PENDING", "APPROVED", "REJECTED", "REWRITE_REQUIRED"].includes(approvalStatus)) throw Object.assign(new Error(`Invalid promise approval status for ${promiseId}.`), { statusCode: 400 });
+    const classification = safeString(decision.classification);
+    const update: Record<string, unknown> = {
+      approvalStatus,
+      approvedBy: reviewer,
+      updatedAt: serverTimestamp()
+    };
+    if (PROMISE_CLASSIFICATIONS.has(classification)) update.classification = classification;
+    if (Array.isArray(decision.linkedAssetIds)) update.linkedAssetIds = decision.linkedAssetIds.map((id: unknown) => safeString(id)).filter(Boolean);
+    if (typeof decision.notes === "string") update.notes = safeLongString(decision.notes, "", 2000);
+    batch.set(db.collection("productPromises").doc(promiseId), update, { merge: true });
+  });
+
+  const nextStatus = status === "APPROVED" ? "SUPPORTING_ASSETS_GENERATING" : status === "REJECTED" ? "BLOCKED" : "SOURCE_REVIEW";
+  batch.set(approvalRef, {
+    status,
+    reviewerNotes: safeLongString(req.body?.reviewerNotes || "", "", 5000),
+    decidedBy: reviewer,
+    decidedAt: serverTimestamp()
+  }, { merge: true });
+  batch.set(db.collection("digitalProducts").doc(product.id), {
+    status: nextStatus,
+    approvalRequired: status !== "APPROVED",
+    statusHistory: FieldValue.arrayUnion({ status: nextStatus, updatedBy: reviewer, reason: `Promise list ${status.toLowerCase().replace(/_/g, " ")}.`, workflow: "promise-list approval", updatedAt: new Date() }),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  batch.set(db.collection("productTasks").doc(`${product.productId}_promise_review`), {
+    status: status === "APPROVED" ? "DONE" : "BLOCKED",
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  if (status === "APPROVED") {
+    const assetTaskRef = db.collection("productTasks").doc(`${product.productId}_asset_builder`);
+    batch.set(assetTaskRef, {
+      productId: product.productId,
+      taskId: assetTaskRef.id,
+      title: "Generate Approved Supporting Assets",
+      workflow: "FD-POS - Asset Builder",
+      status: "OPEN",
+      priority: "high",
+      inputRefs: { approvalId: approvalRef.id, promiseIds: itemPromiseIds },
+      outputRefs: {},
+      error: null,
+      createdBy: "system",
+      assignedTo: "workflow-name",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  }
+  await batch.commit();
+  res.json({ ok: true, productId: product.productId, slug: product.slug, approvalId: approvalRef.id, status, nextStatus });
+}));
+
+apiApp.get("/digital-products/:slug/asset-builder/work", asyncRoute(async (req, res) => {
+  await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  if (product.status !== "SUPPORTING_ASSETS_GENERATING") {
+    throw Object.assign(new Error("Product is not approved for supporting asset generation."), { statusCode: 409 });
+  }
+  const promiseSnapshot = await db.collection("productPromises").where("productId", "==", product.productId).limit(300).get();
+  const assetSnapshot = await db.collection("productAssets").where("productId", "==", product.productId).limit(300).get();
+  const assets = assetSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as any));
+  const linkedAssetIds = new Set(assets.map((asset) => safeString(asset.assetId || asset.id)));
+  const workItems = promiseSnapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() } as any))
+    .filter((promise) => promise.approvalStatus === "APPROVED")
+    .filter((promise) => promise.classification === "needs_asset" || (promise.classification === "keep" && safeString(promise.requiredAssetType)))
+    .filter((promise) => !Array.isArray(promise.linkedAssetIds) || !promise.linkedAssetIds.some((assetId: unknown) => linkedAssetIds.has(safeString(assetId))))
+    .map((promise) => ({
+      promiseId: safeString(promise.promiseId || promise.id),
+      text: safeLongString(promise.text, "", 2000),
+      category: safeString(promise.category),
+      requiredAssetType: safeString(promise.requiredAssetType || "other"),
+      notes: safeLongString(promise.notes, "", 2000),
+      sourceAssetId: safeString(promise.sourceAssetId),
+      approvedImplementationPaths: ["paper", "spreadsheet", "Livestock Tracker app optional"]
+    }));
+  res.json({
+    product: {
+      productId: product.productId,
+      slug: product.slug,
+      name: product.name,
+      sourceFolder: product.sourceFolder,
+      status: product.status
+    },
+    workItems,
+    constraints: {
+      generateOnlyApprovedPromises: true,
+      appIsOptional: true,
+      noUnsupportedAppFeatures: true,
+      outputFolder: `${product.sourceFolder.replace(/\/$/, "")}/supporting-assets`
+    }
+  });
+}));
+
+apiApp.post("/digital-products/:slug/assets/register", asyncRoute(async (req, res) => {
+  await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  if (product.status !== "SUPPORTING_ASSETS_GENERATING") {
+    throw Object.assign(new Error("Product is not approved for supporting asset generation."), { statusCode: 409 });
+  }
+  const promiseId = safeString(req.body?.promiseId);
+  const promise = promiseId ? await db.collection("productPromises").doc(promiseId).get() : null;
+  if (!promise?.exists || promise.get("productId") !== product.productId || promise.get("approvalStatus") !== "APPROVED") {
+    throw Object.assign(new Error("Asset registration requires an approved product promise."), { statusCode: 409 });
+  }
+  if (!["needs_asset", "keep"].includes(safeString(promise.get("classification")))) {
+    throw Object.assign(new Error("Promise classification does not permit asset generation."), { statusCode: 409 });
+  }
+
+  const assetInput = req.body?.asset || {};
+  const assetId = safeString(assetInput.assetId || `${product.productId}_${slugify(safeString(assetInput.name || promiseId))}`);
+  const pathOrUrl = safeLongString(assetInput.pathOrUrl, "", 4000);
+  const normalizedSourceFolder = product.sourceFolder.replace(/\\/g, "/").replace(/\/$/, "");
+  const normalizedPath = pathOrUrl.replace(/\\/g, "/");
+  if (!assetId || !pathOrUrl) throw Object.assign(new Error("assetId and pathOrUrl are required."), { statusCode: 400 });
+  if (!/^https:\/\//i.test(normalizedPath) && !normalizedPath.startsWith(`${normalizedSourceFolder}/`)) {
+    throw Object.assign(new Error("Generated asset must be stored under the product source folder or at an HTTPS URL."), { statusCode: 400 });
+  }
+  const type = safeString(assetInput.type || promise.get("requiredAssetType") || "other");
+  const format = safeString(assetInput.format || "md");
+  if (!ASSET_TYPES.has(type)) throw Object.assign(new Error("Invalid asset type."), { statusCode: 400 });
+  if (!ASSET_FORMATS.has(format)) throw Object.assign(new Error("Invalid asset format."), { statusCode: 400 });
+
+  const assetRef = db.collection("productAssets").doc(assetId);
+  const batch = db.batch();
+  batch.set(assetRef, {
+    productId: product.productId,
+    assetId,
+    name: safeString(assetInput.name || promise.get("text") || assetId),
+    type,
+    format,
+    pathOrUrl,
+    source: "perc",
+    status: "NEEDS_REVIEW",
+    qualityReview: null,
+    sourcePromiseIds: [promiseId],
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  batch.set(promise.ref, { linkedAssetIds: FieldValue.arrayUnion(assetId), updatedAt: serverTimestamp() }, { merge: true });
+  batch.set(db.collection("productTasks").doc(`${product.productId}_asset_builder`), {
+    status: "RUNNING",
+    registeredAssetIds: FieldValue.arrayUnion(assetId),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  await batch.commit();
+  res.json({ ok: true, productId: product.productId, promiseId, assetId, status: "NEEDS_REVIEW" });
+}));
+
+apiApp.post("/digital-products/:slug/asset-builder/complete", asyncRoute(async (req, res) => {
+  const actor = await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  if (product.status !== "SUPPORTING_ASSETS_GENERATING") {
+    throw Object.assign(new Error("Product is not in supporting asset generation."), { statusCode: 409 });
+  }
+  const promiseSnapshot = await db.collection("productPromises").where("productId", "==", product.productId).limit(300).get();
+  const requiredPromises = promiseSnapshot.docs.filter((doc) => doc.get("approvalStatus") === "APPROVED" && ["needs_asset", "keep"].includes(safeString(doc.get("classification"))) && (doc.get("classification") === "needs_asset" || safeString(doc.get("requiredAssetType"))));
+  const missingPromiseIds = requiredPromises.filter((doc) => !Array.isArray(doc.get("linkedAssetIds")) || !doc.get("linkedAssetIds").length).map((doc) => safeString(doc.get("promiseId") || doc.id));
+  if (missingPromiseIds.length) {
+    throw Object.assign(new Error(`Approved promises are missing assets: ${missingPromiseIds.join(", ")}.`), { statusCode: 409 });
+  }
+  const includedAssetIds = Array.from(new Set(requiredPromises.flatMap((doc) => doc.get("linkedAssetIds") || []).map((id) => safeString(id)).filter(Boolean)));
+  const assets = await Promise.all(includedAssetIds.map((assetId) => db.collection("productAssets").doc(assetId).get()));
+  const unavailableAssetIds = assets.filter((asset) => !asset.exists || ["MISSING", "REJECTED"].includes(safeString(asset.get("status")))).map((asset) => asset.id);
+  if (unavailableAssetIds.length) throw Object.assign(new Error(`Registered assets are unavailable: ${unavailableAssetIds.join(", ")}.`), { statusCode: 409 });
+
+  const approvalRef = db.collection("productApprovals").doc(`${product.productId}_asset_quality_${Date.now()}`);
+  const batch = db.batch();
+  batch.set(approvalRef, {
+    productId: product.productId,
+    approvalId: approvalRef.id,
+    approvalType: "asset-quality",
+    status: "PENDING",
+    summary: { total: includedAssetIds.length },
+    items: assets.map((asset) => ({ assetId: asset.id, name: safeString(asset.get("name")), type: safeString(asset.get("type")), format: safeString(asset.get("format")), pathOrUrl: safeLongString(asset.get("pathOrUrl"), "", 4000) })),
+    reviewerNotes: "",
+    createdAt: serverTimestamp(),
+    decidedAt: null
+  });
+  batch.set(db.collection("digitalProducts").doc(product.id), {
+    status: "SUPPORTING_ASSETS_REVIEW",
+    approvalRequired: true,
+    statusHistory: FieldValue.arrayUnion({ status: "SUPPORTING_ASSETS_REVIEW", updatedBy: actor.email || actor.uid, reason: "Approved supporting assets registered and ready for quality review.", workflow: "FD-POS - Asset Builder", updatedAt: new Date() }),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  batch.set(db.collection("productTasks").doc(`${product.productId}_asset_builder`), {
+    status: "WAITING_FOR_APPROVAL",
+    outputRefs: { assetIds: includedAssetIds, approvalId: approvalRef.id },
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  await batch.commit();
+  res.json({ ok: true, productId: product.productId, status: "SUPPORTING_ASSETS_REVIEW", approvalId: approvalRef.id, assetIds: includedAssetIds });
+}));
+
+apiApp.post("/digital-products/:slug/create-stripe-product", asyncRoute(async (req, res) => {
+  const actor = await requireAdmin(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  if (product.status !== "PACKAGE_READY" && product.status !== "SALES_PAGE_DRAFT" && product.status !== "STRIPE_DRAFT") {
+    throw Object.assign(new Error("Product must be package-ready or sales-page-draft before Stripe creation."), { statusCode: 409 });
+  }
+  if (!product.salesPagePath) throw Object.assign(new Error("Sales page path is required before Stripe creation."), { statusCode: 409 });
   const stripe = stripeClient();
-  const priceId = configuredChoreTrackerPriceId();
-  const session = await stripe.checkout.sessions.create({
+  const stripeProduct = product.stripeProductId ? await stripe.products.retrieve(product.stripeProductId) : await stripe.products.create({
+    name: product.name,
+    metadata: {
+      product_slug: product.slug,
+      product_id: product.productId,
+      package_version: product.fulfillmentVersion,
+      environment: process.env.FUNCTIONS_EMULATOR === "true" ? "emulator" : "production"
+    }
+  });
+  const price = product.stripePriceId ? await stripe.prices.retrieve(product.stripePriceId) : await stripe.prices.create({
+    product: stripeProduct.id,
+    unit_amount: product.priceCents,
+    currency: product.currency,
+    metadata: {
+      product_slug: product.slug,
+      product_id: product.productId,
+      package_version: product.fulfillmentVersion,
+      environment: process.env.FUNCTIONS_EMULATOR === "true" ? "emulator" : "production"
+    }
+  });
+  await db.collection("digitalProducts").doc(product.id).set({
+    stripeProductId: stripeProduct.id,
+    stripePriceId: price.id,
+    status: "STRIPE_READY",
+    statusHistory: FieldValue.arrayUnion({ status: "STRIPE_READY", updatedBy: actor.email || actor.uid, reason: "Stripe Product and Price created.", workflow: "create-stripe-product", updatedAt: new Date() }),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  res.json({ ok: true, productId: product.productId, slug: product.slug, stripeProductId: stripeProduct.id, stripePriceId: price.id });
+}));
+
+async function createCheckoutSessionForSlug(slug: string) {
+  const stripe = stripeClient();
+  const product = await getDigitalProductBySlug(slug);
+  assertCheckoutEnabled(product);
+  const salesPath = product.salesPagePath || `/digital-products/${product.slug}`;
+  return stripe.checkout.sessions.create({
     mode: "payment",
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${SITE_URL}/chore-tracker/success.html?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${SITE_URL}/chore-tracker/?checkout=cancelled`,
+    line_items: [{ price: product.stripePriceId, quantity: 1 }],
+    success_url: `${SITE_URL}${salesPath.startsWith("/") ? salesPath : `/${salesPath}`}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${SITE_URL}${salesPath.startsWith("/") ? salesPath : `/${salesPath}`}?checkout=cancelled`,
     allow_promotion_codes: true,
     metadata: {
-      product_slug: CHORE_TRACKER_PRODUCT_SLUG,
-      fulfillment_version: CHORE_TRACKER_FULFILLMENT_VERSION
+      product_slug: product.slug,
+      product_id: product.productId,
+      package_version: product.fulfillmentVersion,
+      environment: process.env.FUNCTIONS_EMULATOR === "true" ? "emulator" : "production"
     },
     payment_intent_data: {
       metadata: {
-        product_slug: CHORE_TRACKER_PRODUCT_SLUG,
-        fulfillment_version: CHORE_TRACKER_FULFILLMENT_VERSION
+        product_slug: product.slug,
+        product_id: product.productId,
+        package_version: product.fulfillmentVersion,
+        environment: process.env.FUNCTIONS_EMULATOR === "true" ? "emulator" : "production"
       }
     }
   });
+}
+
+apiApp.post("/digital-products/:slug/create-checkout-session", asyncRoute(async (req, res) => {
+  const session = await createCheckoutSessionForSlug(safeString(req.params.slug));
   res.json({ sessionId: session.id, url: session.url });
 }));
 
-apiApp.get("/chore-tracker/purchase-status", asyncRoute(async (req, res) => {
+apiApp.post("/chore-tracker/create-checkout-session", asyncRoute(async (_req, res) => {
+  const session = await createCheckoutSessionForSlug(CHORE_TRACKER_PRODUCT_SLUG);
+  res.json({ sessionId: session.id, url: session.url });
+}));
+
+apiApp.get("/digital-products/:slug/purchase-status", asyncRoute(async (req, res) => {
+  const slug = safeString(req.params.slug);
   const sessionId = safeString(req.query.session_id);
   if (!sessionId) throw Object.assign(new Error("Checkout session is required."), { statusCode: 400 });
   const purchase = await db.collection("digitalPurchases").doc(sessionId).get();
-  if (purchase.exists && purchase.get("productSlug") === CHORE_TRACKER_PRODUCT_SLUG) {
+  if (purchase.exists && purchase.get("productSlug") === slug) {
     res.json({
       status: safeString(purchase.get("status"), "fulfilled"),
       emailStatus: safeString(purchase.get("fulfillmentEmailStatus"), "pending"),
-      productSlug: CHORE_TRACKER_PRODUCT_SLUG
+      productSlug: slug
     });
     return;
   }
@@ -1407,7 +2086,20 @@ apiApp.get("/chore-tracker/purchase-status", asyncRoute(async (req, res) => {
   }
 }));
 
-apiApp.post("/chore-tracker/recover-access", asyncRoute(async (req, res) => {
+apiApp.get("/chore-tracker/purchase-status", asyncRoute(async (req, res) => {
+  req.params.slug = CHORE_TRACKER_PRODUCT_SLUG;
+  const sessionId = safeString(req.query.session_id);
+  if (!sessionId) throw Object.assign(new Error("Checkout session is required."), { statusCode: 400 });
+  const purchase = await db.collection("digitalPurchases").doc(sessionId).get();
+  res.json({
+    status: purchase.exists && purchase.get("productSlug") === CHORE_TRACKER_PRODUCT_SLUG ? safeString(purchase.get("status"), "fulfilled") : "pending",
+    emailStatus: purchase.exists ? safeString(purchase.get("fulfillmentEmailStatus"), "pending") : "pending",
+    productSlug: purchase.exists ? safeString(purchase.get("productSlug")) : ""
+  });
+}));
+
+apiApp.post("/digital-products/:slug/recover-access", asyncRoute(async (req, res) => {
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
   const email = normalizeEmail(req.body?.email);
   if (!isValidEmail(email)) {
     res.json({ ok: true });
@@ -1416,12 +2108,13 @@ apiApp.post("/chore-tracker/recover-access", asyncRoute(async (req, res) => {
 
   const emailHash = hashEmail(email);
   const purchases = await db.collection("digitalPurchases").where("emailHash", "==", emailHash).limit(10).get();
-  const purchase = purchases.docs.find((doc) => doc.get("productSlug") === CHORE_TRACKER_PRODUCT_SLUG && doc.get("status") === "fulfilled");
+  const purchase = purchases.docs.find((doc) => doc.get("productSlug") === product.slug && doc.get("status") === "fulfilled");
   if (purchase) {
-    const { token, tokenHash, expiresAt } = createDownloadToken();
+    const { token, tokenHash, expiresAt } = createDownloadToken(product.tokenTtlDays);
     const tokenRef = db.collection("downloadTokens").doc(tokenHash);
     await tokenRef.create({
-      productSlug: CHORE_TRACKER_PRODUCT_SLUG,
+      productId: product.productId,
+      productSlug: product.slug,
       purchaseId: purchase.id,
       emailHash,
       tokenHash,
@@ -1431,7 +2124,7 @@ apiApp.post("/chore-tracker/recover-access", asyncRoute(async (req, res) => {
       createdFrom: "access_recovery",
       createdAt: serverTimestamp()
     });
-    const emailResult = await sendChoreTrackerAccessEmail(email, accessUrlForToken(token));
+    const emailResult = await sendDigitalProductAccessEmail(product, email, accessUrlForToken(product, token));
     await purchase.ref.set({
       latestTokenHash: tokenHash,
       tokenExpiresAt: expiresAt,
@@ -1445,26 +2138,68 @@ apiApp.post("/chore-tracker/recover-access", asyncRoute(async (req, res) => {
   res.json({ ok: true });
 }));
 
-apiApp.get("/chore-tracker/download", asyncRoute(async (req, res) => {
+apiApp.post("/chore-tracker/recover-access", asyncRoute(async (req, res) => {
+  req.params.slug = CHORE_TRACKER_PRODUCT_SLUG;
+  const product = await getDigitalProductBySlug(CHORE_TRACKER_PRODUCT_SLUG);
+  const email = normalizeEmail(req.body?.email);
+  if (!isValidEmail(email)) {
+    res.json({ ok: true });
+    return;
+  }
+  const emailHash = hashEmail(email);
+  const purchases = await db.collection("digitalPurchases").where("emailHash", "==", emailHash).limit(10).get();
+  const purchase = purchases.docs.find((doc) => doc.get("productSlug") === product.slug && doc.get("status") === "fulfilled");
+  if (purchase) {
+    const { token, tokenHash, expiresAt } = createDownloadToken(product.tokenTtlDays);
+    const tokenRef = db.collection("downloadTokens").doc(tokenHash);
+    await tokenRef.create({ productId: product.productId, productSlug: product.slug, purchaseId: purchase.id, emailHash, tokenHash, expiresAt, revoked: false, downloadCount: 0, createdFrom: "access_recovery", createdAt: serverTimestamp() });
+    const emailResult = await sendDigitalProductAccessEmail(product, email, accessUrlForToken(product, token));
+    await purchase.ref.set({ latestTokenHash: tokenHash, tokenExpiresAt: expiresAt, recoveryEmailStatus: emailResult.status, lastRecoveryRequestedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    await tokenRef.set({ emailStatus: emailResult.status, updatedAt: serverTimestamp() }, { merge: true });
+  }
+  res.json({ ok: true });
+}));
+
+apiApp.get("/digital-products/download", asyncRoute(async (req, res) => {
   const token = safeString(req.query.token, "");
   if (!token || token.length < 32) throw Object.assign(new Error("Invalid or expired access link."), { statusCode: 403 });
   const tokenHash = hashDownloadToken(token);
   const tokenRef = db.collection("downloadTokens").doc(tokenHash);
   const tokenSnapshot = await tokenRef.get();
   const expiresAt = firestoreDate(tokenSnapshot.get("expiresAt"));
-  if (!tokenSnapshot.exists || tokenSnapshot.get("productSlug") !== CHORE_TRACKER_PRODUCT_SLUG || tokenSnapshot.get("revoked") === true || !expiresAt || expiresAt.getTime() < Date.now()) {
+  if (!tokenSnapshot.exists || tokenSnapshot.get("revoked") === true || !expiresAt || expiresAt.getTime() < Date.now()) {
     throw Object.assign(new Error("Invalid or expired access link."), { statusCode: 403 });
   }
+  const product = await getDigitalProductBySlug(safeString(tokenSnapshot.get("productSlug")));
 
   const purchaseId = safeString(tokenSnapshot.get("purchaseId"));
   const purchase = purchaseId ? await db.collection("digitalPurchases").doc(purchaseId).get() : null;
-  if (!purchase?.exists || purchase.get("status") !== "fulfilled") throw Object.assign(new Error("Purchase is not eligible for download."), { statusCode: 403 });
+  if (!purchase?.exists || purchase.get("status") !== "fulfilled" || purchase.get("productSlug") !== product.slug) throw Object.assign(new Error("Purchase is not eligible for download."), { statusCode: 403 });
 
   const fileKey = safeString(req.query.file, "screen");
-  const productFile = privateProductFile(fileKey);
+  const productFile = privateProductFile(product, fileKey);
   if (!productFile || !fs.existsSync(productFile.filePath)) throw Object.assign(new Error("Product file is unavailable."), { statusCode: 503 });
 
   await tokenRef.set({ downloadCount: FieldValue.increment(1), lastUsedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+  res.set("cache-control", "private, no-store");
+  res.download(productFile.filePath, productFile.downloadName);
+}));
+
+apiApp.get("/chore-tracker/download", asyncRoute(async (req, res) => {
+  const token = safeString(req.query.token, "");
+  if (!token || token.length < 32) throw Object.assign(new Error("Invalid or expired access link."), { statusCode: 403 });
+  const tokenSnapshot = await db.collection("downloadTokens").doc(hashDownloadToken(token)).get();
+  if (!tokenSnapshot.exists || tokenSnapshot.get("productSlug") !== CHORE_TRACKER_PRODUCT_SLUG) throw Object.assign(new Error("Invalid or expired access link."), { statusCode: 403 });
+  req.url = `/digital-products/download?token=${encodeURIComponent(token)}&file=${encodeURIComponent(safeString(req.query.file, "screen"))}`;
+  const product = await getDigitalProductBySlug(CHORE_TRACKER_PRODUCT_SLUG);
+  const expiresAt = firestoreDate(tokenSnapshot.get("expiresAt"));
+  if (tokenSnapshot.get("revoked") === true || !expiresAt || expiresAt.getTime() < Date.now()) throw Object.assign(new Error("Invalid or expired access link."), { statusCode: 403 });
+  const purchaseId = safeString(tokenSnapshot.get("purchaseId"));
+  const purchase = purchaseId ? await db.collection("digitalPurchases").doc(purchaseId).get() : null;
+  if (!purchase?.exists || purchase.get("status") !== "fulfilled") throw Object.assign(new Error("Purchase is not eligible for download."), { statusCode: 403 });
+  const productFile = privateProductFile(product, safeString(req.query.file, "screen"));
+  if (!productFile || !fs.existsSync(productFile.filePath)) throw Object.assign(new Error("Product file is unavailable."), { statusCode: 503 });
+  await tokenSnapshot.ref.set({ downloadCount: FieldValue.increment(1), lastUsedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
   res.set("cache-control", "private, no-store");
   res.download(productFile.filePath, productFile.downloadName);
 }));
@@ -1474,7 +2209,7 @@ apiApp.post("/sites/:siteId/create-checkout-session", asyncRoute(async (req, res
   res.status(501).json({ error: "Stripe Checkout is intentionally disabled until product and price decisions are finalized.", siteId: req.params.siteId });
 }));
 
-export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [openAiApiKey, stripeSecretKey, stripeWebhookSecret, stripePriceChoreTracker, resendApiKey] }, apiApp);
+export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [openAiApiKey, stripeSecretKey, stripeWebhookSecret, stripePriceChoreTracker, fdPosServiceSecret, resendApiKey] }, apiApp);
 
 export const renderSite = onRequest({ region: REGION, timeoutSeconds: 30, memory: "256MiB" }, async (req, res) => {
   const pathname = (req.originalUrl || req.url || "").split("?")[0];

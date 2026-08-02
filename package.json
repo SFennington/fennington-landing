@@ -7,7 +7,11 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "emulators": "firebase emulators:start --only hosting,functions,firestore,auth",
-    "functions:build": "npm --prefix functions run build"
+    "functions:build": "npm --prefix functions run build",
+    "fd-pos:register-backyard-livestock": "node scripts/fd-pos-register-backyard-livestock.js",
+    "fd-pos:promise-review-backyard-livestock": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fd-pos-promise-review-backyard-livestock.ps1",
+    "fd-pos:export-promise-approval": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fd-pos-export-promise-approval.ps1",
+    "fd-pos:submit-promise-approval": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fd-pos-submit-promise-approval.ps1"
   },
   "keywords": [],
   "author": "",
