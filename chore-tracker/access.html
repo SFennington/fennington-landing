@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Access Your Chore Tracker | Fennington</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="simple-page">
+  <main class="simple-card wide-card">
+    <p class="eyebrow">Secure access</p>
+    <h1>Access your files</h1>
+    <section id="tokenDownloads" class="download-panel" hidden>
+      <p>Your access link is active. Download the files below before the link expires.</p>
+      <div class="download-list">
+        <a class="btn btn-primary" data-file="screen" href="#">Screen PDF</a>
+        <a class="btn btn-primary" data-file="print" href="#">Print PDF</a>
+        <a class="btn btn-primary" data-file="worksheets" href="#">Worksheet PDF</a>
+      </div>
+      <p class="status" id="downloadStatus" role="status" aria-live="polite"></p>
+    </section>
+    <section id="recoveryPanel">
+      <p>Enter the email used at checkout. If a matching purchase exists, a fresh access link will be sent when fulfillment email is configured.</p>
+      <form class="access-form" id="recoverAccessForm">
+        <label for="recoveryEmail">Purchase email</label>
+        <input id="recoveryEmail" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+        <button class="btn btn-primary btn-block" type="submit">Send Access Link</button>
+      </form>
+      <p class="status" id="recoveryStatus" role="status" aria-live="polite"></p>
+    </section>
+    <div class="simple-actions">
+      <a class="btn btn-secondary" href="./">Back to Product Page</a>
+    </div>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>

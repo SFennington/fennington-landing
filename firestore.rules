@@ -158,6 +158,18 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /digitalProducts/{productId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /digitalPurchases/{purchaseId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /downloadTokens/{tokenId} {
+      allow read, write: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

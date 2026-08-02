@@ -10,6 +10,7 @@ import crypto from "crypto";
 import express from "express";
 import fs from "fs";
 import path from "path";
+import Stripe from "stripe";
 
 loadLocalEnvFile();
 
@@ -18,6 +19,10 @@ initializeApp();
 const db = getFirestore();
 const serverTimestamp = FieldValue.serverTimestamp;
 const openAiApiKey = defineSecret("OPENAI_API_KEY");
+const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
+const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
+const stripePriceChoreTracker = defineSecret("STRIPE_PRICE_CHORE_TRACKER");
+const resendApiKey = defineSecret("RESEND_API_KEY");
 
 const REGION = "us-central1";
 const TRADE = "hvac";
@@ -32,6 +37,32 @@ const FINANCIAL_AI_MAX_TRANSACTIONS = 100;
 const FINANCIAL_INPUT_PRICE_PER_1M = Number(process.env.FINANCIAL_INPUT_PRICE_PER_1M || process.env.OPENAI_INPUT_PRICE_PER_1M || 0.20);
 const FINANCIAL_OUTPUT_PRICE_PER_1M = Number(process.env.FINANCIAL_OUTPUT_PRICE_PER_1M || process.env.OPENAI_OUTPUT_PRICE_PER_1M || 1.25);
 const FINANCIAL_WEB_SEARCH_PRICE_PER_1K = Number(process.env.FINANCIAL_WEB_SEARCH_PRICE_PER_1K || process.env.OPENAI_WEB_SEARCH_PRICE_PER_1K || 10);
+const CHORE_TRACKER_PRODUCT_SLUG = "chore-tracker";
+const CHORE_TRACKER_PRODUCT_NAME = "14-Day Homestead Chore Tracker System";
+const CHORE_TRACKER_FULFILLMENT_VERSION = "2026-08-01";
+const CHORE_TRACKER_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@fennington.com";
+const SITE_URL = (process.env.SITE_URL || process.env.PUBLIC_SITE_URL || "https://fennington.com").replace(/\/$/, "");
+const CHORE_TRACKER_FILES: Record<string, { filename: string; downloadName: string }> = {
+  screen: {
+    filename: "14-Day-Homestead-Chore-Tracker-System-screen.pdf",
+    downloadName: "14-Day-Homestead-Chore-Tracker-System-screen.pdf"
+  },
+  print: {
+    filename: "14-Day-Homestead-Chore-Tracker-System-print.pdf",
+    downloadName: "14-Day-Homestead-Chore-Tracker-System-print.pdf"
+  },
+  worksheets: {
+    filename: "Reusable-Chore-Tracker-Worksheets.pdf",
+    downloadName: "Reusable-Chore-Tracker-Worksheets.pdf"
+  }
+};
+
+type PurchaseEmailResult = {
+  status: "sent" | "pending_config" | "failed";
+  resendEmailId?: string | null;
+  error?: unknown;
+};
 
 const FINANCIAL_CATEGORIES = [
   "Housing", "Utilities", "Groceries", "Restaurants", "Transportation", "Fuel", "Vehicle expenses", "Insurance", "Medical", "Shopping", "Entertainment", "Subscriptions", "Kids", "Childcare", "Education", "Debt payments", "Taxes", "Transfers", "Credits to the Account", "Income", "Uncategorized"
@@ -179,6 +210,98 @@ function normalizePhone(value: unknown): string {
 
 function hashEmail(email: string): string {
   return crypto.createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+}
+
+function hashDownloadToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function secretValue(envName: string, secret: { value: () => string }): string {
+  if (process.env[envName]) return process.env[envName] || "";
+  try {
+    return secret.value() || "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeEmail(value: unknown): string {
+  return safeString(value).toLowerCase();
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function stripeClient(): Stripe {
+  const apiKey = secretValue("STRIPE_SECRET_KEY", stripeSecretKey);
+  if (!apiKey) throw Object.assign(new Error("Stripe is not configured."), { statusCode: 412 });
+  return new Stripe(apiKey);
+}
+
+function configuredChoreTrackerPriceId(): string {
+  const priceId = secretValue("STRIPE_PRICE_CHORE_TRACKER", stripePriceChoreTracker);
+  if (!priceId) throw Object.assign(new Error("Chore tracker Stripe price is not configured."), { statusCode: 412 });
+  return priceId;
+}
+
+function createDownloadToken(): { token: string; tokenHash: string; expiresAt: Date } {
+  const token = crypto.randomBytes(32).toString("base64url");
+  return {
+    token,
+    tokenHash: hashDownloadToken(token),
+    expiresAt: new Date(Date.now() + CHORE_TRACKER_TOKEN_TTL_MS)
+  };
+}
+
+function accessUrlForToken(token: string): string {
+  return `${SITE_URL}/chore-tracker/access.html?token=${encodeURIComponent(token)}`;
+}
+
+function privateProductFile(fileKey: string): { filePath: string; downloadName: string } | null {
+  const file = CHORE_TRACKER_FILES[fileKey] || CHORE_TRACKER_FILES.screen;
+  if (!file) return null;
+  return {
+    filePath: path.resolve(__dirname, "..", "private-products", CHORE_TRACKER_PRODUCT_SLUG, file.filename),
+    downloadName: file.downloadName
+  };
+}
+
+function firestoreDate(value: any): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === "function") return value.toDate();
+  return null;
+}
+
+async function sendChoreTrackerAccessEmail(toEmail: string, accessUrl: string): Promise<PurchaseEmailResult> {
+  const emailConfig = await db.collection("config").doc("email").get();
+  const fromEmail = safeString(emailConfig.get("transactionalFromEmail") || emailConfig.get("fromEmail") || process.env.RESEND_FROM_EMAIL);
+  const apiKey = secretValue("RESEND_API_KEY", resendApiKey);
+  if (!fromEmail || !apiKey) return { status: "pending_config" };
+
+  const subject = `Your ${CHORE_TRACKER_PRODUCT_NAME} access link`;
+  const text = `Thank you for purchasing ${CHORE_TRACKER_PRODUCT_NAME}.\n\nAccess your files here: ${accessUrl}\n\nThis link is time-limited. If it expires, request a fresh link from the access page.\n\nSupport: ${SUPPORT_EMAIL}`;
+  const html = `<p>Thank you for purchasing <strong>${escapeHtml(CHORE_TRACKER_PRODUCT_NAME)}</strong>.</p><p><a href="${escapeHtml(accessUrl)}">Access your files</a></p><p>This link is time-limited. If it expires, request a fresh link from the access page.</p><p>Support: <a href="mailto:${escapeHtml(SUPPORT_EMAIL)}">${escapeHtml(SUPPORT_EMAIL)}</a></p>`;
+
+  const resendResponse = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [toEmail],
+      reply_to: SUPPORT_EMAIL,
+      subject,
+      html,
+      text
+    })
+  });
+  const resendBody = await resendResponse.json().catch(() => ({}));
+  if (!resendResponse.ok) return { status: "failed", error: resendBody };
+  return { status: "sent", resendEmailId: resendBody.id || null };
 }
 
 function encodeToken(messageId: string, emailHash: string): string {
@@ -899,6 +1022,117 @@ apiApp.use((req, _res, next) => {
   else if (req.url.startsWith("/api/")) req.url = req.url.slice(4);
   next();
 });
+
+apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1mb" }), asyncRoute(async (req, res) => {
+  const stripe = stripeClient();
+  const webhookSecret = secretValue("STRIPE_WEBHOOK_SECRET", stripeWebhookSecret);
+  if (!webhookSecret) throw Object.assign(new Error("Stripe webhook secret is not configured."), { statusCode: 412 });
+  const signature = req.header("stripe-signature");
+  if (!signature) throw Object.assign(new Error("Missing Stripe signature."), { statusCode: 400 });
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+  } catch (error: any) {
+    logger.warn("Stripe webhook signature verification failed", { error: error?.message });
+    throw Object.assign(new Error("Invalid Stripe signature."), { statusCode: 400 });
+  }
+
+  if (event.type !== "checkout.session.completed") {
+    res.json({ received: true, ignored: true });
+    return;
+  }
+
+  const eventSession = event.data.object as Stripe.Checkout.Session;
+  if (eventSession.metadata?.product_slug !== CHORE_TRACKER_PRODUCT_SLUG) {
+    res.json({ received: true, ignored: true });
+    return;
+  }
+
+  const expectedPriceId = configuredChoreTrackerPriceId();
+  const session = await stripe.checkout.sessions.retrieve(eventSession.id);
+  const lineItems = await stripe.checkout.sessions.listLineItems(eventSession.id, { limit: 100 });
+  const hasExpectedPrice = lineItems.data.some((item) => item.price?.id === expectedPriceId);
+  if (!hasExpectedPrice) throw Object.assign(new Error("Checkout session does not include the configured product price."), { statusCode: 400 });
+  if (session.payment_status !== "paid") throw Object.assign(new Error("Checkout session is not paid."), { statusCode: 400 });
+
+  const customerEmail = normalizeEmail(session.customer_details?.email || session.customer_email);
+  if (!isValidEmail(customerEmail)) throw Object.assign(new Error("Checkout session is missing a valid customer email."), { statusCode: 400 });
+
+  const emailHash = hashEmail(customerEmail);
+  const purchaseRef = db.collection("digitalPurchases").doc(session.id);
+  const eventRef = db.collection("stripeEvents").doc(event.id);
+  const { token, tokenHash, expiresAt } = createDownloadToken();
+  const tokenRef = db.collection("downloadTokens").doc(tokenHash);
+  let shouldSendEmail = false;
+
+  await db.runTransaction(async (transaction) => {
+    const eventSnapshot = await transaction.get(eventRef);
+    if (eventSnapshot.exists) return;
+
+    transaction.create(eventRef, {
+      type: event.type,
+      stripeEventId: event.id,
+      stripeCreatedAt: new Date(event.created * 1000),
+      productSlug: CHORE_TRACKER_PRODUCT_SLUG,
+      stripeSessionId: session.id,
+      status: "processing",
+      createdAt: serverTimestamp()
+    });
+    transaction.set(purchaseRef, {
+      productSlug: CHORE_TRACKER_PRODUCT_SLUG,
+      productName: CHORE_TRACKER_PRODUCT_NAME,
+      fulfillmentVersion: CHORE_TRACKER_FULFILLMENT_VERSION,
+      status: "fulfilled",
+      stripeSessionId: session.id,
+      stripePaymentIntentId: safeString(session.payment_intent as string),
+      stripeCustomerId: safeString(session.customer as string),
+      stripePriceId: expectedPriceId,
+      amountTotal: session.amount_total || 0,
+      currency: safeString(session.currency || "usd"),
+      customerEmail,
+      emailHash,
+      latestTokenHash: tokenHash,
+      tokenExpiresAt: expiresAt,
+      fulfillmentEmailStatus: "pending",
+      purchasedAt: new Date((session.created || event.created) * 1000),
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp()
+    }, { merge: true });
+    transaction.create(tokenRef, {
+      productSlug: CHORE_TRACKER_PRODUCT_SLUG,
+      purchaseId: purchaseRef.id,
+      emailHash,
+      tokenHash,
+      expiresAt,
+      revoked: false,
+      downloadCount: 0,
+      createdFrom: "stripe_webhook",
+      createdAt: serverTimestamp()
+    });
+    transaction.set(eventRef, {
+      status: "fulfilled",
+      purchaseId: purchaseRef.id,
+      tokenHash,
+      processedAt: serverTimestamp()
+    }, { merge: true });
+    shouldSendEmail = true;
+  });
+
+  if (shouldSendEmail) {
+    const emailResult = await sendChoreTrackerAccessEmail(customerEmail, accessUrlForToken(token));
+    await purchaseRef.set({
+      fulfillmentEmailStatus: emailResult.status,
+      resendEmailId: emailResult.resendEmailId || null,
+      fulfillmentEmailError: emailResult.error || null,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    await tokenRef.set({ emailStatus: emailResult.status, updatedAt: serverTimestamp() }, { merge: true });
+  }
+
+  res.json({ received: true, fulfilled: shouldSendEmail });
+}));
+
 apiApp.use(express.json({ limit: "1mb" }));
 
 apiApp.get("/health", (_req, res) => {
@@ -1124,16 +1358,123 @@ apiApp.post("/financial/categorize", asyncRoute(async (req, res) => {
   res.json({ results, source, processed: results.length, model: FINANCIAL_AI_MODEL, usage, cost, webSearchCalls });
 }));
 
+apiApp.post("/chore-tracker/create-checkout-session", asyncRoute(async (_req, res) => {
+  const stripe = stripeClient();
+  const priceId = configuredChoreTrackerPriceId();
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: `${SITE_URL}/chore-tracker/success.html?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${SITE_URL}/chore-tracker/?checkout=cancelled`,
+    allow_promotion_codes: true,
+    metadata: {
+      product_slug: CHORE_TRACKER_PRODUCT_SLUG,
+      fulfillment_version: CHORE_TRACKER_FULFILLMENT_VERSION
+    },
+    payment_intent_data: {
+      metadata: {
+        product_slug: CHORE_TRACKER_PRODUCT_SLUG,
+        fulfillment_version: CHORE_TRACKER_FULFILLMENT_VERSION
+      }
+    }
+  });
+  res.json({ sessionId: session.id, url: session.url });
+}));
+
+apiApp.get("/chore-tracker/purchase-status", asyncRoute(async (req, res) => {
+  const sessionId = safeString(req.query.session_id);
+  if (!sessionId) throw Object.assign(new Error("Checkout session is required."), { statusCode: 400 });
+  const purchase = await db.collection("digitalPurchases").doc(sessionId).get();
+  if (purchase.exists && purchase.get("productSlug") === CHORE_TRACKER_PRODUCT_SLUG) {
+    res.json({
+      status: safeString(purchase.get("status"), "fulfilled"),
+      emailStatus: safeString(purchase.get("fulfillmentEmailStatus"), "pending"),
+      productSlug: CHORE_TRACKER_PRODUCT_SLUG
+    });
+    return;
+  }
+
+  try {
+    const stripe = stripeClient();
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    res.json({
+      status: session.payment_status === "paid" ? "paid_pending_fulfillment" : "pending",
+      emailStatus: "pending",
+      productSlug: session.metadata?.product_slug || ""
+    });
+  } catch {
+    res.json({ status: "pending", emailStatus: "pending", productSlug: "" });
+  }
+}));
+
+apiApp.post("/chore-tracker/recover-access", asyncRoute(async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!isValidEmail(email)) {
+    res.json({ ok: true });
+    return;
+  }
+
+  const emailHash = hashEmail(email);
+  const purchases = await db.collection("digitalPurchases").where("emailHash", "==", emailHash).limit(10).get();
+  const purchase = purchases.docs.find((doc) => doc.get("productSlug") === CHORE_TRACKER_PRODUCT_SLUG && doc.get("status") === "fulfilled");
+  if (purchase) {
+    const { token, tokenHash, expiresAt } = createDownloadToken();
+    const tokenRef = db.collection("downloadTokens").doc(tokenHash);
+    await tokenRef.create({
+      productSlug: CHORE_TRACKER_PRODUCT_SLUG,
+      purchaseId: purchase.id,
+      emailHash,
+      tokenHash,
+      expiresAt,
+      revoked: false,
+      downloadCount: 0,
+      createdFrom: "access_recovery",
+      createdAt: serverTimestamp()
+    });
+    const emailResult = await sendChoreTrackerAccessEmail(email, accessUrlForToken(token));
+    await purchase.ref.set({
+      latestTokenHash: tokenHash,
+      tokenExpiresAt: expiresAt,
+      recoveryEmailStatus: emailResult.status,
+      lastRecoveryRequestedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    await tokenRef.set({ emailStatus: emailResult.status, updatedAt: serverTimestamp() }, { merge: true });
+  }
+
+  res.json({ ok: true });
+}));
+
+apiApp.get("/chore-tracker/download", asyncRoute(async (req, res) => {
+  const token = safeString(req.query.token, "");
+  if (!token || token.length < 32) throw Object.assign(new Error("Invalid or expired access link."), { statusCode: 403 });
+  const tokenHash = hashDownloadToken(token);
+  const tokenRef = db.collection("downloadTokens").doc(tokenHash);
+  const tokenSnapshot = await tokenRef.get();
+  const expiresAt = firestoreDate(tokenSnapshot.get("expiresAt"));
+  if (!tokenSnapshot.exists || tokenSnapshot.get("productSlug") !== CHORE_TRACKER_PRODUCT_SLUG || tokenSnapshot.get("revoked") === true || !expiresAt || expiresAt.getTime() < Date.now()) {
+    throw Object.assign(new Error("Invalid or expired access link."), { statusCode: 403 });
+  }
+
+  const purchaseId = safeString(tokenSnapshot.get("purchaseId"));
+  const purchase = purchaseId ? await db.collection("digitalPurchases").doc(purchaseId).get() : null;
+  if (!purchase?.exists || purchase.get("status") !== "fulfilled") throw Object.assign(new Error("Purchase is not eligible for download."), { statusCode: 403 });
+
+  const fileKey = safeString(req.query.file, "screen");
+  const productFile = privateProductFile(fileKey);
+  if (!productFile || !fs.existsSync(productFile.filePath)) throw Object.assign(new Error("Product file is unavailable."), { statusCode: 503 });
+
+  await tokenRef.set({ downloadCount: FieldValue.increment(1), lastUsedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+  res.set("cache-control", "private, no-store");
+  res.download(productFile.filePath, productFile.downloadName);
+}));
+
 apiApp.post("/sites/:siteId/create-checkout-session", asyncRoute(async (req, res) => {
   await requireAdmin(req);
   res.status(501).json({ error: "Stripe Checkout is intentionally disabled until product and price decisions are finalized.", siteId: req.params.siteId });
 }));
 
-apiApp.post("/stripe/webhook", asyncRoute(async (_req, res) => {
-  res.status(501).json({ error: "Stripe webhook placeholder only. Enable with raw-body signature verification before production use." });
-}));
-
-export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [openAiApiKey] }, apiApp);
+export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [openAiApiKey, stripeSecretKey, stripeWebhookSecret, stripePriceChoreTracker, resendApiKey] }, apiApp);
 
 export const renderSite = onRequest({ region: REGION, timeoutSeconds: 30, memory: "256MiB" }, async (req, res) => {
   const pathname = (req.originalUrl || req.url || "").split("?")[0];

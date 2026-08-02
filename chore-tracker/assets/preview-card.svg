@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">14-Day Homestead Chore Tracker System preview</title>
+  <desc id="desc">A stylized preview of printable chore tracker pages with checkboxes, tables, and notes.</desc>
+  <rect width="1200" height="900" fill="#e7efdf"/>
+  <circle cx="1030" cy="120" r="220" fill="#d9e8cd"/>
+  <circle cx="130" cy="780" r="190" fill="#f5ead7"/>
+  <rect x="120" y="92" width="455" height="640" rx="18" fill="#fffdf7" stroke="#cdbf9f" stroke-width="4" transform="rotate(-4 120 92)"/>
+  <rect x="625" y="160" width="420" height="600" rx="18" fill="#ffffff" stroke="#cdbf9f" stroke-width="4" transform="rotate(5 625 160)"/>
+  <text x="185" y="175" fill="#285f3b" font-family="Arial, sans-serif" font-size="38" font-weight="700">14-Day Homestead</text>
+  <text x="185" y="225" fill="#285f3b" font-family="Arial, sans-serif" font-size="38" font-weight="700">Chore Tracker</text>
+  <text x="185" y="280" fill="#6f4d2f" font-family="Arial, sans-serif" font-size="21" font-weight="700">Morning Checklist</text>
+  <g stroke="#d8cdb7" stroke-width="4" fill="none">
+    <rect x="185" y="320" width="30" height="30"/>
+    <line x1="235" y1="337" x2="500" y2="337"/>
+    <rect x="185" y="380" width="30" height="30"/>
+    <line x1="235" y1="397" x2="500" y2="397"/>
+    <rect x="185" y="440" width="30" height="30"/>
+    <line x1="235" y1="457" x2="500" y2="457"/>
+    <rect x="185" y="500" width="30" height="30"/>
+    <line x1="235" y1="517" x2="500" y2="517"/>
+    <line x1="185" y1="610" x2="505" y2="610"/>
+    <line x1="185" y1="655" x2="505" y2="655"/>
+  </g>
+  <text x="700" y="245" fill="#285f3b" font-family="Arial, sans-serif" font-size="30" font-weight="700">Daily Chore Tracker</text>
+  <g stroke="#d8cdb7" stroke-width="4" fill="none">
+    <rect x="700" y="295" width="270" height="48"/>
+    <rect x="700" y="343" width="270" height="48"/>
+    <rect x="700" y="391" width="270" height="48"/>
+    <rect x="700" y="439" width="270" height="48"/>
+    <rect x="700" y="487" width="270" height="48"/>
+    <line x1="760" y1="295" x2="760" y2="535"/>
+    <line x1="880" y1="295" x2="880" y2="535"/>
+    <line x1="700" y1="600" x2="970" y2="600"/>
+    <line x1="700" y1="645" x2="970" y2="645"/>
+  </g>
+  <rect x="420" y="690" width="360" height="74" rx="37" fill="#285f3b"/>
+  <text x="485" y="738" fill="#ffffff" font-family="Arial, sans-serif" font-size="27" font-weight="700">Printable PDF System</text>
+</svg>
