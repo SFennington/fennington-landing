@@ -5,6 +5,49 @@ Build a repeatable Fennington Digital Product Operating System (FD-POS) that tur
 
 This plan supersedes the prior one-off `14-Day Homestead Chore Tracker System` direction. The paid product for the current run is the ebook asset in `G:\My Drive\Business\Digital Products\Backyard Livestock Planner 1\Attempt 3\ebook-asset`, sold at `$17`, with supporting resources generated only after review/approval.
 
+## Implementation Status And Resume Point
+Last updated: 2026-08-02.
+
+### Completed
+- [x] Defined the FD-POS lifecycle, Firestore schemas, manifest shape, approval types, and quality gates.
+- [x] Added generic digital-product registration, Stripe Product/Price, checkout, webhook fulfillment, access recovery, and private-download APIs.
+- [x] Added Firebase Admin/service-secret authentication for n8n-to-Firebase calls.
+- [x] Added admin-only Firestore rules for product assets, promises, tasks, approvals, packages, purchases, tokens, and Stripe events.
+- [x] Added the Attempt 3 Backyard Livestock Planner registration and DOCX extraction scripts.
+- [x] Built ebook Promise Review, named-human approval submission, source rewrite handling, and XLSX/CSV review tooling.
+- [x] Corrected the two approved source rewrites in `Attempt 3/value-enhancer.docx`: manual calendar entry and non-medical observation records.
+- [x] Separated paid-ebook promises from value-enhancer recommendations. Value-enhancer records now use `sourceIntent: proposal` and `inclusionStatus: NOT_INCLUDED`.
+- [x] Added feasibility, one-time cash, labor, outsourcing, recurring-cost, dependency, and limitation estimates for value-enhancer proposals.
+- [x] Added stored per-product `supervisorPolicy`, supervisor evaluation API/task orchestration, and `C:\Users\cfenn\_Git\n8n\workflows\FD-POS - Supervisor.json`.
+- [x] Added `C:\Users\cfenn\_Git\n8n\workflows\FD-POS - Asset Builder.json` plus backend work, registration, completion, and approval gates.
+- [x] Validated Functions TypeScript builds, Firestore rules, n8n workflow JSON, DOCX extraction, review submission, and approval-gate rejection in Firebase emulators.
+
+### Current Pause Point
+- [ ] User must review the 11 `PENDING` rows in `G:\My Drive\Business\Digital Products\Backyard Livestock Planner 1\Attempt 3\product-review-v2.xlsx`, sheet `Value Enhancer Feasibility`.
+- [ ] Allowed human feasibility decisions: `FEASIBLE`, `REWRITE_AS_STATIC`, `MOVE_TO_UPSELL`, or `REJECT`.
+- [ ] Do not treat feasibility as inclusion. All 20 recommendations remain excluded from the `$17` product until a separate promotion/asset-generation approval.
+- [ ] After review, submit the v2 feasibility decisions, create a proposed included-asset list, consolidate overlapping resources, and request explicit inclusion approval.
+
+Latest supervisor result under the conservative policy:
+- 20 value-enhancer proposals evaluated.
+- 7 live, personalized, community, or ongoing-service proposals automatically rejected.
+- 2 unsupported automation/medical ideas automatically changed to `REWRITE_AS_STATIC`.
+- 11 proposals require human feasibility review.
+- 0 proposals included by default.
+
+Current supervisor settings are visible in the workbook's `Supervisor Policy` sheet and stored in the product manifest: static printables/spreadsheets allowed; prerecorded training, research-heavy, app-dependent, live-service, and ongoing-support work require review or are disabled; automatic inclusion is disabled; automatic recurring-cost threshold is `$0/month`.
+
+### Resume Procedure
+1. Inspect both repository worktrees before editing; there are intentional uncommitted implementation changes after the last pushed commits.
+2. Read `product-review-v2.xlsx` and confirm all `Value Enhancer Feasibility` rows have final decisions.
+3. Complete the v2 feasibility-decision import/submission path. Do not reuse the old promise-list importer as an inclusion approval.
+4. Start Firebase emulators with the portable JDK 21 at `C:\Users\cfenn\AppData\Local\Temp\kilo\jdk-21\jdk-21.0.12+8` if system Java remains below 21.
+5. Rehydrate emulator state with `npm run fd-pos:register-backyard-livestock` and `npm run fd-pos:promise-review-backyard-livestock`, then call `/digital-products/backyard-livestock-planner/supervisor/evaluate-proposals`.
+6. Apply reviewed feasibility decisions, generate a separate inclusion proposal, and keep `inclusionStatus: NOT_INCLUDED` until explicit human promotion approval.
+7. Only then consolidate approved ebook-required assets with promoted value-enhancer assets and run one stored Asset Builder test output.
+
+Intentional uncommitted implementation work at pause time includes `functions/src/index.ts`, `package.json`, `scripts/fd-pos-register-backyard-livestock.js`, `scripts/fd-pos-submit-promise-approval.ps1`, new `scripts/fd-pos-export-product-review-v2.ps1`, and the n8n supervisor workflow. Do not discard these changes. Unrelated existing workspace/plan files must also remain untouched.
+
 ## Context Reviewed
 - Repo: `C:\Users\cfenn\_Git\fennington-landing`.
 - Current Firebase Hosting serves repo root and rewrites `/api/**` to Cloud Function `api`.
@@ -90,7 +133,7 @@ Required fields:
 - `updatedAt`
 
 ### `productPromises/{promiseId}`
-A promise is any deliverable, feature, claim, bonus, app tie-in, upsell, or outcome mentioned in ebook/value-enhancer/sales copy.
+A promise is a customer-facing deliverable, feature, claim, bonus, app tie-in, upsell, or outcome in paid-product or sales copy. Value-enhancer recommendations use the same collection for traceability but must have `sourceIntent: proposal` and `inclusionStatus: NOT_INCLUDED` until explicitly promoted.
 
 Required fields:
 - `productId`
@@ -100,7 +143,17 @@ Required fields:
 - `text`
 - `category`: `deliverable`, `feature`, `bonus`, `upsell`, `outcome`, `app-tie-in`, `price`, `support`, `refund`, `testimonial`, `scarcity`, `statistic`, `other`
 - `riskLevel`: `low`, `medium`, `high`, `blocked`
-- `classification`: `keep`, `needs_asset`, `needs_evidence`, `move_to_upsell`, `remove`, `rewrite`, `ignore`
+- `classification`: `keep`, `needs_asset`, `needs_evidence`, `move_to_upsell`, `remove`, `rewrite`, `ignore`, `proposed`
+- `sourceIntent`: `product-content`, `proposal`
+- `inclusionStatus`: `CANDIDATE`, `NOT_INCLUDED`, `APPROVED_FOR_INCLUSION`
+- `feasibility`
+- `estimatedCashCostUsd`
+- `estimatedLaborHours`
+- `estimatedOutsourceCostUsd`
+- `recurringCostEstimate`
+- `limits`
+- `supervisorDecision`
+- `supervisorReason`
 - `requiredAssetType`
 - `approvedBy`
 - `approvalStatus`: `PENDING`, `APPROVED`, `REJECTED`, `REWRITE_REQUIRED`
@@ -129,7 +182,7 @@ Required fields:
 Required fields:
 - `productId`
 - `approvalId`
-- `approvalType`: `promise-list`, `asset-generation`, `asset-quality`, `sales-page`, `stripe-live`, `launch`, `content-marketing`
+- `approvalType`: `promise-list`, `proposal-feasibility`, `asset-generation`, `asset-quality`, `sales-page`, `stripe-live`, `launch`, `content-marketing`
 - `status`: `PENDING`, `APPROVED`, `REJECTED`, `CHANGES_REQUESTED`
 - `summary`
 - `items`
@@ -363,13 +416,16 @@ For the current product, do not sell the unusable generated chore-tracker PDFs. 
 
 ## Approval Gates
 Required approvals:
-1. `promise-list`: approve extracted deliverables/claims from ebook and value enhancer.
-2. `asset-generation`: approve which missing resources should be created.
-3. `asset-quality`: approve generated supporting assets.
-4. `sales-page`: approve generated sales page copy/files.
-5. `stripe-live`: approve creating/enabling live Stripe pricing if not test-only.
-6. `launch`: approve publishing/deployment/live checkout.
-7. `content-marketing`: approve Content Reactor activation.
+1. `promise-list`: approve customer-facing deliverables/claims from the paid ebook.
+2. `proposal-feasibility`: evaluate value-enhancer recommendations for feasibility, cost, limits, and recurring obligations; all remain not included by default.
+3. `asset-generation`: approve which feasible proposals or missing promised resources should be created and included.
+4. `asset-quality`: approve generated supporting assets.
+5. `sales-page`: approve generated sales page copy/files.
+6. `stripe-live`: approve creating/enabling live Stripe pricing if not test-only.
+7. `launch`: approve publishing/deployment/live checkout.
+8. `content-marketing`: approve Content Reactor activation.
+
+The permanent `FD-POS - Supervisor` workflow runs after extraction. It reads the product's stored `supervisorPolicy`, may automatically mark low-cost static proposals feasible or reject disallowed live/ongoing services, and sends threshold exceptions to human review. A supervisor feasibility decision never changes `inclusionStatus` from `NOT_INCLUDED`; promotion into the paid package requires a separate inclusion/asset-generation approval.
 
 Approval interface can start in Google Sheets and later become a Firebase admin page. Firestore remains the source of truth.
 
@@ -406,15 +462,16 @@ For `Backyard Livestock Planner 1`:
 1. Register a new `digitalProducts` draft for `backyard-livestock-planner` with price `$17`.
 2. Attach the current `ebook-asset` as the primary paid asset.
 3. Attach `value-enhancer` as a source for promise extraction, not as an automatically included product.
-4. Run Promise Review against ebook and value enhancer.
-5. Approve/reject/rewrite the proposed supporting assets.
-6. Generate only approved supporting resources using the PERC-style pillar/fix/resource method.
-7. Package ebook plus approved resources.
-8. Generate a sales page from the approved package.
-9. Create Stripe Product/Price from the manifest after package readiness.
-10. Enable test checkout and fulfillment.
-11. Launch only after approvals and validation pass.
-12. Hand approved product record to Content Reactor.
+4. Run Promise Review against the ebook and proposal extraction against the value enhancer.
+5. Run `FD-POS - Supervisor` using stored cost, labor, recurring-cost, service, app, research, and auto-inclusion settings.
+6. Review only proposal exceptions, then explicitly promote selected feasible proposals for inclusion.
+7. Generate only approved included supporting resources using the PERC-style pillar/fix/resource method.
+8. Package ebook plus approved resources.
+9. Generate a sales page from the approved package.
+10. Create Stripe Product/Price from the manifest after package readiness.
+11. Enable test checkout and fulfillment.
+12. Launch only after approvals and validation pass.
+13. Hand approved product record to Content Reactor.
 
 ## Content Reactor Plan Boundary
 The provided Content Reactor prompt should become a separate implementation plan/repo after FD-POS product registry and approved-product handoff are defined.
@@ -458,20 +515,20 @@ Implementation agent should validate in this order:
 13. Content Reactor dry-run consumes approved product metadata only.
 
 ## Implementation Order
-1. Create schemas/config docs for product manifest, statuses, approvals, promise classifications, and quality gates.
-2. Add/genericize Firebase backend data model and endpoints.
-3. Replace hardcoded chore-tracker constants and routes with generic digital-product logic.
-4. Add admin/service authentication for n8n-to-Firebase calls.
-5. Add product package storage strategy.
-6. Upgrade ABK copy into a versioned workflow that outputs a product manifest.
-7. Build Promise Review workflow.
-8. Build Approval interface in Google Sheets or Firestore-backed admin view.
-9. Build Approved Asset Builder workflow.
-10. Build Package Builder workflow.
-11. Build Website Builder workflow.
-12. Build Manager AI workflow that advances statuses and triggers sub-workflows.
-13. Run the current Backyard Livestock Planner through the new process.
-14. Only after this system works, implement Content Reactor as a separate repo/workflow system consuming approved FD-POS product records.
+- [x] 1. Create schemas/config docs for product manifest, statuses, approvals, promise classifications, and quality gates.
+- [x] 2. Add/genericize Firebase backend data model and endpoints.
+- [x] 3. Replace hardcoded chore-tracker constants and routes with generic digital-product logic.
+- [x] 4. Add admin/service authentication for n8n-to-Firebase calls.
+- [ ] 5. Add product package storage strategy. Backend path validation exists; real Google Drive/Firebase Storage connector remains pending.
+- [ ] 6. Upgrade ABK copy into a versioned workflow that outputs a product manifest.
+- [x] 7. Build Promise Review workflow, including separate proposal-feasibility evaluation.
+- [x] 8. Build initial XLSX approval/feasibility interface. A future Firebase admin page remains optional.
+- [ ] 9. Build Approved Asset Builder workflow. Foundation and API gates exist; storage connector and one-asset end-to-end test remain pending.
+- [ ] 10. Build Package Builder workflow.
+- [ ] 11. Build Website Builder workflow.
+- [ ] 12. Build Manager AI workflow. The policy-based Supervisor sub-workflow exists; full lifecycle orchestration remains pending.
+- [ ] 13. Run the current Backyard Livestock Planner through the new process. Paused at value-enhancer feasibility review.
+- [ ] 14. Only after this system works, implement Content Reactor as a separate repo/workflow system consuming approved FD-POS product records.
 
 ## Out Of Scope For First Implementation
 - Full custom Firebase admin dashboard, unless Google Sheets approvals prove insufficient.
