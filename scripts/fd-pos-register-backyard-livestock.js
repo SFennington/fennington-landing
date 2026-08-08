@@ -62,6 +62,20 @@ const manifest = {
     noUnsupportedAppFeatures: true,
     appIsOptional: true
   },
+  supervisorPolicy: {
+    maxAutoCashCostUsd: 25,
+    maxAutoLaborHours: 8,
+    maxAutoRecurringCostUsdMonthly: 0,
+    allowStaticPrintables: true,
+    allowSpreadsheets: true,
+    allowPrerecordedTraining: false,
+    allowResearchHeavyAssets: false,
+    allowAppDependentAssets: false,
+    allowLiveServices: false,
+    allowOngoingSupport: false,
+    autoRejectDisallowedServices: true,
+    autoIncludeFeasibleProposals: false
+  },
   fulfillment: {
     deliveryMode: "zip-or-private-files",
     tokenTtlDays: 7

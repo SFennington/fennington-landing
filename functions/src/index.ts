@@ -57,7 +57,7 @@ const ASSET_FORMATS = new Set(["docx", "pdf", "html", "xlsx", "gsheet", "csv", "
 const ASSET_SOURCES = new Set(["abk", "perc", "manual", "website-builder", "package-builder"]);
 const PROMISE_CATEGORIES = new Set(["deliverable", "feature", "bonus", "upsell", "outcome", "app-tie-in", "price", "support", "refund", "testimonial", "scarcity", "statistic", "other"]);
 const PROMISE_RISK_LEVELS = new Set(["low", "medium", "high", "blocked"]);
-const PROMISE_CLASSIFICATIONS = new Set(["keep", "needs_asset", "needs_evidence", "move_to_upsell", "remove", "rewrite", "ignore"]);
+const PROMISE_CLASSIFICATIONS = new Set(["keep", "needs_asset", "needs_evidence", "move_to_upsell", "remove", "rewrite", "ignore", "proposed"]);
 
 type ProductStatus = typeof PRODUCT_STATUSES[number];
 
@@ -84,6 +84,7 @@ type ProductManifest = {
   targetAudience?: string;
   approvedImplementationPaths?: string[];
   claimsPolicy?: Record<string, unknown>;
+  supervisorPolicy?: Record<string, unknown>;
   fulfillment?: {
     deliveryMode?: string;
     tokenTtlDays?: number;
@@ -110,7 +111,38 @@ type DigitalProduct = {
   tokenTtlDays: number;
   testCheckoutEnabled: boolean;
   approvalRequired: boolean;
+  supervisorPolicy: SupervisorPolicy;
   fulfillmentFiles: Record<string, { filename: string; downloadName: string }>;
+};
+
+type SupervisorPolicy = {
+  maxAutoCashCostUsd: number;
+  maxAutoLaborHours: number;
+  maxAutoRecurringCostUsdMonthly: number;
+  allowStaticPrintables: boolean;
+  allowSpreadsheets: boolean;
+  allowPrerecordedTraining: boolean;
+  allowResearchHeavyAssets: boolean;
+  allowAppDependentAssets: boolean;
+  allowLiveServices: boolean;
+  allowOngoingSupport: boolean;
+  autoRejectDisallowedServices: boolean;
+  autoIncludeFeasibleProposals: boolean;
+};
+
+const DEFAULT_SUPERVISOR_POLICY: SupervisorPolicy = {
+  maxAutoCashCostUsd: 25,
+  maxAutoLaborHours: 8,
+  maxAutoRecurringCostUsdMonthly: 0,
+  allowStaticPrintables: true,
+  allowSpreadsheets: true,
+  allowPrerecordedTraining: false,
+  allowResearchHeavyAssets: false,
+  allowAppDependentAssets: false,
+  allowLiveServices: false,
+  allowOngoingSupport: false,
+  autoRejectDisallowedServices: true,
+  autoIncludeFeasibleProposals: false
 };
 
 type PurchaseEmailResult = {
@@ -324,6 +356,29 @@ function privateProductFile(product: DigitalProduct, fileKey: string): { filePat
   };
 }
 
+function normalizeSupervisorPolicy(input: unknown): SupervisorPolicy {
+  const policy = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const numberSetting = (key: keyof SupervisorPolicy) => {
+    const value = Number(policy[key]);
+    return Number.isFinite(value) && value >= 0 ? value : DEFAULT_SUPERVISOR_POLICY[key] as number;
+  };
+  const booleanSetting = (key: keyof SupervisorPolicy) => typeof policy[key] === "boolean" ? policy[key] as boolean : DEFAULT_SUPERVISOR_POLICY[key] as boolean;
+  return {
+    maxAutoCashCostUsd: numberSetting("maxAutoCashCostUsd"),
+    maxAutoLaborHours: numberSetting("maxAutoLaborHours"),
+    maxAutoRecurringCostUsdMonthly: numberSetting("maxAutoRecurringCostUsdMonthly"),
+    allowStaticPrintables: booleanSetting("allowStaticPrintables"),
+    allowSpreadsheets: booleanSetting("allowSpreadsheets"),
+    allowPrerecordedTraining: booleanSetting("allowPrerecordedTraining"),
+    allowResearchHeavyAssets: booleanSetting("allowResearchHeavyAssets"),
+    allowAppDependentAssets: booleanSetting("allowAppDependentAssets"),
+    allowLiveServices: booleanSetting("allowLiveServices"),
+    allowOngoingSupport: booleanSetting("allowOngoingSupport"),
+    autoRejectDisallowedServices: booleanSetting("autoRejectDisallowedServices"),
+    autoIncludeFeasibleProposals: booleanSetting("autoIncludeFeasibleProposals")
+  };
+}
+
 function digitalProductFromSnapshot(snapshot: DocumentSnapshot): DigitalProduct | null {
   if (!snapshot.exists) return null;
   const data = snapshot.data() || {};
@@ -357,6 +412,7 @@ function digitalProductFromSnapshot(snapshot: DocumentSnapshot): DigitalProduct 
     tokenTtlDays: Math.max(1, Math.min(30, Number(data.tokenTtlDays || DEFAULT_DIGITAL_PRODUCT_TOKEN_TTL_DAYS))),
     testCheckoutEnabled: data.testCheckoutEnabled === true,
     approvalRequired: data.approvalRequired === true,
+    supervisorPolicy: normalizeSupervisorPolicy(data.supervisorPolicy),
     fulfillmentFiles
   };
 }
@@ -424,6 +480,7 @@ function productDraftFromManifest(manifest: ProductManifest) {
     targetAudience: safeString(manifest.targetAudience),
     approvedImplementationPaths: Array.isArray(manifest.approvedImplementationPaths) ? manifest.approvedImplementationPaths.map((item) => safeString(item)).filter(Boolean) : [],
     claimsPolicy: manifest.claimsPolicy || {},
+    supervisorPolicy: normalizeSupervisorPolicy(manifest.supervisorPolicy),
     fulfillment: manifest.fulfillment || {},
     tokenTtlDays: Math.max(1, Math.min(30, ttlDays)),
     statusHistory: FieldValue.arrayUnion({ status: "EBOOK_GENERATED", updatedBy: "register-draft", reason: "Product manifest registered.", workflow: "FD-POS register-draft", updatedAt: new Date() }),
@@ -455,9 +512,10 @@ function normalizePromiseCategory(value: unknown, text: string): string {
   if (/\b(limited time|only \d+ (?:copies|spots|available|left)|enrollment closes|offer expires?|fake scarcity)\b/i.test(text)) return "scarcity";
   if (/\b\d+%|\$\d+|\bprice\b|\bcost\b/i.test(text)) return /\$\d+|\bprice\b|\bcost\b/i.test(text) ? "price" : "statistic";
   if (/\brefund|guarantee|money back\b/i.test(text)) return "refund";
+  if (/\btemplate|worksheet|checklist|spreadsheet|pdf|printable|toolkit|reference chart|recordkeeping pages?|observation logs?\b/i.test(text)) return "deliverable";
   if (/\bLivestock Tracker|app|iOS|Android|notification|reminder|sync|export\b/i.test(text)) return "app-tie-in";
   if (/\bbonus|upsell|upgrade\b/i.test(text)) return /\bupsell|upgrade\b/i.test(text) ? "upsell" : "bonus";
-  if (/\btemplate|worksheet|checklist|spreadsheet|pdf|module|planner|tracker|resource|printable|toolkit|reference chart\b/i.test(text)) return "deliverable";
+  if (/\bmodule|planner|tracker|resource\b/i.test(text)) return "deliverable";
   if (/\bresult|outcome|save|avoid|fix|solve|build|learn\b/i.test(text)) return "outcome";
   return "other";
 }
@@ -488,25 +546,170 @@ function requiredAssetTypeForPromise(text: string, category: string): string {
   if (/\bworksheet\b/i.test(text)) return "worksheet";
   if (/\bchecklist\b/i.test(text)) return "checklist";
   if (/\btemplate\b/i.test(text)) return "template";
+  if (/\brecordkeeping pages?|observation logs?|logs?\b/i.test(text)) return "worksheet";
   if (/\bmodule|lesson\b/i.test(text)) return "module";
   if (/\bpdf|printable\b/i.test(text)) return "pdf";
   return "other";
 }
 
-function extractPromiseCandidatesFromText(sourceText: string): string[] {
-  return safeLongString(sourceText, "", 50000)
+function extractPromiseCandidatesFromText(sourceText: string, proposalSource = false): string[] {
+  const source = safeLongString(sourceText, "", 50000);
+  if (proposalSource) {
+    const ignoredHeadings = new Set(["bonus vault & value enhancer", "bonus bundle", "workbook outline"]);
+    return source
+      .split(/\r?\n/)
+      .map((line) => safeString(line, "").replace(/^[\s>*#-]+/, ""))
+      .filter((line) => line.length >= 18)
+      .filter((line) => !ignoredHeadings.has(line.toLowerCase()))
+      .slice(0, 200);
+  }
+  const lines = source
     .split(/\r?\n|(?<=[.!?])\s+/)
     .map((line) => safeString(line, "").replace(/^[\s>*#-]+/, ""))
-    .filter((line) => line.length >= 18)
-    .filter((line) => /\b(template|worksheet|checklist|spreadsheet|pdf|bonus|module|planner|tracker|Livestock Tracker|app|iOS|Android|refund|guarantee|limited time|only \d+|\d+%|\$\d+|included|you get|download|printable|resource|system)\b/i.test(line))
+    .filter((line) => line.length >= 18);
+  return lines
+    .filter((line) => /\b(template|worksheet|checklist|spreadsheet|pdf|bonus|module|planner|tracker|observation logs?|recordkeeping pages?|Livestock Tracker|app|iOS|Android|refund|guarantee|limited time|only \d+|\d+%|\$\d+|included|you get|download|printable|resource|system)\b/i.test(line))
     .slice(0, 200);
+}
+
+function proposalAssessment(text: string) {
+  const base = {
+    sourceIntent: "proposal",
+    inclusionStatus: "NOT_INCLUDED",
+    feasibility: "FEASIBLE_STATIC",
+    classification: "proposed",
+    requiredAssetType: requiredAssetTypeForPromise(text, "deliverable"),
+    estimatedCashCostUsd: { min: 0, max: 25 },
+    estimatedLaborHours: { min: 2, max: 8 },
+    estimatedOutsourceCostUsd: { min: 75, max: 400 },
+    recurringCostEstimate: "$0-$20/month depending on storage/design tools",
+    limits: "Planning estimate only. Final cost depends on design quality, research depth, and software already owned."
+  };
+  if (/\b(live group coaching|mastermind|8-week|personalized review|private mastermind|VIP priority support|peer accountability|direct help|community support)\b/i.test(text)) {
+    return {
+      ...base,
+      feasibility: "NOT_FEASIBLE_FOR_CURRENT_PRODUCT",
+      classification: "move_to_upsell",
+      requiredAssetType: "other",
+      estimatedCashCostUsd: { min: 100, max: 4000 },
+      estimatedLaborHours: { min: 8, max: 80 },
+      estimatedOutsourceCostUsd: { min: 500, max: 5000 },
+      recurringCostEstimate: "$0-$100+/month plus 1-10 hours/week of delivery, moderation, or support",
+      limits: "Requires ongoing human availability, capacity limits, scheduling, support policies, and separate pricing. Do not include in the $17 self-serve product."
+    };
+  }
+  if (/\b(tutorials?|walkthroughs?|training)\b/i.test(text)) {
+    return {
+      ...base,
+      feasibility: "FEASIBLE_PRERECORDED",
+      requiredAssetType: "module",
+      estimatedCashCostUsd: { min: 0, max: 150 },
+      estimatedLaborHours: { min: 6, max: 20 },
+      estimatedOutsourceCostUsd: { min: 250, max: 1500 },
+      recurringCostEstimate: "$0-$50/month for video/file hosting",
+      limits: "Feasible only as prerecorded self-serve training. Live instruction, feedback, and guaranteed support are separate services. Automation demonstrations must use verified features."
+    };
+  }
+  if (/\bautomation|auto-schedule|importable|integration\b/i.test(text)) {
+    return {
+      ...base,
+      feasibility: "REWRITE_AS_STATIC",
+      requiredAssetType: "template",
+      estimatedCashCostUsd: { min: 0, max: 30 },
+      estimatedLaborHours: { min: 3, max: 10 },
+      estimatedOutsourceCostUsd: { min: 100, max: 500 },
+      recurringCostEstimate: "$0-$20/month",
+      limits: "Replace automation claims with a manual template, setup guide, or checklist unless a working integration is built and tested."
+    };
+  }
+  if (/\b(vet-approved|emergency toolkit|health emergency)\b/i.test(text)) {
+    return {
+      ...base,
+      feasibility: "REWRITE_AS_STATIC",
+      requiredAssetType: "checklist",
+      estimatedCashCostUsd: { min: 0, max: 75 },
+      estimatedLaborHours: { min: 6, max: 16 },
+      estimatedOutsourceCostUsd: { min: 200, max: 1200 },
+      recurringCostEstimate: "$0-$20/month",
+      limits: "Limit to observation records, emergency contacts, and prompts to contact a veterinarian. Professional review is required before making veterinary or treatment claims."
+    };
+  }
+  if (/\b(seed|planting guide|climate|frost|crop pairings)\b/i.test(text)) {
+    return {
+      ...base,
+      feasibility: "FEASIBLE_WITH_RESEARCH",
+      requiredAssetType: "pdf",
+      estimatedCashCostUsd: { min: 0, max: 75 },
+      estimatedLaborHours: { min: 8, max: 20 },
+      estimatedOutsourceCostUsd: { min: 200, max: 900 },
+      recurringCostEstimate: "$0-$20/month",
+      limits: "Regional planting dates vary. Must identify climate-zone assumptions, cite reliable sources, and avoid claiming universal local accuracy."
+    };
+  }
+  if (/\b(recipe bank|meal planner)\b/i.test(text)) {
+    return {
+      ...base,
+      feasibility: "FEASIBLE_WITH_RESEARCH",
+      requiredAssetType: "template",
+      estimatedCashCostUsd: { min: 0, max: 50 },
+      estimatedLaborHours: { min: 6, max: 15 },
+      estimatedOutsourceCostUsd: { min: 150, max: 700 },
+      recurringCostEstimate: "$0-$20/month",
+      limits: "Recipe content needs originality checks, food-safety review, and clear handling/storage disclaimers."
+    };
+  }
+  if (/\b(app orientation|mobile app|dashboard|screenshots|on-the-go entry)\b/i.test(text)) {
+    return {
+      ...base,
+      feasibility: "REQUIRES_VERIFIED_APP_FEATURES",
+      requiredAssetType: "module",
+      estimatedCashCostUsd: { min: 0, max: 40 },
+      estimatedLaborHours: { min: 4, max: 12 },
+      estimatedOutsourceCostUsd: { min: 150, max: 600 },
+      recurringCostEstimate: "$0-$20/month plus update work after app UI changes",
+      limits: "Use only verified Livestock Tracker capabilities. Screenshots and instructions require maintenance whenever the app changes. The app must remain optional."
+    };
+  }
+  return base;
+}
+
+function supervisorDecisionForProposal(proposal: any, policy: SupervisorPolicy) {
+  const feasibility = safeString(proposal.feasibility);
+  const assetType = safeString(proposal.requiredAssetType || "other");
+  const maxCashCost = Number(proposal.estimatedCashCostUsd?.max || 0);
+  const maxLaborHours = Number(proposal.estimatedLaborHours?.max || 0);
+  const recurringAmounts = safeString(proposal.recurringCostEstimate).match(/\$([\d,]+)/g)?.map((amount) => Number(amount.replace(/[$,]/g, ""))) || [];
+  const maxRecurringCost = recurringAmounts.length ? Math.max(...recurringAmounts) : 0;
+  const typeAllowed = assetType === "spreadsheet" ? policy.allowSpreadsheets : ["pdf", "worksheet", "checklist", "template", "other"].includes(assetType) ? policy.allowStaticPrintables : assetType === "module" ? policy.allowPrerecordedTraining : false;
+
+  if (feasibility === "NOT_FEASIBLE_FOR_CURRENT_PRODUCT" && !policy.allowLiveServices && policy.autoRejectDisallowedServices) {
+    return { decision: "REJECT", automated: true, reason: "Live, personalized, community, or ongoing service delivery is disabled by supervisor policy." };
+  }
+  if (feasibility === "FEASIBLE_PRERECORDED" && !policy.allowPrerecordedTraining) {
+    return { decision: "HUMAN_REVIEW", automated: false, reason: "Prerecorded training is disabled by supervisor policy." };
+  }
+  if (feasibility === "FEASIBLE_WITH_RESEARCH" && !policy.allowResearchHeavyAssets) {
+    return { decision: "HUMAN_REVIEW", automated: false, reason: "Research-heavy assets require human approval." };
+  }
+  if (feasibility === "REQUIRES_VERIFIED_APP_FEATURES" && !policy.allowAppDependentAssets) {
+    return { decision: "HUMAN_REVIEW", automated: false, reason: "App-dependent assets require verified features and human approval." };
+  }
+  if (feasibility === "REWRITE_AS_STATIC") {
+    return { decision: "REWRITE_AS_STATIC", automated: true, reason: "Policy allows a static alternative but does not allow the original unsupported claim." };
+  }
+  if (typeAllowed && maxCashCost <= policy.maxAutoCashCostUsd && maxLaborHours <= policy.maxAutoLaborHours && maxRecurringCost <= policy.maxAutoRecurringCostUsdMonthly) {
+    return { decision: "FEASIBLE", automated: true, reason: "Estimated cost, labor, recurring cost, and asset type are within supervisor policy limits." };
+  }
+  return { decision: "HUMAN_REVIEW", automated: false, reason: "Proposal exceeds an automatic decision threshold or uses an asset type not enabled by policy." };
 }
 
 function promiseRecordFromInput(product: DigitalProduct, index: number, item: any, fallbackAssetId: string) {
   const text = safeLongString(item?.text || item, "", 2000);
   if (!text) return null;
+  const sourceIntent = safeString(item?.sourceIntent || (fallbackAssetId.includes("value_enhancer") ? "proposal" : "product-content"));
+  const proposal = sourceIntent === "proposal" ? proposalAssessment(text) : null;
   const category = normalizePromiseCategory(item?.category, text);
-  const classification = classifyPromise(text, category, product, item?.classification);
+  const classification = proposal?.classification || classifyPromise(text, category, product, item?.classification);
   const riskLevel = riskForPromise(text, category, classification, item?.riskLevel);
   const promiseId = safeString(item?.promiseId || `${product.productId}_promise_${String(index + 1).padStart(3, "0")}`);
   return {
@@ -518,7 +721,15 @@ function promiseRecordFromInput(product: DigitalProduct, index: number, item: an
     category,
     riskLevel,
     classification,
-    requiredAssetType: safeString(item?.requiredAssetType || requiredAssetTypeForPromise(text, category)),
+    sourceIntent,
+    inclusionStatus: proposal?.inclusionStatus || "CANDIDATE",
+    feasibility: proposal?.feasibility || "REVIEW_REQUIRED",
+    requiredAssetType: safeString(item?.requiredAssetType || proposal?.requiredAssetType || requiredAssetTypeForPromise(text, category)),
+    estimatedCashCostUsd: proposal?.estimatedCashCostUsd || null,
+    estimatedLaborHours: proposal?.estimatedLaborHours || null,
+    estimatedOutsourceCostUsd: proposal?.estimatedOutsourceCostUsd || null,
+    recurringCostEstimate: proposal?.recurringCostEstimate || "",
+    limits: proposal?.limits || "",
     approvedBy: "",
     approvalStatus: "PENDING",
     linkedAssetIds: Array.isArray(item?.linkedAssetIds) ? item.linkedAssetIds.map((id: unknown) => safeString(id)).filter(Boolean) : [],
@@ -1676,7 +1887,8 @@ apiApp.post("/digital-products/:slug/promise-review", asyncRoute(async (req, res
   const extractedPromises = sourceTexts.flatMap((source: any) => {
     const sourceAssetId = safeString(source?.assetId || source?.sourceAssetId || `${product.productId}_source`);
     const sourceLocation = safeString(source?.sourceLocation || source?.pathOrUrl || "source-text");
-    return extractPromiseCandidatesFromText(source?.text || "").map((text) => ({ text, sourceAssetId, sourceLocation }));
+    const sourceIntent = sourceAssetId.includes("value_enhancer") ? "proposal" : "product-content";
+    return extractPromiseCandidatesFromText(source?.text || "", sourceIntent === "proposal").map((text) => ({ text, sourceAssetId, sourceLocation, sourceIntent }));
   });
   const promiseInputs = [...explicitPromises, ...extractedPromises].slice(0, 300);
   if (!promiseInputs.length) throw Object.assign(new Error("Promise Review requires promises or sourceTexts."), { statusCode: 400 });
@@ -1693,19 +1905,21 @@ apiApp.post("/digital-products/:slug/promise-review", asyncRoute(async (req, res
     });
   if (!promises.length) throw Object.assign(new Error("No valid promise records were found."), { statusCode: 400 });
 
+  const ebookPromises = promises.filter((item) => item.sourceIntent === "product-content");
+  const proposals = promises.filter((item) => item.sourceIntent === "proposal");
   const approvalRef = db.collection("productApprovals").doc(`${product.productId}_promise_list_${Date.now()}`);
+  const proposalApprovalRef = db.collection("productApprovals").doc(`${product.productId}_proposal_feasibility_${Date.now()}`);
   const batch = db.batch();
   promises.forEach((promise) => {
     batch.set(db.collection("productPromises").doc(promise.promiseId), promise, { merge: true });
   });
   const summary = {
-    total: promises.length,
-    needsAsset: promises.filter((item) => item.classification === "needs_asset").length,
-    needsEvidence: promises.filter((item) => item.classification === "needs_evidence").length,
-    rewrite: promises.filter((item) => item.classification === "rewrite").length,
-    remove: promises.filter((item) => item.classification === "remove").length,
-    moveToUpsell: promises.filter((item) => item.classification === "move_to_upsell").length,
-    highRisk: promises.filter((item) => item.riskLevel === "high" || item.riskLevel === "blocked").length
+    total: ebookPromises.length,
+    needsAsset: ebookPromises.filter((item) => item.classification === "needs_asset").length,
+    needsEvidence: ebookPromises.filter((item) => item.classification === "needs_evidence").length,
+    rewrite: ebookPromises.filter((item) => item.classification === "rewrite").length,
+    remove: ebookPromises.filter((item) => item.classification === "remove").length,
+    highRisk: ebookPromises.filter((item) => item.riskLevel === "high" || item.riskLevel === "blocked").length
   };
   batch.set(approvalRef, {
     productId: product.productId,
@@ -1713,13 +1927,43 @@ apiApp.post("/digital-products/:slug/promise-review", asyncRoute(async (req, res
     approvalType: "promise-list",
     status: "PENDING",
     summary,
-    items: promises.map((item) => ({
+    items: ebookPromises.map((item) => ({
       promiseId: item.promiseId,
       text: item.text,
       category: item.category,
       riskLevel: item.riskLevel,
       classification: item.classification,
-      requiredAssetType: item.requiredAssetType
+      requiredAssetType: item.requiredAssetType,
+      sourceIntent: item.sourceIntent,
+      inclusionStatus: item.inclusionStatus,
+      feasibility: item.feasibility,
+      estimatedCashCostUsd: item.estimatedCashCostUsd,
+      estimatedLaborHours: item.estimatedLaborHours,
+      estimatedOutsourceCostUsd: item.estimatedOutsourceCostUsd,
+      recurringCostEstimate: item.recurringCostEstimate,
+      limits: item.limits
+    })),
+    reviewerNotes: "",
+    createdAt: serverTimestamp(),
+    decidedAt: null
+  });
+  batch.set(proposalApprovalRef, {
+    productId: product.productId,
+    approvalId: proposalApprovalRef.id,
+    approvalType: "proposal-feasibility",
+    status: "SUPERVISOR_REVIEW_REQUIRED",
+    summary: { total: proposals.length, includedByDefault: 0 },
+    items: proposals.map((item) => ({
+      proposalId: item.promiseId,
+      text: item.text,
+      feasibility: item.feasibility,
+      inclusionStatus: item.inclusionStatus,
+      requiredAssetType: item.requiredAssetType,
+      estimatedCashCostUsd: item.estimatedCashCostUsd,
+      estimatedLaborHours: item.estimatedLaborHours,
+      estimatedOutsourceCostUsd: item.estimatedOutsourceCostUsd,
+      recurringCostEstimate: item.recurringCostEstimate,
+      limits: item.limits
     })),
     reviewerNotes: "",
     createdAt: serverTimestamp(),
@@ -1733,12 +1977,124 @@ apiApp.post("/digital-products/:slug/promise-review", asyncRoute(async (req, res
   }, { merge: true });
   batch.set(db.collection("productTasks").doc(`${product.productId}_promise_review`), {
     status: "WAITING_FOR_APPROVAL",
-    outputRefs: { approvalId: approvalRef.id, promiseIds: promises.map((item) => item.promiseId) },
+    outputRefs: { approvalId: approvalRef.id, proposalApprovalId: proposalApprovalRef.id, promiseIds: ebookPromises.map((item) => item.promiseId), proposalIds: proposals.map((item) => item.promiseId) },
     assignedTo: "user",
     updatedAt: serverTimestamp()
   }, { merge: true });
+  batch.set(db.collection("productTasks").doc(`${product.productId}_proposal_supervisor`), {
+    productId: product.productId,
+    taskId: `${product.productId}_proposal_supervisor`,
+    title: "Evaluate Value Enhancer Feasibility",
+    workflow: "FD-POS - Supervisor",
+    status: "OPEN",
+    priority: "high",
+    inputRefs: { productId: product.productId, proposalApprovalId: proposalApprovalRef.id, proposalIds: proposals.map((item) => item.promiseId) },
+    outputRefs: {},
+    error: null,
+    createdBy: "system",
+    assignedTo: "supervisor",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
   await batch.commit();
-  res.json({ ok: true, productId: product.productId, slug: product.slug, approvalId: approvalRef.id, summary });
+  res.json({ ok: true, productId: product.productId, slug: product.slug, approvalId: approvalRef.id, proposalApprovalId: proposalApprovalRef.id, summary: { ...summary, valueEnhancerProposals: proposals.length, proposalsIncludedByDefault: 0 } });
+}));
+
+apiApp.get("/digital-products/:slug/supervisor-policy", asyncRoute(async (req, res) => {
+  await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  res.json({ productId: product.productId, slug: product.slug, supervisorPolicy: product.supervisorPolicy });
+}));
+
+apiApp.put("/digital-products/:slug/supervisor-policy", asyncRoute(async (req, res) => {
+  const actor = await requireAdmin(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  const supervisorPolicy = normalizeSupervisorPolicy(req.body?.supervisorPolicy || req.body);
+  await db.collection("digitalProducts").doc(product.id).set({
+    supervisorPolicy,
+    supervisorPolicyUpdatedBy: actor.email || actor.uid,
+    supervisorPolicyUpdatedAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  res.json({ ok: true, productId: product.productId, slug: product.slug, supervisorPolicy });
+}));
+
+apiApp.post("/digital-products/:slug/supervisor/evaluate-proposals", asyncRoute(async (req, res) => {
+  const actor = await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  const proposalSnapshot = await db.collection("productPromises").where("productId", "==", product.productId).limit(300).get();
+  const proposals = proposalSnapshot.docs.map((doc) => ({ ref: doc.ref, id: doc.id, ...doc.data() } as any)).filter((item) => item.sourceIntent === "proposal");
+  if (!proposals.length) throw Object.assign(new Error("No value-enhancer proposals are available for supervisor evaluation."), { statusCode: 409 });
+  const approvalSnapshot = await db.collection("productApprovals").where("productId", "==", product.productId).limit(50).get();
+  const approval = approvalSnapshot.docs.find((doc) => doc.get("approvalType") === "proposal-feasibility" && doc.get("status") === "SUPERVISOR_REVIEW_REQUIRED");
+  if (!approval) throw Object.assign(new Error("No proposal-feasibility approval is waiting for supervisor review."), { statusCode: 409 });
+
+  const evaluated = proposals.map((proposal) => ({ proposal, result: supervisorDecisionForProposal(proposal, product.supervisorPolicy) }));
+  const humanReviewItems = evaluated.filter((item) => !item.result.automated);
+  const batch = db.batch();
+  evaluated.forEach(({ proposal, result }) => {
+    batch.set(proposal.ref, {
+      supervisorDecision: result.decision,
+      supervisorReason: result.reason,
+      supervisorAutomated: result.automated,
+      supervisorPolicySnapshot: product.supervisorPolicy,
+      inclusionStatus: "NOT_INCLUDED",
+      supervisorEvaluatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  });
+  batch.set(approval.ref, {
+    status: humanReviewItems.length ? "PENDING" : "SUPERVISOR_DECIDED",
+    supervisorSummary: {
+      total: evaluated.length,
+      autoFeasible: evaluated.filter((item) => item.result.decision === "FEASIBLE").length,
+      autoRewriteAsStatic: evaluated.filter((item) => item.result.decision === "REWRITE_AS_STATIC").length,
+      autoRejected: evaluated.filter((item) => item.result.decision === "REJECT").length,
+      humanReviewRequired: humanReviewItems.length,
+      includedByDefault: 0
+    },
+    supervisorPolicySnapshot: product.supervisorPolicy,
+    supervisorDecidedBy: actor.email || actor.uid,
+    supervisorEvaluatedAt: serverTimestamp(),
+    items: evaluated.map(({ proposal, result }) => ({
+      proposalId: safeString(proposal.promiseId || proposal.id),
+      text: safeLongString(proposal.text, "", 2000),
+      feasibility: safeString(proposal.feasibility),
+      decision: result.decision,
+      automated: result.automated,
+      reason: result.reason,
+      inclusionStatus: "NOT_INCLUDED",
+      requiredAssetType: safeString(proposal.requiredAssetType),
+      estimatedCashCostUsd: proposal.estimatedCashCostUsd || null,
+      estimatedLaborHours: proposal.estimatedLaborHours || null,
+      estimatedOutsourceCostUsd: proposal.estimatedOutsourceCostUsd || null,
+      recurringCostEstimate: safeString(proposal.recurringCostEstimate),
+      limits: safeLongString(proposal.limits, "", 4000)
+    }))
+  }, { merge: true });
+  batch.set(db.collection("productTasks").doc(`${product.productId}_proposal_supervisor`), {
+    status: humanReviewItems.length ? "WAITING_FOR_APPROVAL" : "DONE",
+    outputRefs: { approvalId: approval.id, humanReviewProposalIds: humanReviewItems.map((item) => safeString(item.proposal.promiseId || item.proposal.id)) },
+    assignedTo: humanReviewItems.length ? "user" : "supervisor",
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  await batch.commit();
+  res.json({
+    ok: true,
+    productId: product.productId,
+    slug: product.slug,
+    approvalId: approval.id,
+    status: humanReviewItems.length ? "PENDING" : "SUPERVISOR_DECIDED",
+    policy: product.supervisorPolicy,
+    summary: {
+      total: evaluated.length,
+      autoFeasible: evaluated.filter((item) => item.result.decision === "FEASIBLE").length,
+      autoRewriteAsStatic: evaluated.filter((item) => item.result.decision === "REWRITE_AS_STATIC").length,
+      autoRejected: evaluated.filter((item) => item.result.decision === "REJECT").length,
+      humanReviewRequired: humanReviewItems.length,
+      includedByDefault: 0
+    }
+  });
 }));
 
 apiApp.get("/digital-products/:slug/state", asyncRoute(async (req, res) => {
@@ -1797,6 +2153,11 @@ apiApp.post("/digital-products/:slug/approvals/:approvalId/decide", asyncRoute(a
       updatedAt: serverTimestamp()
     };
     if (PROMISE_CLASSIFICATIONS.has(classification)) update.classification = classification;
+    if (typeof decision.requiredAssetType === "string") {
+      const requiredAssetType = safeString(decision.requiredAssetType);
+      if (requiredAssetType && !ASSET_TYPES.has(requiredAssetType)) throw Object.assign(new Error(`Invalid required asset type for ${promiseId}.`), { statusCode: 400 });
+      update.requiredAssetType = requiredAssetType;
+    }
     if (Array.isArray(decision.linkedAssetIds)) update.linkedAssetIds = decision.linkedAssetIds.map((id: unknown) => safeString(id)).filter(Boolean);
     if (typeof decision.notes === "string") update.notes = safeLongString(decision.notes, "", 2000);
     batch.set(db.collection("productPromises").doc(promiseId), update, { merge: true });
