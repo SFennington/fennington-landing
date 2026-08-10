@@ -178,6 +178,15 @@ The implementation has moved beyond the original scaffold and now has a private 
 - Keep summaries concise by default: current status, top blockers, next actions, overdue/urgent items, active approvals, and notable recent changes. Include source links to the underlying tickets/tasks/runs where available.
 - Add deterministic/mock tests for summary quality and safety: no cross-project leakage, no invented task state, clear distinction between facts and inference, and graceful response when a project has sparse data.
 
+### Priority 2A: Firestore Workspace Sync Diagnostics
+
+- Add a high-priority diagnostic integration for projects that use Firestore/cloud sync, especially Livestock Tracker workspaces with user-reported sync issues.
+- Allow the owner to ask the assistant about a specific allowlisted workspace ID. The assistant should retrieve only scoped, read-only diagnostic records needed to inspect sync health, transaction history, pending/out-of-order writes, conflict markers, timestamps, user/device references, and related error/audit records.
+- Store connection configuration as owner-scoped metadata: project, Firebase project/database, allowed collection prefixes, allowed workspace IDs or lookup policy, redaction policy, and readonly service identity reference. Do not expose service-account credentials, arbitrary collection reads, or cross-workspace customer data to the model or browser.
+- Add tools such as `inspect_firestore_workspace`, `summarize_sync_transactions`, and `propose_sync_bug_fix`. Tools must redact PII, bound query size/time, include provenance for every finding, label uncertainty, and never write to Firestore or code repositories without a separate explicit approval path.
+- The assistant should answer with a practical diagnostic summary: observed facts, likely cause, affected records, recommended user-facing workaround, proposed engineering fix, risk, verification steps, and whether a Kilo/manual-code task should be created.
+- Add tests for owner allowlisting, workspace scoping, redaction, bounded reads, missing workspace behavior, malformed transaction records, stale pending writes, duplicate/conflicting updates, and prompt-injection content inside Firestore records.
+
 ### Priority 3: Manual Kilo Code Supervisor Connection
 
 - Treat Kilo Code as a manually initiated operator capability, not an unattended autonomous integration. Customer messages, webhook events, scheduled jobs, and model confidence must not launch or steer Kilo agents.
