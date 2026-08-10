@@ -152,6 +152,57 @@
 - Client disconnect/offline: preserve persisted user message/run status and provide retry/recovery without duplicating approved writes.
 - Firestore unavailable: fail closed for auth-dependent data, approvals, idempotency, and audit-required actions; do not execute an external write if its audit/approval transaction cannot be recorded.
 
+## Prioritized Remaining Work After Current Implementation
+
+The implementation has moved beyond the original scaffold and now has a private PWA, owner auth, Firestore-backed tickets/tasks/memories/runs/approvals, mock support operations, support knowledge, readonly Google Sheets import, and Cloudflare email shadow intake. The remaining work should be prioritized toward the user's current goal: a chatable private assistant that can summarize project state, maintain project task lists, and, only after a manual owner command, connect to Kilo Code as a supervisor for visible Kilo agent work.
+
+### Priority 0: Phone-Testable Private App
+
+- Re-run `npm run verify` and `npm run test:emulator` in `fennington-assistant` after any plan-aligned changes.
+- Run the app locally in mock mode bound to the LAN and manually test it from the user's phone on the same network: sign-in path, navigation, conversation, ticket queue/detail, tasks, approvals, support knowledge, settings, and message operations.
+- Add an HTTPS local tunnel or explicit preview deployment only after approval, then verify installability, manifest, service worker, safe-area behavior, touch targets, mobile keyboard behavior, offline/reconnect states, and that no authenticated API/private data is cached.
+- Keep this as a private owner app. Do not expose customer chat, production email sending, Messenger, GitHub, or Kilo automation as public routes while validating phone usability.
+
+### Priority 1: Project Task And Status Hub
+
+- Add a first-class `projects` model with owner scope, display name, repository/workspace path, product type, status, priority, latest activity, and optional links to tickets, tasks, support knowledge, and external systems.
+- Extend tasks so each task can belong to a project, carry source/provenance, status, priority, due date, related ticket/run/approval, and roll up into project summaries.
+- Build protected APIs and repositories for project CRUD, task list management by project, and project summary reads. Enforce owner isolation, validation, rate limits, no-store responses, audit events for consequential changes, and tests for cross-project/cross-owner denial.
+- Add a mobile-first project dashboard in the app: project cards, task counts by status, urgent/stale work, recent activity, current blockers, and a drill-down task list.
+- Add a graphical overview surface inside the app, preferably a responsive board/timeline/graph view that shows projects, open tasks, active tickets, approvals, and recent agent/run activity without requiring the user to read raw logs.
+
+### Priority 2: Chatable Assistant Project Summaries
+
+- Teach the assistant to answer project-status questions from application-owned data: projects, tasks, tickets, approvals, recent conversations, support knowledge, and run summaries.
+- Add tools such as `list_projects`, `get_project_summary`, `list_project_tasks`, `create_project_task`, and `update_project_task`, with application policy deciding whether a write needs approval.
+- Keep summaries concise by default: current status, top blockers, next actions, overdue/urgent items, active approvals, and notable recent changes. Include source links to the underlying tickets/tasks/runs where available.
+- Add deterministic/mock tests for summary quality and safety: no cross-project leakage, no invented task state, clear distinction between facts and inference, and graceful response when a project has sparse data.
+
+### Priority 3: Manual Kilo Code Supervisor Connection
+
+- Treat Kilo Code as a manually initiated operator capability, not an unattended autonomous integration. Customer messages, webhook events, scheduled jobs, and model confidence must not launch or steer Kilo agents.
+- Add a `kiloSessions` or equivalent owner-scoped tracking model that records manually started Kilo work: project, objective, session/worktree reference, agent type/model metadata when available, status, last known activity, assigned task IDs, summary, risks, and audit trail. Store only safe references and summaries, not credentials or private Kilo internals.
+- Add an app-side manual command flow: the user explicitly selects a project/task and chooses to prepare or request Kilo Code work. The assistant may draft the Kilo prompt and checklist, but the owner must explicitly execute the Kilo action in the Kilo environment.
+- If a local bridge is later built, gate it behind owner auth, local-only or explicitly approved origin checks, CSRF protection, strict command allowlists, bounded payloads, audit logging, and a visible confirmation for every Kilo start/prompt/stop/move operation.
+- Add supervisor views for Kilo-managed work: active sessions, assigned project/task, latest summary, waiting/busy/offline state if available, blockers, proposed next prompt, and review-needed indicators.
+- Add tests that prove no public route, customer event, webhook, support ticket, or model output can start or prompt Kilo without the owner manual command path.
+
+### Priority 4: GUI Graphical Supervisor View
+
+- Build a visual operations dashboard that combines projects, tasks, tickets, approvals, and Kilo session references into a phone-friendly and desktop-friendly interface.
+- Start with a pragmatic layout: project status cards, Kanban-style task columns, approval queue, active agent/session strip, and recent activity timeline.
+- Add a graph/map view after the core dashboard works: nodes for projects, tasks, tickets, approvals, and Kilo sessions; edges for source/provenance/dependency relationships; filters for active, blocked, waiting approval, and recently changed.
+- Keep the graphical view read-first. Mutations from the graph should open explicit detail/approval flows rather than performing hidden writes.
+- Verify accessibility: keyboard navigation, focus order, contrast, reduced-motion handling, readable labels beyond color alone, and usable touch targets on phone.
+
+### Priority 5: Production Hardening Before Real Customer Or Agent Operations
+
+- Finish retention/deletion/legal-hold jobs, backup/restore expectations, Firestore TTL policy decisions, and audit/run cleanup before production customer data.
+- Resolve or document dependency-audit findings after each dependency change.
+- Harden n8n redirect/DNS-rebinding behavior before treating it as trusted for hostile destinations.
+- Keep Cloudflare email as inbound shadow intake until provider deployment, privacy, consent, retention, and outbound-send review are explicitly approved.
+- Defer public website chat, email outbound, Messenger, GitHub App, and any unattended Kilo automation until the project/task hub, summary assistant, manual Kilo supervision boundary, and phone PWA validation are complete.
+
 ## Completion Acceptance
 
 - A fresh clone plus documented manual configuration can run against Firebase Emulator and the mock model/connector without paid calls.
@@ -162,7 +213,7 @@
 - Cross-user access is denied by both API authorization/repositories and Firestore rules tests.
 - All requested automated scenarios exist and pass; typecheck, lint, production build, and security checks have reported results.
 - Final report states what works, what remains mocked, all command results, security limitations, exact manual steps (referencing `docs/MANUAL_SETUP.md`), and recommends the first next integration.
-- Recommended next integration: an owned website support-chat channel using a narrowly scoped, rate-limited, abuse-protected public ingestion boundary and the existing ticket model. Start the already-tested low-risk auto-reply policy in shadow mode, review its decisions, then enable automatic sending for approved categories. Integrate email and Facebook Messenger directly after provider webhook/API requirements are configured; do not introduce n8n into the critical support path.
+- Updated recommended next integration: complete the private project/task hub, chatable project-summary tools, graphical supervisor dashboard, and manual Kilo Code supervision boundary before adding public customer channels. After those are validated on phone and desktop, the first customer-facing integration remains an owned website support-chat channel using a narrowly scoped, rate-limited, abuse-protected public ingestion boundary and the existing ticket model. Start the already-tested low-risk auto-reply policy in shadow mode, review its decisions, then enable automatic sending for approved categories. Integrate email and Facebook Messenger directly after provider webhook/API requirements are configured; do not introduce n8n into the critical support path.
 
 ## Implementation Reporting Rule
 
