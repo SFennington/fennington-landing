@@ -38,6 +38,13 @@ const FINANCIAL_AI_MAX_TRANSACTIONS = 100;
 const FINANCIAL_INPUT_PRICE_PER_1M = Number(process.env.FINANCIAL_INPUT_PRICE_PER_1M || process.env.OPENAI_INPUT_PRICE_PER_1M || 0.20);
 const FINANCIAL_OUTPUT_PRICE_PER_1M = Number(process.env.FINANCIAL_OUTPUT_PRICE_PER_1M || process.env.OPENAI_OUTPUT_PRICE_PER_1M || 1.25);
 const FINANCIAL_WEB_SEARCH_PRICE_PER_1K = Number(process.env.FINANCIAL_WEB_SEARCH_PRICE_PER_1K || process.env.OPENAI_WEB_SEARCH_PRICE_PER_1K || 10);
+// This project hosts only the private Fennington family financial app. Restrict
+// use of the paid AI categorization endpoint to these two accounts until a
+// broader access model is needed.
+const FINANCIAL_ALLOWED_EMAILS = (process.env.FINANCIAL_ALLOWED_EMAILS || "cfennington2@gmail.com,alainafennington@gmail.com")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
 const CHORE_TRACKER_PRODUCT_SLUG = "chore-tracker";
 const CHORE_TRACKER_PRODUCT_NAME = "14-Day Homestead Chore Tracker System";
 const CHORE_TRACKER_FULFILLMENT_VERSION = "2026-08-01";
@@ -1225,6 +1232,15 @@ async function requireUser(req: express.Request): Promise<DecodedIdToken> {
   return getAuth().verifyIdToken(match[1]);
 }
 
+async function requireFinancialUser(req: express.Request): Promise<DecodedIdToken> {
+  const decoded = await requireUser(req);
+  const email = safeString(decoded.email).toLowerCase();
+  if (!email || !FINANCIAL_ALLOWED_EMAILS.includes(email)) {
+    throw Object.assign(new Error("This app is private. Access is restricted to authorized accounts."), { statusCode: 403 });
+  }
+  return decoded;
+}
+
 function normalizeFinancialMerchant(description: string): string {
   const processorVendor = processorVendorFromDescription(description);
   if (processorVendor) return processorVendor;
@@ -1800,7 +1816,7 @@ apiApp.post("/admin/outreach/:messageId/send", asyncRoute(async (req, res) => {
 }));
 
 apiApp.post("/financial/categorize", asyncRoute(async (req, res) => {
-  const user = await requireUser(req);
+  const user = await requireFinancialUser(req);
   const transactions = Array.isArray(req.body?.transactions) ? req.body.transactions.slice(0, FINANCIAL_AI_MAX_TRANSACTIONS) : [];
   const categories = Array.isArray(req.body?.categories) ? req.body.categories.map((category: unknown) => safeString(category)).filter(Boolean) : FINANCIAL_CATEGORIES;
   const webLookupEnabled = req.body?.webLookupEnabled === true;

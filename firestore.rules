@@ -10,6 +10,18 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.admin == true;
     }
 
+    // This project hosts only the private Fennington family financial app.
+    // Restrict all financial data to these two accounts until a broader
+    // access model is needed.
+    function isAllowedFinancialUser() {
+      return isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() in [
+          'cfennington2@gmail.com',
+          'alainafennington@gmail.com'
+        ];
+    }
+
     function hasHouseholdAccess(data) {
       return isSignedIn()
         && (
@@ -49,107 +61,107 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+      allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
 
       match /financialProfiles/{profileId} {
-        allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
 
         match /accounts/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
 
         match /imports/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
 
         match /mappings/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
 
         match /transactions/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
 
         match /categories/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
 
         match /merchantMappings/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
 
         match /rules/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
 
         match /recurring/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
 
         match /settings/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
 
         match /overtimeScenarios/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
 
         match /monthlySummaries/{recordId} {
-          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+          allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId && isAllowedFinancialUser();
         }
       }
     }
 
     match /households/{householdId} {
-      allow read, update: if hasHouseholdAccess(resource.data) && hasHouseholdAccess(request.resource.data);
-      allow create: if hasHouseholdAccess(request.resource.data);
-      allow delete: if hasHouseholdAccess(resource.data);
+      allow read, update: if isAllowedFinancialUser() && hasHouseholdAccess(resource.data) && hasHouseholdAccess(request.resource.data);
+      allow create: if isAllowedFinancialUser() && hasHouseholdAccess(request.resource.data);
+      allow delete: if isAllowedFinancialUser() && hasHouseholdAccess(resource.data);
 
       match /financialProfiles/{profileId} {
-        allow read, create, update, delete: if isHouseholdMember(householdId);
+        allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
 
         match /accounts/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
 
         match /imports/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
 
         match /mappings/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
 
         match /transactions/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
 
         match /categories/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
 
         match /merchantMappings/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
 
         match /rules/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
 
         match /recurring/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
 
         match /settings/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
 
         match /overtimeScenarios/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
 
         match /monthlySummaries/{recordId} {
-          allow read, create, update, delete: if isHouseholdMember(householdId);
+          allow read, create, update, delete: if isAllowedFinancialUser() && isHouseholdMember(householdId);
         }
       }
     }

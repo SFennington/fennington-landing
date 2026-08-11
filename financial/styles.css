@@ -376,6 +376,15 @@ body {
   letter-spacing: -0.03em;
 }
 
+.auth-gate-message {
+  background: rgba(220, 38, 38, 0.09);
+  border: 1px solid rgba(220, 38, 38, 0.24);
+  color: #991b1b;
+  border-radius: 14px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+}
+
 .gate-actions,
 .app-actions,
 .form-actions,
@@ -5271,6 +5280,12 @@ summary.category-tree-summary::-webkit-details-marker {
 .financial-app-page.financial-dark .ai-analysis-result strong,
 .financial-app-page.financial-dark .ai-analysis-result p {
   color: inherit;
+}
+
+.financial-app-page.financial-dark .auth-gate-message {
+  background: rgba(127, 29, 29, 0.42);
+  border-color: rgba(248, 113, 113, 0.46);
+  color: #fecaca;
 }
 
 .financial-app-page .positive,

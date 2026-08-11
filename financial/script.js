@@ -104,6 +104,7 @@ const els = {
   gateSignInButton: document.getElementById("gateSignInButton"),
   analyzeButton: document.getElementById("analyzeButton"),
   authStatus: document.getElementById("authStatus"),
+  authGateMessage: document.getElementById("authGateMessage"),
   setupWarning: document.getElementById("setupWarning"),
   authGate: document.getElementById("authGate"),
   app: document.getElementById("financialApp"),
@@ -261,17 +262,24 @@ function setupAuth() {
   const provider = new GoogleAuthProvider();
   const signIn = () => {
     scrollToApp();
+    hideAuthGateMessage();
     return signInWithPopup(auth, provider).catch((error) => showStatus(error.message));
   };
   els.signInButton.addEventListener("click", signIn);
   els.gateSignInButton.addEventListener("click", signIn);
   els.signOutButton.addEventListener("click", () => signOut(auth));
   onAuthStateChanged(auth, async (user) => {
+    if (user && !isAllowedFinancialUser(user.email)) {
+      showAuthGateMessage(`${user.email} is not authorized for this private app. Sign in with an approved Fennington family account.`);
+      await signOut(auth);
+      return;
+    }
     currentUser = user;
     els.signInButton.hidden = Boolean(user);
     els.signOutButton.hidden = !user;
     els.authStatus.textContent = user?.email || "Not signed in";
     if (user) {
+      hideAuthGateMessage();
       await loadUserState();
       scrollToApp();
     }
@@ -322,6 +330,18 @@ function showGate() {
   mode = "signed-out";
   els.authGate.hidden = false;
   els.app.hidden = true;
+}
+
+function showAuthGateMessage(message) {
+  if (!els.authGateMessage) return;
+  els.authGateMessage.textContent = message;
+  els.authGateMessage.hidden = false;
+}
+
+function hideAuthGateMessage() {
+  if (!els.authGateMessage) return;
+  els.authGateMessage.hidden = true;
+  els.authGateMessage.textContent = "";
 }
 
 function showApp(nextMode, options = {}) {
@@ -652,7 +672,7 @@ function sanitizeDocId(value) {
 
 function normalizedMemberEmails() {
   const configured = Array.isArray(sharedWorkspaceConfig.memberEmails) ? sharedWorkspaceConfig.memberEmails : [];
-  const emails = [currentUser?.email, ...configured]
+  const emails = configured
     .map((email) => String(email || "").trim())
     .filter(Boolean);
   return Array.from(new Set(emails));
@@ -663,6 +683,11 @@ function memberEmailMap() {
     acc[email] = true;
     return acc;
   }, {});
+}
+
+function isAllowedFinancialUser(email) {
+  const allowed = normalizedMemberEmails().map((item) => item.toLowerCase());
+  return Boolean(email) && allowed.includes(String(email).trim().toLowerCase());
 }
 
 function householdRef() {

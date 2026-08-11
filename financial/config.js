@@ -11,7 +11,8 @@ window.FENNINGTON_FIREBASE_CONFIG = window.FENNINGTON_FIREBASE_CONFIG || {
     name: "Fennington Household",
     autoMigrateLegacy: false,
     memberEmails: [
-      "ADD_YOUR_WIFE_EMAIL_HERE"
+      "cfennington2@gmail.com",
+      "alainafennington@gmail.com"
     ]
   }
 };
