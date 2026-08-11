@@ -11,12 +11,20 @@
       "**/node_modules/**",
       ".kilo/**",
       "functions/**",
+      "functions-financial/**",
       "scripts/**",
       "server.js",
       "package.json",
       "package-lock.json"
     ],
     "rewrites": [
+      {
+        "source": "/api/financial/**",
+        "function": {
+          "functionId": "financialApi",
+          "region": "us-central1"
+        }
+      },
       {
         "source": "/api/**",
         "function": {
@@ -62,6 +70,19 @@
     {
       "source": "functions",
       "codebase": "default",
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ],
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    },
+    {
+      "source": "functions-financial",
+      "codebase": "financial",
       "predeploy": [
         "npm --prefix \"$RESOURCE_DIR\" run build"
       ],

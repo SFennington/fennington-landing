@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 functions/lib/
+functions-financial/lib/
 
 # Environment variables
 .env
