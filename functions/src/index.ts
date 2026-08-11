@@ -1815,11 +1815,13 @@ apiApp.get("/digital-products/:slug/state", asyncRoute(async (req, res) => {
   const tasks = await db.collection("productTasks").where("productId", "==", product.productId).limit(50).get();
   const approvals = await db.collection("productApprovals").where("productId", "==", product.productId).limit(50).get();
   const promises = await db.collection("productPromises").where("productId", "==", product.productId).limit(300).get();
+  const assets = await db.collection("productAssets").where("productId", "==", product.productId).limit(300).get();
   res.json({
     product,
     tasks: tasks.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
     approvals: approvals.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-    promises: promises.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+    promises: promises.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    assets: assets.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
   });
 }));
 
@@ -1839,12 +1841,65 @@ apiApp.post("/digital-products/:slug/approvals/:approvalId/decide", asyncRoute(a
   const approvalRef = db.collection("productApprovals").doc(safeString(req.params.approvalId));
   const approval = await approvalRef.get();
   if (!approval.exists || approval.get("productId") !== product.productId) throw Object.assign(new Error("Approval not found."), { statusCode: 404 });
-  if (approval.get("approvalType") !== "promise-list") throw Object.assign(new Error("Only promise-list approvals can be decided by this endpoint."), { statusCode: 400 });
   if (approval.get("status") !== "PENDING") throw Object.assign(new Error("Approval has already been decided."), { statusCode: 409 });
 
+  const approvalType = safeString(approval.get("approvalType"));
   const status = safeString(req.body?.status || "CHANGES_REQUESTED");
   if (!["APPROVED", "REJECTED", "CHANGES_REQUESTED"].includes(status)) throw Object.assign(new Error("Invalid approval status."), { statusCode: 400 });
   const decisions: any[] = Array.isArray(req.body?.decisions) ? req.body.decisions : [];
+
+  if (approvalType === "asset-quality") {
+    const approvalItems = Array.isArray(approval.get("items")) ? approval.get("items") : [];
+    const itemAssetIds = approvalItems.map((item: any) => safeString(item?.assetId)).filter(Boolean);
+    const decisionByAssetId = new Map<string, any>();
+    decisions.forEach((item: any) => {
+      const assetId = safeString(item?.assetId);
+      if (assetId) decisionByAssetId.set(assetId, item);
+    });
+    const missingAssetIds = itemAssetIds.filter((assetId: string) => !decisionByAssetId.has(assetId));
+    if (missingAssetIds.length) throw Object.assign(new Error(`Asset decisions are missing for: ${missingAssetIds.join(", ")}.`), { statusCode: 400 });
+
+    const batch = db.batch();
+    itemAssetIds.forEach((assetId: string) => {
+      const decision: any = decisionByAssetId.get(assetId) || {};
+      const assetStatus = safeString(decision.approvalStatus || status);
+      if (!["APPROVED", "REJECTED", "CHANGES_REQUESTED"].includes(assetStatus)) throw Object.assign(new Error(`Invalid asset approval status for ${assetId}.`), { statusCode: 400 });
+      batch.set(db.collection("productAssets").doc(assetId), {
+        status: assetStatus === "APPROVED" ? "APPROVED" : assetStatus === "REJECTED" ? "REJECTED" : "NEEDS_REVISION",
+        qualityReview: {
+          status: assetStatus,
+          reviewedBy: reviewer,
+          notes: safeLongString(decision.notes || "", "", 3000),
+          reviewedAt: new Date()
+        },
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    });
+
+    const nextStatus = status === "APPROVED" ? "PACKAGE_READY" : status === "REJECTED" ? "BLOCKED" : "SUPPORTING_ASSETS_GENERATING";
+    batch.set(approvalRef, {
+      status,
+      reviewerNotes: safeLongString(req.body?.reviewerNotes || "", "", 5000),
+      decidedBy: reviewer,
+      decidedAt: serverTimestamp()
+    }, { merge: true });
+    batch.set(db.collection("digitalProducts").doc(product.id), {
+      status: nextStatus,
+      approvalRequired: status !== "APPROVED",
+      statusHistory: FieldValue.arrayUnion({ status: nextStatus, updatedBy: reviewer, reason: `Asset quality ${status.toLowerCase().replace(/_/g, " ")}.`, workflow: "asset-quality approval", updatedAt: new Date() }),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    batch.set(db.collection("productTasks").doc(`${product.productId}_asset_builder`), {
+      status: status === "APPROVED" ? "DONE" : status === "REJECTED" ? "BLOCKED" : "OPEN",
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    await batch.commit();
+    res.json({ ok: true, productId: product.productId, slug: product.slug, approvalId: approvalRef.id, status, nextStatus, assetIds: itemAssetIds });
+    return;
+  }
+
+  if (approvalType !== "promise-list") throw Object.assign(new Error("Only promise-list and asset-quality approvals can be decided by this endpoint."), { statusCode: 400 });
+
   const decisionByPromiseId = new Map<string, any>();
   decisions.forEach((item: any) => {
     const promiseId = safeString(item?.promiseId);
