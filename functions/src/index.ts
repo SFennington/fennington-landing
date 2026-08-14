@@ -474,6 +474,25 @@ function assetRecordFromManifest(productId: string, assetId: string, asset: Prod
   };
 }
 
+function normalizeFulfillmentFileMap(input: unknown): Record<string, { filename: string; downloadName: string }> {
+  const rawFiles = input && typeof input === "object" ? input as Record<string, any> : {};
+  const fulfillmentFiles: Record<string, { filename: string; downloadName: string }> = {};
+  Object.entries(rawFiles).forEach(([key, value]) => {
+    const fileKey = safeString(key).replace(/[^a-z0-9_-]/gi, "_").slice(0, 80);
+    const filename = safeString(value?.filename).replace(/[\\/]/g, "");
+    const downloadName = safeString(value?.downloadName || value?.filename).replace(/[\\/]/g, "");
+    if (fileKey && filename && downloadName) fulfillmentFiles[fileKey] = { filename, downloadName };
+  });
+  return fulfillmentFiles;
+}
+
+function normalizeSalesPagePath(value: unknown, slug: string): string {
+  const salesPagePath = safeString(value || `/digital-products/${slug}`);
+  if (!salesPagePath.startsWith("/")) throw Object.assign(new Error("salesPagePath must start with /."), { statusCode: 400 });
+  if (salesPagePath.includes("..") || /[?#]/.test(salesPagePath)) throw Object.assign(new Error("salesPagePath is invalid."), { statusCode: 400 });
+  return salesPagePath.replace(/\/$/, "");
+}
+
 function normalizePromiseCategory(value: unknown, text: string): string {
   const explicit = safeString(value);
   if (PROMISE_CATEGORIES.has(explicit)) return explicit;
@@ -2109,6 +2128,93 @@ apiApp.post("/digital-products/:slug/asset-builder/complete", asyncRoute(async (
   }, { merge: true });
   await batch.commit();
   res.json({ ok: true, productId: product.productId, status: "SUPPORTING_ASSETS_REVIEW", approvalId: approvalRef.id, assetIds: includedAssetIds });
+}));
+
+apiApp.post("/digital-products/:slug/package-builder/complete", asyncRoute(async (req, res) => {
+  const actor = await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  if (!["PACKAGE_READY", "SALES_PAGE_DRAFT", "STRIPE_DRAFT", "FULFILLMENT_READY"].includes(product.status)) {
+    throw Object.assign(new Error("Product must have approved assets before packaging."), { statusCode: 409 });
+  }
+
+  const fulfillmentFiles = normalizeFulfillmentFileMap(req.body?.fulfillmentFiles);
+  const fulfillmentFileKeys = Object.keys(fulfillmentFiles);
+  if (!fulfillmentFileKeys.length) throw Object.assign(new Error("At least one fulfillment file is required."), { statusCode: 400 });
+  if (!fulfillmentFiles.default && !fulfillmentFiles.screen) throw Object.assign(new Error("A default or screen fulfillment file is required."), { statusCode: 400 });
+
+  const requestedAssetIds: string[] = (Array.isArray(req.body?.includedAssetIds) ? req.body.includedAssetIds : [])
+    .map((id: unknown) => safeString(id))
+    .filter((id: string) => Boolean(id));
+  const includedAssetIds = Array.from(new Set<string>(requestedAssetIds));
+  if (!includedAssetIds.includes(`${product.productId}_primary`)) includedAssetIds.unshift(`${product.productId}_primary`);
+  const assetSnapshots = await Promise.all(includedAssetIds.map((assetId) => db.collection("productAssets").doc(assetId).get()));
+  const unavailableAssetIds = assetSnapshots
+    .filter((asset) => !asset.exists || asset.get("productId") !== product.productId || (asset.id === `${product.productId}_primary` ? !["APPROVED", "NEEDS_REVIEW"].includes(safeString(asset.get("status"))) : safeString(asset.get("status")) !== "APPROVED"))
+    .map((asset) => asset.id);
+  if (unavailableAssetIds.length) throw Object.assign(new Error(`Package includes unavailable assets: ${unavailableAssetIds.join(", ")}.`), { statusCode: 409 });
+
+  const promiseSnapshot = await db.collection("productPromises").where("productId", "==", product.productId).limit(300).get();
+  const requiredPromises = promiseSnapshot.docs.filter((doc) => doc.get("approvalStatus") === "APPROVED" && ["needs_asset", "keep"].includes(safeString(doc.get("classification"))) && (doc.get("classification") === "needs_asset" || safeString(doc.get("requiredAssetType"))));
+  const missingPromiseIds = requiredPromises
+    .filter((doc) => !Array.isArray(doc.get("linkedAssetIds")) || !doc.get("linkedAssetIds").some((assetId: unknown) => includedAssetIds.includes(safeString(assetId))))
+    .map((doc) => safeString(doc.get("promiseId") || doc.id));
+  if (missingPromiseIds.length) throw Object.assign(new Error(`Approved promises are not represented in the package: ${missingPromiseIds.join(", ")}.`), { statusCode: 409 });
+
+  const version = safeString(req.body?.version || product.fulfillmentVersion || new Date().toISOString().slice(0, 10));
+  const packageId = safeString(req.body?.packageId || `${product.productId}_${version.replace(/[^a-z0-9_-]/gi, "_")}`);
+  const manifestFilename = safeString(req.body?.manifestFilename || "package-manifest.json").replace(/[\\/]/g, "");
+  const salesPagePath = normalizeSalesPagePath(req.body?.salesPagePath, product.slug);
+  const packageRef = db.collection("productPackages").doc(packageId);
+  const productRef = db.collection("digitalProducts").doc(product.id);
+  const taskRef = db.collection("productTasks").doc(`${product.productId}_package_builder`);
+  const nextStatus = salesPagePath ? "SALES_PAGE_DRAFT" : "FULFILLMENT_READY";
+
+  const batch = db.batch();
+  batch.set(packageRef, {
+    productId: product.productId,
+    packageId,
+    version,
+    status: "READY",
+    includedAssetIds,
+    fulfillmentFiles,
+    zipPathOrStorageObject: safeString(req.body?.zipPathOrStorageObject),
+    manifestPathOrStorageObject: `functions/private-products/${product.slug}/${manifestFilename}`,
+    validationResults: {
+      requiredPromisesChecked: requiredPromises.length,
+      fulfillmentFileCount: fulfillmentFileKeys.length,
+      privateFilesRegistered: true
+    },
+    createdBy: actor.email || actor.uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  batch.set(productRef, {
+    fulfillmentPackageId: packageId,
+    fulfillmentVersion: version,
+    fulfillmentFiles,
+    salesPagePath,
+    status: nextStatus,
+    approvalRequired: false,
+    statusHistory: FieldValue.arrayUnion({ status: nextStatus, updatedBy: actor.email || actor.uid, reason: "Fulfillment package registered by Package Builder.", workflow: "FD-POS - Package Builder", updatedAt: new Date() }),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  batch.set(taskRef, {
+    productId: product.productId,
+    taskId: taskRef.id,
+    title: "Build Fulfillment Package",
+    workflow: "FD-POS - Package Builder",
+    status: "DONE",
+    priority: "high",
+    inputRefs: { assetIds: includedAssetIds },
+    outputRefs: { packageId, fulfillmentFiles, salesPagePath },
+    error: null,
+    createdBy: actor.uid === "fd-pos-service" ? "workflow" : "user",
+    assignedTo: "workflow-name",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  await batch.commit();
+  res.json({ ok: true, productId: product.productId, slug: product.slug, packageId, status: nextStatus, fulfillmentFiles, salesPagePath });
 }));
 
 apiApp.post("/digital-products/:slug/create-stripe-product", asyncRoute(async (req, res) => {

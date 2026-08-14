@@ -12,7 +12,8 @@
     "fd-pos:promise-review-backyard-livestock": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fd-pos-promise-review-backyard-livestock.ps1",
     "fd-pos:export-promise-approval": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fd-pos-export-promise-approval.ps1",
     "fd-pos:submit-promise-approval": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fd-pos-submit-promise-approval.ps1",
-    "fd-pos:export-product-review-v2": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fd-pos-export-product-review-v2.ps1"
+    "fd-pos:export-product-review-v2": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fd-pos-export-product-review-v2.ps1",
+    "fd-pos:build-package-backyard-livestock": "node scripts/fd-pos-build-package-backyard-livestock.js"
   },
   "keywords": [],
   "author": "",
