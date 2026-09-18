@@ -38,6 +38,9 @@ const CHORE_TRACKER_FULFILLMENT_VERSION = "2026-08-01";
 const DEFAULT_DIGITAL_PRODUCT_TOKEN_TTL_DAYS = 7;
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@fennington.com";
 const SITE_URL = (process.env.SITE_URL || process.env.PUBLIC_SITE_URL || "https://fennington.com").replace(/\/$/, "");
+const FULFILLMENT_MONITOR_LOOKBACK_HOURS = 3;
+const FULFILLMENT_MONITOR_MAX_SESSIONS = 500;
+const UNUSED_ACCESS_LOOKBACK_DAYS = 14;
 
 const PRODUCT_STATUSES = [
   "IDEA", "ABK_GENERATING", "EBOOK_GENERATED", "SOURCE_REVIEW", "PROMISE_EXTRACTION", "PROMISE_APPROVAL_REQUIRED",
@@ -764,6 +767,30 @@ async function sendDigitalProductAccessEmail(product: DigitalProduct, toEmail: s
   return { status: "sent", resendEmailId: resendBody.id || null };
 }
 
+async function sendAdminAlertEmail(subject: string, text: string, html: string): Promise<void> {
+  const emailConfig = await db.collection("config").doc("email").get();
+  const fromEmail = safeString(emailConfig.get("transactionalFromEmail") || emailConfig.get("fromEmail") || process.env.RESEND_FROM_EMAIL);
+  const apiKey = secretValue("RESEND_API_KEY", resendApiKey);
+  const recipients = await getAdminEmails();
+  if (!fromEmail || !apiKey || recipients.length === 0) {
+    logger.warn("Skipping admin alert email: missing from-address, API key, or recipients.", { hasFromEmail: Boolean(fromEmail), hasApiKey: Boolean(apiKey), recipientCount: recipients.length });
+    return;
+  }
+
+  const resendResponse = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ from: fromEmail, to: recipients, subject, html, text })
+  });
+  if (!resendResponse.ok) {
+    const resendBody = await resendResponse.json().catch(() => ({}));
+    logger.error("Admin alert email failed to send", { error: resendBody });
+  }
+}
+
 function encodeToken(messageId: string, emailHash: string): string {
   return Buffer.from(`${messageId}:${emailHash}`, "utf8").toString("base64url");
 }
@@ -1172,6 +1199,136 @@ async function runNashvilleHvacDiscovery(options: DiscoveryOptions = {}): Promis
     await jobRef.set({ status: "failed", completedAt: serverTimestamp(), counters, errors: errors.slice(0, 20) }, { merge: true });
     throw error;
   }
+}
+
+async function upsertSupportAlert(alertId: string, data: Record<string, unknown>): Promise<boolean> {
+  const alertRef = db.collection("supportAlerts").doc(alertId);
+  const existing = await alertRef.get();
+  if (existing.exists) {
+    await alertRef.set({ lastSeenAt: serverTimestamp() }, { merge: true });
+    return false;
+  }
+  await alertRef.set({
+    ...data,
+    status: "open",
+    firstDetectedAt: serverTimestamp(),
+    lastSeenAt: serverTimestamp(),
+    alertedAt: serverTimestamp(),
+    createdAt: serverTimestamp()
+  });
+  return true;
+}
+
+// Cross-checks Stripe (source of truth for what was paid) against Firestore
+// (what the webhook actually recorded) to catch cases where fulfillment
+// silently failed or partially completed - see functions/AGENTS.md.
+async function runFulfillmentMonitor(): Promise<{ checked: number; newAlerts: number }> {
+  const stripe = stripeClient();
+  const cutoffSeconds = Math.floor(Date.now() / 1000) - FULFILLMENT_MONITOR_LOOKBACK_HOURS * 3600;
+  const newAlerts: Array<{ type: string; customerEmail?: string; stripeSessionId?: string; productName?: string }> = [];
+  let checked = 0;
+  let startingAfter: string | undefined;
+
+  for (let page = 0; page < Math.ceil(FULFILLMENT_MONITOR_MAX_SESSIONS / 100); page++) {
+    const sessions = await stripe.checkout.sessions.list({ limit: 100, created: { gte: cutoffSeconds }, starting_after: startingAfter });
+    for (const session of sessions.data) {
+      if (session.status !== "complete" || session.payment_status !== "paid") continue;
+      const productSlug = safeString(session.metadata?.product_slug);
+      const productId = safeString(session.metadata?.product_id);
+      if (!productSlug && !productId) continue;
+
+      checked += 1;
+      try {
+        let product: DigitalProduct | null = null;
+        try {
+          product = productId ? await getDigitalProductById(productId) : await getDigitalProductBySlug(productSlug);
+        } catch {
+          product = null;
+        }
+
+        const customerEmail = normalizeEmail(session.customer_details?.email || session.customer_email);
+        const baseFields = {
+          stripeSessionId: session.id,
+          stripeCustomerId: safeString(session.customer as string),
+          stripePaymentIntentId: safeString(session.payment_intent as string),
+          productSlug: product?.slug || productSlug || null,
+          productId: product?.productId || productId || null,
+          productName: product?.name || null,
+          customerEmail: customerEmail || null,
+          amountTotal: session.amount_total || 0,
+          currency: safeString(session.currency || "usd")
+        };
+
+        const purchaseSnapshot = await db.collection("digitalPurchases").doc(session.id).get();
+        if (!purchaseSnapshot.exists) {
+          const created = await upsertSupportAlert(`sess_${session.id}_missing_fulfillment`, {
+            type: "missing_fulfillment",
+            detail: "Stripe shows a paid checkout session with no matching digitalPurchases record.",
+            ...baseFields
+          });
+          if (created) newAlerts.push({ type: "missing_fulfillment", customerEmail: baseFields.customerEmail || undefined, stripeSessionId: session.id, productName: baseFields.productName || undefined });
+          continue;
+        }
+
+        const emailStatus = safeString(purchaseSnapshot.get("fulfillmentEmailStatus"));
+        if (emailStatus !== "sent") {
+          const created = await upsertSupportAlert(`sess_${session.id}_email_not_sent`, {
+            type: "email_not_sent",
+            detail: `Purchase is fulfilled but the access email status is "${emailStatus || "unknown"}".`,
+            purchaseId: purchaseSnapshot.id,
+            ...baseFields
+          });
+          if (created) newAlerts.push({ type: "email_not_sent", customerEmail: baseFields.customerEmail || undefined, stripeSessionId: session.id, productName: baseFields.productName || undefined });
+        }
+      } catch (error: any) {
+        logger.error("Fulfillment monitor failed to evaluate a checkout session", { sessionId: session.id, error: error?.message });
+      }
+    }
+    if (!sessions.has_more || sessions.data.length === 0) break;
+    startingAfter = sessions.data[sessions.data.length - 1].id;
+  }
+
+  const now = new Date();
+  const unusedLookback = new Date(now.getTime() - UNUSED_ACCESS_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const expiredUnusedTokens = await db.collection("downloadTokens")
+    .where("revoked", "==", false)
+    .where("downloadCount", "==", 0)
+    .where("expiresAt", "<=", now)
+    .where("expiresAt", ">=", unusedLookback)
+    .get();
+
+  for (const tokenDoc of expiredUnusedTokens.docs) {
+    try {
+      const purchaseId = safeString(tokenDoc.get("purchaseId"));
+      const purchaseSnapshot = purchaseId ? await db.collection("digitalPurchases").doc(purchaseId).get() : null;
+      const customerEmail = safeString(purchaseSnapshot?.get("customerEmail"));
+      const created = await upsertSupportAlert(`token_${tokenDoc.id}_unused_access`, {
+        type: "unused_access",
+        detail: "Access link expired without the customer downloading the product.",
+        purchaseId: purchaseSnapshot?.id || null,
+        productSlug: safeString(tokenDoc.get("productSlug")) || null,
+        productId: safeString(tokenDoc.get("productId")) || null,
+        customerEmail: customerEmail || null,
+        stripeSessionId: safeString(purchaseSnapshot?.get("stripeSessionId")) || null,
+        stripeCustomerId: safeString(purchaseSnapshot?.get("stripeCustomerId")) || null,
+        amountTotal: Number(purchaseSnapshot?.get("amountTotal")) || 0,
+        currency: safeString(purchaseSnapshot?.get("currency") || "usd")
+      });
+      if (created) newAlerts.push({ type: "unused_access", customerEmail: customerEmail || undefined });
+    } catch (error: any) {
+      logger.error("Fulfillment monitor failed to evaluate an unused download token", { tokenId: tokenDoc.id, error: error?.message });
+    }
+  }
+
+  if (newAlerts.length > 0) {
+    const lines = newAlerts.map((alert) => `[${alert.type}] ${alert.customerEmail || "unknown email"}${alert.stripeSessionId ? ` - Stripe session ${alert.stripeSessionId}` : ""}${alert.productName ? ` - ${alert.productName}` : ""}`);
+    const subject = `${newAlerts.length} new fulfillment alert${newAlerts.length === 1 ? "" : "s"}`;
+    const text = `The Stripe/Firebase fulfillment monitor found ${newAlerts.length} new issue(s):\n\n${lines.map((line) => `- ${line}`).join("\n")}\n\nReview and resolve at GET /admin/support-alerts.`;
+    const html = `<p>The Stripe/Firebase fulfillment monitor found <strong>${newAlerts.length}</strong> new issue(s):</p><ul>${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul><p>Review and resolve via <code>GET /admin/support-alerts</code>.</p>`;
+    await sendAdminAlertEmail(subject, text, html);
+  }
+
+  return { checked, newAlerts: newAlerts.length };
 }
 
 async function getAdminEmails(): Promise<string[]> {
@@ -2443,6 +2600,115 @@ apiApp.post("/sites/:siteId/create-checkout-session", asyncRoute(async (req, res
   res.status(501).json({ error: "Stripe Checkout is intentionally disabled until product and price decisions are finalized.", siteId: req.params.siteId });
 }));
 
+apiApp.post("/admin/jobs/monitor-fulfillment", asyncRoute(async (req, res) => {
+  await requireAdmin(req);
+  const result = await runFulfillmentMonitor();
+  res.json(result);
+}));
+
+apiApp.get("/admin/support-alerts", asyncRoute(async (req, res) => {
+  await requireAdmin(req);
+  const status = safeString(req.query.status) || "open";
+  const limit = Math.min(Number(req.query.limit || 50), 200);
+  const snapshot = await db.collection("supportAlerts").where("status", "==", status).orderBy("firstDetectedAt", "desc").limit(limit).get();
+  res.json({ alerts: snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) });
+}));
+
+apiApp.post("/admin/support-alerts/:alertId/resolve", asyncRoute(async (req, res) => {
+  const adminUser = await requireAdmin(req);
+  const alertRef = db.collection("supportAlerts").doc(req.params.alertId);
+  const alert = await alertRef.get();
+  if (!alert.exists) throw Object.assign(new Error("Support alert not found."), { statusCode: 404 });
+  await alertRef.set({
+    status: "resolved",
+    resolvedBy: adminUser.email || adminUser.uid,
+    resolvedAt: serverTimestamp(),
+    resolutionNote: safeString(req.body?.note),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  res.json({ ok: true });
+}));
+
+apiApp.post("/admin/support-alerts/:alertId/resend-access", asyncRoute(async (req, res) => {
+  const adminUser = await requireAdmin(req);
+  const alertRef = db.collection("supportAlerts").doc(req.params.alertId);
+  const alertSnapshot = await alertRef.get();
+  if (!alertSnapshot.exists) throw Object.assign(new Error("Support alert not found."), { statusCode: 404 });
+
+  const alertType = safeString(alertSnapshot.get("type"));
+  if (alertType !== "missing_fulfillment" && alertType !== "email_not_sent") {
+    throw Object.assign(new Error("Resend-access only applies to missing_fulfillment or email_not_sent alerts."), { statusCode: 409 });
+  }
+
+  const customerEmail = normalizeEmail(alertSnapshot.get("customerEmail"));
+  if (!isValidEmail(customerEmail)) throw Object.assign(new Error("Alert has no valid customer email on file."), { statusCode: 412 });
+
+  const productId = safeString(alertSnapshot.get("productId"));
+  const productSlug = safeString(alertSnapshot.get("productSlug"));
+  const product = productId ? await getDigitalProductById(productId) : await getDigitalProductBySlug(productSlug);
+
+  const stripeSessionId = safeString(alertSnapshot.get("stripeSessionId"));
+  if (!stripeSessionId) throw Object.assign(new Error("Alert has no Stripe session on file."), { statusCode: 412 });
+  const purchaseRef = db.collection("digitalPurchases").doc(stripeSessionId);
+  const purchaseSnapshot = await purchaseRef.get();
+  const { token, tokenHash, expiresAt } = createDownloadToken(product.tokenTtlDays);
+  const emailHash = hashEmail(customerEmail);
+
+  await purchaseRef.set({
+    productId: product.productId,
+    productSlug: product.slug,
+    productName: product.name,
+    fulfillmentPackageId: product.fulfillmentPackageId,
+    fulfillmentVersion: product.fulfillmentVersion,
+    status: "fulfilled",
+    stripeSessionId,
+    stripeCustomerId: safeString(alertSnapshot.get("stripeCustomerId")),
+    stripePriceId: product.stripePriceId,
+    amountTotal: Number(alertSnapshot.get("amountTotal")) || 0,
+    currency: safeString(alertSnapshot.get("currency") || "usd"),
+    customerEmail,
+    emailHash,
+    latestTokenHash: tokenHash,
+    tokenExpiresAt: expiresAt,
+    fulfillmentEmailStatus: "pending",
+    manuallyFulfilledBy: adminUser.email || adminUser.uid,
+    updatedAt: serverTimestamp(),
+    ...(purchaseSnapshot.exists ? {} : { createdAt: serverTimestamp() })
+  }, { merge: true });
+
+  await db.collection("downloadTokens").doc(tokenHash).set({
+    productId: product.productId,
+    productSlug: product.slug,
+    purchaseId: purchaseRef.id,
+    emailHash,
+    tokenHash,
+    expiresAt,
+    revoked: false,
+    downloadCount: 0,
+    createdFrom: "admin_resend",
+    createdAt: serverTimestamp()
+  });
+
+  const emailResult = await sendDigitalProductAccessEmail(product, customerEmail, accessUrlForToken(product, token));
+  await purchaseRef.set({
+    fulfillmentEmailStatus: emailResult.status,
+    resendEmailId: emailResult.resendEmailId || null,
+    fulfillmentEmailError: emailResult.error || null,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  const alertUpdate: Record<string, unknown> = { updatedAt: serverTimestamp() };
+  if (emailResult.status === "sent") {
+    alertUpdate.status = "resolved";
+    alertUpdate.resolvedBy = adminUser.email || adminUser.uid;
+    alertUpdate.resolvedAt = serverTimestamp();
+    alertUpdate.resolutionNote = "Access email resent by admin.";
+  }
+  await alertRef.set(alertUpdate, { merge: true });
+
+  res.json({ ok: true, emailStatus: emailResult.status, purchaseId: purchaseRef.id });
+}));
+
 export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [stripeSecretKey, stripeWebhookSecret, stripePriceChoreTracker, fdPosServiceSecret, resendApiKey] }, apiApp);
 
 // Financial categorization is its own function (functions-financial/) so it can
@@ -2501,4 +2767,9 @@ export const unsubscribe = onRequest({ region: REGION, timeoutSeconds: 30, memor
 
 export const scheduledDiscoverNashvilleHvacLeads = onSchedule({ region: REGION, schedule: "every day 08:00", timeZone: "America/Chicago", timeoutSeconds: 540, memory: "512MiB" }, async () => {
   await runNashvilleHvacDiscovery({ dryRun: false, cap: DEFAULT_LEAD_CAP, requestedBy: "scheduled" });
+});
+
+export const scheduledMonitorStripeFulfillment = onSchedule({ region: REGION, schedule: "every 30 minutes", timeoutSeconds: 120, memory: "256MiB", secrets: [stripeSecretKey, resendApiKey] }, async () => {
+  const result = await runFulfillmentMonitor();
+  logger.info("Fulfillment monitor run complete", result);
 });

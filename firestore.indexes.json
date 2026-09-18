@@ -62,6 +62,23 @@
         { "fieldPath": "needsReview", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "downloadTokens",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "revoked", "order": "ASCENDING" },
+        { "fieldPath": "downloadCount", "order": "ASCENDING" },
+        { "fieldPath": "expiresAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "supportAlerts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "firstDetectedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
