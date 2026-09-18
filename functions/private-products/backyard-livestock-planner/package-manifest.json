@@ -1,0 +1,85 @@
+﻿{
+    "schemaVersion":  "1.0",
+    "productId":  "backyard-livestock-planner-001",
+    "slug":  "backyard-livestock-planner",
+    "name":  "Backyard Livestock Planner",
+    "version":  "2026-09-09",
+    "priceCents":  1700,
+    "currency":  "usd",
+    "salesPagePath":  "/digital-products/backyard-livestock-planner",
+    "builtAt":  "2026-09-09T20:29:33.8432606Z",
+    "files":  [
+                  {
+                      "key":  "ebook",
+                      "filename":  "00-Backyard-Livestock-Planner-Ebook.docx",
+                      "downloadName":  "Backyard-Livestock-Planner-Ebook.docx",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\ebook-asset.docx"
+                  },
+                  {
+                      "key":  "chore_completion_pattern_template",
+                      "filename":  "01-chore-completion-pattern-template.md",
+                      "downloadName":  "01-chore-completion-pattern-template.md",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\chore-completion-pattern-template.md"
+                  },
+                  {
+                      "key":  "daily_walkthrough_inventory",
+                      "filename":  "02-daily-walkthrough-inventory.md",
+                      "downloadName":  "02-daily-walkthrough-inventory.md",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\daily-walkthrough-inventory.md"
+                  },
+                  {
+                      "key":  "emergency_protocol_vet_contact_sheet",
+                      "filename":  "03-emergency-protocol-vet-contact-sheet.md",
+                      "downloadName":  "03-emergency-protocol-vet-contact-sheet.md",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\emergency-protocol-vet-contact-sheet.md"
+                  },
+                  {
+                      "key":  "financial_supply_tracker",
+                      "filename":  "04-financial-supply-tracker.md",
+                      "downloadName":  "04-financial-supply-tracker.md",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\financial-supply-tracker.md"
+                  },
+                  {
+                      "key":  "homestead_command_center_overview",
+                      "filename":  "05-homestead-command-center-overview.md",
+                      "downloadName":  "05-homestead-command-center-overview.md",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\homestead-command-center-overview.md"
+                  },
+                  {
+                      "key":  "homestead_command_center_template",
+                      "filename":  "06-homestead-command-center-template.md",
+                      "downloadName":  "06-homestead-command-center-template.md",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\homestead-command-center-template.md"
+                  },
+                  {
+                      "key":  "monthly_financial_review",
+                      "filename":  "07-monthly-financial-review.md",
+                      "downloadName":  "07-monthly-financial-review.md",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\monthly-financial-review.md"
+                  },
+                  {
+                      "key":  "people_resource_plan",
+                      "filename":  "08-people-resource-plan.md",
+                      "downloadName":  "08-people-resource-plan.md",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\people-resource-plan.md"
+                  },
+                  {
+                      "key":  "printable_whiteboard_app_tracker",
+                      "filename":  "09-printable-whiteboard-app-tracker.csv",
+                      "downloadName":  "09-printable-whiteboard-app-tracker.csv",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\printable-whiteboard-app-tracker.csv"
+                  },
+                  {
+                      "key":  "recurring_chore_planner",
+                      "filename":  "10-recurring-chore-planner.md",
+                      "downloadName":  "10-recurring-chore-planner.md",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\recurring-chore-planner.md"
+                  },
+                  {
+                      "key":  "weekly_check_in",
+                      "filename":  "11-weekly-check-in.md",
+                      "downloadName":  "11-weekly-check-in.md",
+                      "source":  "G:\\My Drive\\Business\\Digital Products\\Backyard Livestock Planner 1\\Attempt 3\\supporting-assets\\weekly-check-in.md"
+                  }
+              ]
+}
