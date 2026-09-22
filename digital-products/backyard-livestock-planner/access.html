@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex,nofollow">
-  <title>Access Your Chore Tracker | Fennington</title>
+  <title>Access Your Planner | Fennington</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="simple-page">
@@ -12,16 +12,16 @@
     <p class="eyebrow">Secure access</p>
     <h1>Access your files</h1>
     <section id="tokenDownloads" class="download-panel" hidden>
-      <p>Your access link is active. Download the files below before the link expires.</p>
+      <p>Your access link is active. Download your files before the link expires.</p>
       <div class="download-list">
-        <a class="btn btn-primary" data-file="screen" href="#">Screen PDF</a>
-        <a class="btn btn-primary" data-file="print" href="#">Print PDF</a>
-        <a class="btn btn-primary" data-file="worksheets" href="#">Worksheet PDF</a>
+        <a class="btn btn-primary" data-file="default" href="#">Download Your Files</a>
+        <a class="btn btn-secondary" data-file="ebook" href="#">Ebook Only</a>
       </div>
+      <p class="download-hint">The complete kit arrives as a single ZIP containing the ebook and all 11 templates. If you bought the ebook on its own, either button gives you the ebook.</p>
       <p class="status" id="downloadStatus" role="status" aria-live="polite"></p>
     </section>
     <section id="recoveryPanel">
-      <p>Enter the email used at checkout. If a matching purchase exists, a fresh access link will be sent when fulfillment email is configured.</p>
+      <p>Enter the email used at checkout. If a matching purchase exists, a fresh access link will be sent.</p>
       <form class="access-form" id="recoverAccessForm">
         <label for="recoveryEmail">Purchase email</label>
         <input id="recoveryEmail" name="email" type="email" autocomplete="email" required placeholder="you@example.com">

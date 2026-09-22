@@ -97,6 +97,41 @@ details p { margin-top: 12px; color: var(--muted); }
 .download-panel { margin: 22px 0; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); }
 .download-list { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
 
+/* Hero contents list */
+.contents-peek { padding: 8px 4px; }
+.contents-peek-title { color: var(--soil); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase; }
+.contents-peek ul { margin: 16px 0 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+.contents-peek li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.contents-peek li:last-child { border-bottom: 0; padding-bottom: 0; }
+.contents-peek strong { color: var(--green); font-size: 1.05rem; }
+.contents-peek span { color: var(--muted); font-size: 0.92rem; text-align: right; }
+
+/* Ebook section grid: six items read better as three across */
+#sections .timeline { grid-template-columns: repeat(3, 1fr); }
+
+.section-lead { max-width: 720px; margin: 18px auto 0; color: var(--muted); font-size: 1.1rem; }
+
+/* Template cards */
+.template-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 36px; }
+.template-grid article { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: 0 12px 30px rgba(32, 51, 36, 0.08); }
+.template-grid h3 { font-size: 1.05rem; color: var(--green-dark); }
+.template-grid p { margin-top: 10px; color: var(--muted); font-size: 0.98rem; }
+
+/* Pricing tiers */
+.tier-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 36px; align-items: start; }
+.tier-card { display: flex; flex-direction: column; padding: 30px; border: 1px solid var(--line); border-radius: 24px; background: var(--white); box-shadow: 0 12px 30px rgba(32, 51, 36, 0.08); }
+.tier-card-featured { border: 2px solid var(--green); box-shadow: var(--shadow); }
+.tier-flag { align-self: flex-start; margin-bottom: 12px; padding: 6px 12px; border-radius: 999px; background: var(--sage); color: var(--green-dark); font-size: 0.74rem; font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase; }
+.tier-price { margin: 14px 0 6px; color: var(--green); font-size: 2.6rem; font-weight: 900; letter-spacing: -0.04em; line-height: 1; }
+.tier-summary { color: var(--muted); }
+.tier-list { margin: 20px 0 24px; }
+.tier-list li { font-size: 1rem; }
+.tier-card .btn { margin-top: auto; }
+
+.purchase-note { max-width: 760px; margin: 32px auto 0; text-align: center; display: grid; gap: 14px; color: var(--muted); }
+.purchase-note .policy-note { font-size: 0.95rem; }
+.download-hint { font-size: 0.95rem; }
+
 @media (max-width: 900px) {
   .nav { display: none; position: absolute; top: 76px; left: 0; right: 0; padding: 18px; background: var(--white); border-bottom: 1px solid var(--line); }
   .nav.active { display: grid; }
@@ -104,6 +139,11 @@ details p { margin-top: 12px; color: var(--muted); }
   .header-inner > .btn { display: none; }
   .hero-grid, .split, .preview-grid, .purchase-card { grid-template-columns: 1fr; }
   .included-grid, .timeline, .mockup-stack { grid-template-columns: 1fr; }
+  #sections .timeline, .template-grid, .tier-grid { grid-template-columns: 1fr; }
   .hero { padding: 54px 0; }
   .section { padding: 58px 0; }
+}
+
+@media (min-width: 901px) and (max-width: 1100px) {
+  .template-grid, #sections .timeline { grid-template-columns: repeat(2, 1fr); }
 }
