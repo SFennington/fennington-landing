@@ -5,8 +5,46 @@ Build a repeatable Fennington Digital Product Operating System (FD-POS) that tur
 
 This plan supersedes the prior one-off `14-Day Homestead Chore Tracker System` direction. The paid product for the current run is the ebook asset in `G:\My Drive\Business\Digital Products\Backyard Livestock Planner 1\Attempt 3\ebook-asset`, sold at `$17`, with supporting resources generated only after review/approval.
 
+## Reconciliation, 2026-09-25
+
+The PERC builder replaced the planned ABK upgrade, and the Fennington Assistant replaced
+the planned spreadsheet approval interface. This section records what is actually true
+now; the older status list below it is kept for history.
+
+### What is built and verified
+
+- **`PERC - 6 Pillar Product Builder v1`** in the n8n repo, 23 nodes, run end to end.
+  Writes six pillars with one AI call each (about 8,000 words), generates blank fill-in
+  worksheets, renders PDFs with wkhtmltopdf, and uploads each product to its own folder
+  under `Digital Products` on Google Drive. This supersedes implementation item 6.
+- **Generic digital-product backend** in `functions/src/index.ts`: register-draft,
+  create-stripe-product, checkout session, purchase status, recover access, token-gated
+  download, and one Stripe webhook keyed on product metadata.
+- **A sales page** for the planner at `digital-products/backyard-livestock-planner/`,
+  two tiers, wired to the generic checkout routes.
+- **The assistant takes ebook requests**: it runs an intake, files an engineering task
+  under `digital_products`, and can start a build after explicit approval.
+
+### Constraints discovered the hard way
+
+- **n8n runs as a Windows service under `NT AUTHORITY\SYSTEM`, session 0.** It cannot
+  reach the `G:` Drive mount (mounted for the interactive user) and cannot run headless
+  Edge or Chrome (exit 1002, no desktop). Anything needing a browser or `G:` must use an
+  HTTP API or run outside n8n. PDFs therefore use wkhtmltopdf; Drive uses the API.
+- **`fennington.com` is served by Cloudflare static hosting, not Firebase.** The
+  `/api/**` rewrite in `firebase.json` only works on `fennington-financial.web.app`, so
+  checkout from the live domain cannot work until that is resolved.
+- **The deployed `api` function is old** and has none of the digital-product routes.
+- **Model calls cost real money.** Nothing may generate assets without explicit
+  approval; a careless test loop spent several builds' worth during development.
+
+### What is not built
+
+Stripe products and prices, live fulfillment, the upsell builder, marketing assets, and
+the assistant-side review of proposed value-adds.
+
 ## Implementation Status And Resume Point
-Last updated: 2026-08-02.
+Last updated: 2026-08-02. Superseded in part by the reconciliation above.
 
 ### Completed
 - [x] Defined the FD-POS lifecycle, Firestore schemas, manifest shape, approval types, and quality gates.
@@ -363,6 +401,71 @@ Content Reactor should not ingest raw ABK output directly. It should ingest:
 - product package metadata;
 - brand rules.
 
+### Value-Add Upsell Builder Workflow (Workflow 2)
+
+Confirmed 2026-09-25. This is the original "proposed, not included, until approved" rule
+with a concrete interface: the builder proposes, a human decides item by item, and only
+approved items are built. Nothing here may run automatically, because every run spends
+model credits.
+
+**Workflow 1 (PERC builder) ends by exporting proposals, not products.** For each
+value-add it records a name, what it is, the format, who it helps, the buyer problem it
+solves, a rough build cost, and `inclusionStatus: NOT_INCLUDED`. It writes them as
+`productPromises` with `sourceIntent: proposal`. It must not build them and must not
+mention them in the ebook: naming a price for something that does not exist is a false
+promise to someone who already paid.
+
+**Review happens in the assistant.** It lists the proposals for a product, and the owner
+approves or declines each one individually. Declines are recorded with a reason so the
+same idea is not proposed again next time. Approval writes an `asset-generation`
+approval for exactly the approved item IDs.
+
+**Workflow 2 builds only approved items.** A separate n8n workflow, triggered with a
+product ID and the approved item IDs, and refusing anything not in that approval.
+Preferred output is a working tool the buyer downloads and uses — a spreadsheet with the
+formulas already in it, a fillable form, a calculator — not another paper plan. It
+writes `productAssets`, uploads to the product's Drive folder, and marks anything it
+cannot build as `BLOCKED` with a reason rather than inventing a substitute.
+
+Two workflows rather than one, deliberately: it keeps the expensive second pass behind a
+human decision, and keeps a failed upsell build from taking the ebook down with it.
+
+### Marketing Assets
+
+Each product gets 3-5 ad concepts for Meta. Generated per product, reviewed before use,
+and never auto-published.
+
+Each concept needs a hook, primary text, a headline, a call to action, the audience it
+targets, and an image brief — subject, setting, mood, and the text overlay. Claims may
+only come from approved product content, and no concept may promise an income result,
+a health outcome, or anything the product does not actually deliver.
+
+Image generation can produce candidates, but the owner picks and runs the campaign. No
+direct Meta API integration: that is a separate decision with its own approval.
+
+## What Is Automated And What Stays Manual
+
+The honest split, for planning purposes.
+
+**Automated once a build is approved:** pillar and ebook writing, blank worksheet
+generation, PDF rendering, the Drive folder and upload, sales page copy and files,
+Stripe product and price creation through the existing endpoint, checkout sessions,
+webhook fulfillment, download tokens, access emails, and ad concept drafting.
+
+**Always manual, by design:**
+
+1. Approving the product idea and the intake answers.
+2. Approving each proposed value-add before it is built.
+3. Reviewing the ebook and worksheets before anything is sold.
+4. Approving sales page copy.
+5. Approving live Stripe pricing, and connecting the Stripe account itself.
+6. Publishing the site.
+7. Choosing ad images and launching campaigns in Meta.
+8. Setting the refund policy wording.
+
+**Manual until infrastructure changes:** deploying functions, and fixing `/api` routing
+on `fennington.com` so checkout works from the live domain.
+
 ## Firebase Backend Changes
 Convert hardcoded chore tracker functionality into generic digital-product infrastructure.
 
@@ -520,7 +623,8 @@ Implementation agent should validate in this order:
 - [x] 3. Replace hardcoded chore-tracker constants and routes with generic digital-product logic.
 - [x] 4. Add admin/service authentication for n8n-to-Firebase calls.
 - [ ] 5. Add product package storage strategy. Backend path validation exists; real Google Drive/Firebase Storage connector remains pending.
-- [ ] 6. Upgrade ABK copy into a versioned workflow that outputs a product manifest.
+- [x] 6. ~~Upgrade ABK copy into a versioned workflow~~ — superseded 2026-09-22 by
+      `PERC - 6 Pillar Product Builder v1`, which replaces ABK rather than upgrading it.
 - [x] 7. Build Promise Review workflow, including separate proposal-feasibility evaluation.
 - [x] 8. Build initial XLSX approval/feasibility interface. A future Firebase admin page remains optional.
 - [ ] 9. Build Approved Asset Builder workflow. Foundation and API gates exist; storage connector and one-asset end-to-end test remain pending.
@@ -529,6 +633,18 @@ Implementation agent should validate in this order:
 - [ ] 12. Build Manager AI workflow. The policy-based Supervisor sub-workflow exists; full lifecycle orchestration remains pending.
 - [ ] 13. Run the current Backyard Livestock Planner through the new process. Paused at value-enhancer feasibility review.
 - [ ] 14. Only after this system works, implement Content Reactor as a separate repo/workflow system consuming approved FD-POS product records.
+
+### Added 2026-09-25
+
+- [ ] 15. Export value-add proposals from the PERC builder as `NOT_INCLUDED` promises.
+- [ ] 16. Review proposals in the assistant, approving or declining each item.
+- [ ] 17. Build the Workflow 2 upsell builder, limited to approved item IDs, favouring
+      working tools such as spreadsheets over paper plans.
+- [ ] 18. Generate 3-5 Meta ad concepts per product, with image briefs, for review.
+- [ ] 19. Deploy functions and fix `/api` routing on `fennington.com` so checkout works
+      from the live domain.
+- [ ] 20. Take one product fully live: Stripe price, sales page, test purchase,
+      confirmed download and access email.
 
 ## Out Of Scope For First Implementation
 - Full custom Firebase admin dashboard, unless Google Sheets approvals prove insufficient.
