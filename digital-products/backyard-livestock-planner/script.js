@@ -3,6 +3,16 @@
   // Stripe, so it probes these in order to learn which tier was bought.
   const PRODUCT_SLUGS = ["backyard-livestock-planner", "backyard-livestock-planner-ebook"];
 
+  // fennington.com serves the homepage with a 200 for every unmatched path, so a
+  // relative "/api/..." call silently returns HTML instead of reaching the API.
+  // Call the function directly; it sets CORS to reflect any origin and accepts the
+  // path with or without the /api prefix.
+  const API_BASE = (
+    window.FENNINGTON_API_BASE ||
+    "https://us-central1-fennington-financial.cloudfunctions.net/api"
+  ).replace(/\/$/, "");
+  const api = (path) => `${API_BASE}${path}`;
+
   const analytics = {
     track(eventName, details) {
       if (window.fenningtonAnalytics && typeof window.fenningtonAnalytics.track === "function") {
@@ -46,7 +56,7 @@
         button.disabled = true;
         setText(status, "Creating secure checkout...");
         try {
-          const data = await postJson(`/api/digital-products/${encodeURIComponent(slug)}/create-checkout-session`);
+          const data = await postJson(api(`/digital-products/${encodeURIComponent(slug)}/create-checkout-session`));
           analytics.track("planner_checkout_created", { slug, sessionId: data.sessionId });
           window.location.assign(data.url);
         } catch (error) {
@@ -60,7 +70,7 @@
   async function fetchPurchaseStatus(sessionId) {
     for (const slug of PRODUCT_SLUGS) {
       try {
-        const response = await fetch(`/api/digital-products/${encodeURIComponent(slug)}/purchase-status?session_id=${encodeURIComponent(sessionId)}`);
+        const response = await fetch(api(`/digital-products/${encodeURIComponent(slug)}/purchase-status?session_id=${encodeURIComponent(sessionId)}`));
         if (!response.ok) continue;
         const data = await response.json().catch(() => ({}));
         if (data && data.status) return { slug, data };
@@ -104,7 +114,7 @@
     const status = document.getElementById("downloadStatus");
     document.querySelectorAll("[data-file]").forEach((link) => {
       const file = link.getAttribute("data-file");
-      link.setAttribute("href", `/api/digital-products/download?token=${encodeURIComponent(token)}&file=${encodeURIComponent(file)}`);
+      link.setAttribute("href", api(`/digital-products/download?token=${encodeURIComponent(token)}&file=${encodeURIComponent(file)}`));
       link.addEventListener("click", () => {
         analytics.track("planner_download_started", { file });
         setText(status, "Download started. If it does not begin, request a fresh access link.");
@@ -123,7 +133,7 @@
       setText(status, "Checking purchase records...");
       // A buyer knows their email, not which tier they bought, so ask every tier.
       const results = await Promise.allSettled(
-        PRODUCT_SLUGS.map((slug) => postJson(`/api/digital-products/${encodeURIComponent(slug)}/recover-access`, { email }))
+        PRODUCT_SLUGS.map((slug) => postJson(api(`/digital-products/${encodeURIComponent(slug)}/recover-access`), { email }))
       );
       if (results.some((result) => result.status === "fulfilled")) {
         analytics.track("planner_recovery_submitted");
