@@ -636,10 +636,18 @@ Implementation agent should validate in this order:
 
 ### Added 2026-09-25
 
-- [ ] 15. Export value-add proposals from the PERC builder as `NOT_INCLUDED` promises.
-- [ ] 16. Review proposals in the assistant, approving or declining each item.
-- [ ] 17. Build the Workflow 2 upsell builder, limited to approved item IDs, favouring
+- [x] 15. Export value-add proposals from the PERC builder as `NOT_INCLUDED` promises.
+      Done 2026-09-25: the builder proposes add-ons and marks each buildable or not.
+      Only buildable ones are offered; nothing is built and no price is invented.
+- [x] 16. Review proposals in the assistant, approving or declining each item.
+      Done 2026-09-25: a finished build posts to the assistant's callback and the
+      result, including the proposed add-ons, is written onto the task.
+- [x] 17. Build the Workflow 2 upsell builder, limited to approved item IDs, favouring
       working tools such as spreadsheets over paper plans.
+      Done 2026-09-25: `PERC - Add-On Builder v1`. Refuses an empty list or anything
+      not approved. Ships a blank CSV grid plus a printable guide.
+      Known gap: files carry no live formulas; calculated columns are explained in
+      words instead.
 - [ ] 18. Generate 3-5 Meta ad concepts per product, with image briefs, for review.
 - [ ] 19. Deploy functions and fix `/api` routing on `fennington.com` so checkout works
       from the live domain.
