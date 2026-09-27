@@ -57,7 +57,9 @@ Treat these as high risk. Changes here need extra scrutiny and, ideally, a test 
 
 ## Deployment Restrictions
 
-- **Never run a production deployment from an agent session.** `firebase deploy` (or the `functions/package.json` `deploy` script, which runs `firebase deploy --only functions,firestore,hosting`) requires explicit, separate human authorization every time, regardless of how confident a change appears.
+- **`firebase deploy --only functions` is pre-approved for this repo** (owner instruction, 2026-09-27), because this codebase deploys to `fennington-financial` and has no path to the Livestock Tracker app, its separate `livestock-tracker-1fc5b` project, or its paying users. Stop and ask if a change would reach any of those, or would create or modify **live** Stripe objects on the account that bills them.
+- **Every other production deployment still needs explicit, separate authorization each time**, including hosting, Firestore rules, and the `functions/package.json` `deploy` script (which runs `firebase deploy --only functions,firestore,hosting`).
+- Deploying this codebase needs `FUNCTIONS_DISCOVERY_TIMEOUT=180`; `index.ts` takes longer than the default 10s to load, and the CLI otherwise fails with "Cannot determine backend specification".
 - Do not rename or remove the exported Cloud Functions (`api`, `financialApi`, `renderSite`, `unsubscribe`, `scheduledDiscoverNashvilleHvacLeads`) without a migration plan — Hosting rewrites and any external references (Stripe webhook URL, `renderSite` links, etc.) depend on the current names and regions.
 - Do not change `firebase.json` rewrites, `firestore.rules`, or `firestore.indexes.json` without confirming the change is additive/non-breaking to the routes and collections listed above.
 
