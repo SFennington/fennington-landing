@@ -1,7 +1,7 @@
 (function () {
-  // Tier slugs, most complete first. success.html gets only a session_id back from
-  // Stripe, so it probes these in order to learn which tier was bought.
-  const PRODUCT_SLUGS = ["backyard-livestock-planner", "backyard-livestock-planner-ebook"];
+  // One product, one slug. success.html gets only a session_id back from Stripe,
+  // so it asks this product whether that session belongs to it.
+  const PRODUCT_SLUGS = ["homestead-command-center"];
 
   // fennington.com serves the homepage with a 200 for every unmatched path, so a
   // relative "/api/..." call silently returns HTML instead of reaching the API.
