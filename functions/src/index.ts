@@ -1442,9 +1442,16 @@ apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1
   const signature = req.header("stripe-signature");
   if (!signature) throw Object.assign(new Error("Missing Stripe signature."), { statusCode: 400 });
 
+  // Cloud Functions for Firebase always populates req.rawBody with the exact,
+  // unparsed request bytes, regardless of Express body-parsing middleware.
+  // Stripe's signature is computed over those exact bytes, so verification
+  // must use rawBody rather than req.body (which can differ even when the
+  // JSON content is logically identical, breaking the HMAC check).
+  const rawBody = (req as express.Request & { rawBody?: Buffer }).rawBody || req.body;
+
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (error: any) {
     logger.warn("Stripe webhook signature verification failed", { error: error?.message });
     throw Object.assign(new Error("Invalid Stripe signature."), { statusCode: 400 });
