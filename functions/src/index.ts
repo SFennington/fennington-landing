@@ -2677,9 +2677,12 @@ async function fetchMetaInsights(accountId: string, token: string, datePreset: s
 }
 
 async function runMetaAdInsightsSync(datePreset: string): Promise<Record<string, unknown>> {
-  const token = secretValue("META_ACCESS_TOKEN", metaAccessToken);
+  // Trimmed: the secret has to exist before the function can bind it, so it is
+  // created blank and filled in later. A pasted token can also arrive with a
+  // trailing newline, which would otherwise be sent to Meta and rejected.
+  const token = secretValue("META_ACCESS_TOKEN", metaAccessToken).trim();
   const configDoc = await db.collection("config").doc("meta").get();
-  const configuredAccount = safeString(configDoc.get("adAccountId"));
+  const configuredAccount = safeString(configDoc.get("adAccountId")).trim();
 
   // Stays inert rather than failing until both halves are configured, matching
   // how the fulfillment email reports pending_config.
