@@ -455,6 +455,44 @@ sync matches on ad name, so no extra permission and no manual ID mapping is need
 ad whose name is missing the code still records its own numbers; it just reports under
 `unmatchedAdNames` instead of against a concept.
 
+## Build Order And Its Approval Stages
+
+Decided 2026-09-29. The ordering matters for one practical reason: artwork that
+arrives after the documents forces the documents to be repaired, and repairing
+them is only safe while nothing has been sold against their wording. The brand
+kit therefore comes first, and each stage stops for approval so a rejected draft
+costs one stage rather than a whole product.
+
+| Stage | Produces | Workflow | Built |
+| --- | --- | --- | --- |
+| 1 | Brand kit, cover art, logo | `PERC - Brand Kit v1` (`imageSet=core`) | yes |
+| 2 | Ebook, with the cover on it | `PERC - 6 Pillar Product Builder v1` | yes |
+| 3 | Hero, secondary, worksheet header | `PERC - Brand Kit v1` (`imageSet=site`) | yes |
+| 4 | Worksheets, landing page | Product Builder / sales page | partly |
+| 5 | Value add-ons, by selection | `PERC - Add-On Builder v1` | yes |
+| any | Ad concepts and creatives | `PERC - Ad Studio v1` | yes |
+
+The brand kit is generated once and reused on every later stage. That is
+deliberate: stage 3 must not mint a new palette, because the ebook approved at
+stage 2 was already built against the old one.
+
+Ads sit outside the sequence because they are the one part that recurs. Each run
+writes its own dated folder, reads the brand kit without modifying it, and takes
+a `startIndex` so a second batch numbers itself `HCC-A4` onward instead of
+colliding with the first batch's codes in insights.
+
+**Still to build for this to run as one gated sequence:**
+
+- The Product Builder writes the ebook and all worksheets in a single run, so
+  stage 2 and stage 4 cannot yet be approved separately. Splitting it is the
+  main remaining piece.
+- Stage transitions are triggered by hand. The FD-POS approval routes already
+  exist (`/digital-products/:slug/approvals/:approvalId/decide`), so an approval
+  should fire the next workflow rather than the owner starting it; nothing wires
+  that up yet.
+- The landing page is written by hand from the build's own data. It could be
+  generated from the brand kit and the pillar titles, and is not.
+
 ## What Is Automated And What Stays Manual
 
 The honest split, for planning purposes.
