@@ -440,8 +440,20 @@ targets, and an image brief — subject, setting, mood, and the text overlay. Cl
 only come from approved product content, and no concept may promise an income result,
 a health outcome, or anything the product does not actually deliver.
 
-Image generation can produce candidates, but the owner picks and runs the campaign. No
-direct Meta API integration: that is a separate decision with its own approval.
+Image generation can produce candidates, but the owner picks and runs the campaign.
+
+Meta API integration was the separate decision this section deferred. It was taken on
+2026-09-29 and deliberately split in half: **reading** ad insights is automated, and
+**creating or publishing** anything in Meta is not, and is not built. The sync needs
+only a token that can read the ad account, so nothing in this repository can start a
+campaign, change a budget, or spend money.
+
+Attribution avoids asking Meta for more access than that. `Brand Kit & Ad Studio`
+stamps each concept with a tracking code (`HCC-A1`), prints it on the creative and into
+`ad-concepts.md`, and the owner names the Meta ad with that code first. The nightly
+sync matches on ad name, so no extra permission and no manual ID mapping is needed. An
+ad whose name is missing the code still records its own numbers; it just reports under
+`unmatchedAdNames` instead of against a concept.
 
 ## What Is Automated And What Stays Manual
 
@@ -648,11 +660,32 @@ Implementation agent should validate in this order:
       not approved. Ships a blank CSV grid plus a printable guide.
       Known gap: files carry no live formulas; calculated columns are explained in
       words instead.
-- [ ] 18. Generate 3-5 Meta ad concepts per product, with image briefs, for review.
-- [ ] 19. Deploy functions and fix `/api` routing on `fennington.com` so checkout works
+- [x] 18. Generate 3-5 Meta ad concepts per product, with image briefs, for review.
+      Done 2026-09-29: `PERC - Brand Kit & Ad Studio v1`. One brand kit (hex palette,
+      photography direction, motifs) is generated first and then quoted into every
+      image prompt, which is what keeps the set looking like one brand. It produces
+      the ebook cover, a transparent logo mark, two website images, a worksheet
+      header, and a clean image plus a composited creative per concept.
+      Headlines are composited from real strings by wkhtmltoimage rather than drawn
+      by the image model, so a cover cannot ship with a misspelled title.
+- [x] 19. Deploy functions and fix `/api` routing on `fennington.com` so checkout works
       from the live domain.
-- [ ] 20. Take one product fully live: Stripe price, sales page, test purchase,
+      Done 2026-09-28: resolved by calling the function URL directly from the sales
+      page rather than moving the domain, since `fennington.com` is served by
+      Cloudflare and never sees `firebase.json`'s rewrites.
+- [x] 20. Take one product fully live: Stripe price, sales page, test purchase,
       confirmed download and access email.
+      Done 2026-09-29 in Stripe test mode, both tiers, end to end. Two real bugs came
+      out of it: webhook signatures were verified against Express's parsed body
+      instead of Firebase's `req.rawBody`, and a product's files have to be deployed
+      with the functions before its downloads resolve.
+      Still pending: switching Stripe to live mode, which is a separate decision.
+- [ ] 21. Sync Meta ad insights nightly and report per concept.
+      Built 2026-09-29 (`scheduledSyncMetaAdInsights`, `GET /admin/ad-performance`);
+      inert until `META_ACCESS_TOKEN` and `config/meta.adAccountId` are set. Read-only
+      by design: nothing here can create an ad or spend money.
+- [ ] 22. Run the Ad Studio for Homestead Command Center and review the creatives.
+      Not run yet: image generation is billed per image, so it waits for approval.
 
 ## Out Of Scope For First Implementation
 - Full custom Firebase admin dashboard, unless Google Sheets approvals prove insufficient.

@@ -23,6 +23,7 @@ const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripePriceChoreTracker = defineSecret("STRIPE_PRICE_CHORE_TRACKER");
 const fdPosServiceSecret = defineSecret("FD_POS_SERVICE_SECRET");
 const resendApiKey = defineSecret("RESEND_API_KEY");
+const metaAccessToken = defineSecret("META_ACCESS_TOKEN");
 
 const REGION = "us-central1";
 const TRADE = "hvac";
@@ -2613,6 +2614,181 @@ apiApp.post("/admin/jobs/monitor-fulfillment", asyncRoute(async (req, res) => {
   res.json(result);
 }));
 
+const META_GRAPH_VERSION = "v21.0";
+
+// Ad Studio stamps a code like "HCC-A1" onto each creative and tells the owner to
+// start the Meta ad name with it. Matching on the name is what attributes spend to
+// a concept without asking Meta for any permission beyond reading the ad account.
+const AD_TRACKING_CODE_PATTERN = /^([A-Z]{2,6}-A\d{1,2})\b/;
+
+// Meta reports a purchase under whichever of these the pixel/CAPI setup produced.
+const META_PURCHASE_ACTIONS = ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"];
+
+type MetaActionRow = { action_type?: string; value?: string };
+type MetaInsightRow = {
+  ad_id?: string;
+  ad_name?: string;
+  date_start?: string;
+  impressions?: string;
+  clicks?: string;
+  spend?: string;
+  ctr?: string;
+  cpc?: string;
+  actions?: MetaActionRow[];
+  action_values?: MetaActionRow[];
+};
+
+function metaActionTotal(rows: MetaActionRow[] | undefined, actionTypes: string[]): number {
+  if (!Array.isArray(rows)) return 0;
+  return rows
+    .filter((row) => actionTypes.includes(safeString(row?.action_type)))
+    .reduce((sum, row) => sum + (Number(row?.value) || 0), 0);
+}
+
+async function fetchMetaInsights(accountId: string, token: string, datePreset: string): Promise<MetaInsightRow[]> {
+  const fields = ["ad_id", "ad_name", "impressions", "clicks", "spend", "ctr", "cpc", "actions", "action_values"].join(",");
+  const rows: MetaInsightRow[] = [];
+  let after = "";
+
+  // Paginate by cursor rather than following paging.next: that URL carries the
+  // access token as a query parameter, which would then reach error messages and logs.
+  for (let page = 0; page < 10; page++) {
+    const url = new URL(`https://graph.facebook.com/${META_GRAPH_VERSION}/${accountId}/insights`);
+    url.searchParams.set("level", "ad");
+    url.searchParams.set("time_increment", "1");
+    url.searchParams.set("limit", "200");
+    url.searchParams.set("date_preset", datePreset);
+    url.searchParams.set("fields", fields);
+    if (after) url.searchParams.set("after", after);
+
+    const response = await fetch(url.toString(), { headers: { authorization: `Bearer ${token}` } });
+    const body: any = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const reason = safeString(body?.error?.message) || `Meta returned ${response.status}.`;
+      throw Object.assign(new Error(`Meta insights request failed: ${reason}`), { statusCode: 502 });
+    }
+
+    const page_rows: MetaInsightRow[] = Array.isArray(body.data) ? body.data : [];
+    rows.push(...page_rows);
+    after = safeString(body?.paging?.cursors?.after);
+    if (!after || page_rows.length === 0) break;
+  }
+  return rows;
+}
+
+async function runMetaAdInsightsSync(datePreset: string): Promise<Record<string, unknown>> {
+  const token = secretValue("META_ACCESS_TOKEN", metaAccessToken);
+  const configDoc = await db.collection("config").doc("meta").get();
+  const configuredAccount = safeString(configDoc.get("adAccountId"));
+
+  // Stays inert rather than failing until both halves are configured, matching
+  // how the fulfillment email reports pending_config.
+  if (!token || !configuredAccount) {
+    return { status: "pending_config", hasToken: Boolean(token), hasAdAccount: Boolean(configuredAccount), rows: 0 };
+  }
+
+  const accountId = configuredAccount.startsWith("act_") ? configuredAccount : `act_${configuredAccount}`;
+  const rows = await fetchMetaInsights(accountId, token, datePreset);
+
+  type ConceptTotals = { impressions: number; clicks: number; spend: number; purchases: number; revenue: number; adIds: Set<string> };
+  const totals = new Map<string, ConceptTotals>();
+  const unmatchedNames = new Set<string>();
+
+  let batch = db.batch();
+  let pending = 0;
+  let matched = 0;
+
+  for (const row of rows) {
+    const adId = safeString(row.ad_id);
+    const date = safeString(row.date_start);
+    if (!adId || !date) continue;
+
+    const adName = safeString(row.ad_name);
+    const trackingCode = (adName.toUpperCase().match(AD_TRACKING_CODE_PATTERN) || [])[1] || "";
+    const impressions = Number(row.impressions) || 0;
+    const clicks = Number(row.clicks) || 0;
+    const spend = Number(row.spend) || 0;
+    const purchases = metaActionTotal(row.actions, META_PURCHASE_ACTIONS);
+    const revenue = metaActionTotal(row.action_values, META_PURCHASE_ACTIONS);
+
+    batch.set(db.collection("adInsights").doc(`${adId}_${date}`), {
+      adId, adName, trackingCode, date, impressions, clicks, spend, purchases, revenue,
+      ctr: Number(row.ctr) || 0,
+      cpc: Number(row.cpc) || 0,
+      syncedAt: serverTimestamp()
+    }, { merge: true });
+
+    pending++;
+    if (pending >= 400) { await batch.commit(); batch = db.batch(); pending = 0; }
+
+    if (!trackingCode) {
+      if (adName) unmatchedNames.add(adName);
+      continue;
+    }
+    matched++;
+
+    const totalsForCode = totals.get(trackingCode)
+      || { impressions: 0, clicks: 0, spend: 0, purchases: 0, revenue: 0, adIds: new Set<string>() };
+    totalsForCode.impressions += impressions;
+    totalsForCode.clicks += clicks;
+    totalsForCode.spend += spend;
+    totalsForCode.purchases += purchases;
+    totalsForCode.revenue += revenue;
+    totalsForCode.adIds.add(adId);
+    totals.set(trackingCode, totalsForCode);
+  }
+  if (pending > 0) await batch.commit();
+
+  const rollup = db.batch();
+  for (const [trackingCode, t] of totals) {
+    rollup.set(db.collection("adPerformance").doc(`${trackingCode}_${datePreset}`), {
+      trackingCode,
+      window: datePreset,
+      impressions: t.impressions,
+      clicks: t.clicks,
+      spend: Math.round(t.spend * 100) / 100,
+      purchases: t.purchases,
+      revenue: Math.round(t.revenue * 100) / 100,
+      ctr: t.impressions > 0 ? Math.round((t.clicks / t.impressions) * 10000) / 100 : 0,
+      costPerPurchase: t.purchases > 0 ? Math.round((t.spend / t.purchases) * 100) / 100 : null,
+      roas: t.spend > 0 ? Math.round((t.revenue / t.spend) * 100) / 100 : null,
+      adIds: [...t.adIds],
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  }
+  await rollup.commit();
+
+  return {
+    status: "ok",
+    window: datePreset,
+    rows: rows.length,
+    matched,
+    concepts: totals.size,
+    // Surfaced so a mis-named ad is visible rather than silently uncounted.
+    unmatchedAdNames: [...unmatchedNames].slice(0, 20)
+  };
+}
+
+apiApp.post("/admin/jobs/sync-meta-insights", asyncRoute(async (req, res) => {
+  await requireAdmin(req);
+  const datePreset = safeString(req.body?.datePreset) || "last_7d";
+  res.json(await runMetaAdInsightsSync(datePreset));
+}));
+
+apiApp.get("/admin/ad-performance", asyncRoute(async (req, res) => {
+  await requireAdmin(req);
+  const datePreset = safeString(req.query.window) || "last_7d";
+  const snapshot = await db.collection("adPerformance").where("window", "==", datePreset).get();
+
+  // Best first: sales settle it where there are any, engagement where there are not.
+  const concepts = snapshot.docs.map((doc) => doc.data()).sort((a: any, b: any) =>
+    (Number(b.purchases) || 0) - (Number(a.purchases) || 0)
+    || (Number(b.roas) || 0) - (Number(a.roas) || 0)
+    || (Number(b.ctr) || 0) - (Number(a.ctr) || 0));
+
+  res.json({ window: datePreset, concepts });
+}));
+
 apiApp.get("/admin/support-alerts", asyncRoute(async (req, res) => {
   await requireAdmin(req);
   const status = safeString(req.query.status) || "open";
@@ -2716,7 +2892,7 @@ apiApp.post("/admin/support-alerts/:alertId/resend-access", asyncRoute(async (re
   res.json({ ok: true, emailStatus: emailResult.status, purchaseId: purchaseRef.id });
 }));
 
-export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [stripeSecretKey, stripeWebhookSecret, stripePriceChoreTracker, fdPosServiceSecret, resendApiKey] }, apiApp);
+export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [stripeSecretKey, stripeWebhookSecret, stripePriceChoreTracker, fdPosServiceSecret, resendApiKey, metaAccessToken] }, apiApp);
 
 // Financial categorization is its own function (functions-financial/) so it can
 // deploy independently of the Stripe secrets this codebase's api function needs
@@ -2779,4 +2955,11 @@ export const scheduledDiscoverNashvilleHvacLeads = onSchedule({ region: REGION, 
 export const scheduledMonitorStripeFulfillment = onSchedule({ region: REGION, schedule: "every 30 minutes", timeoutSeconds: 120, memory: "256MiB", secrets: [stripeSecretKey, resendApiKey] }, async () => {
   const result = await runFulfillmentMonitor();
   logger.info("Fulfillment monitor run complete", result);
+});
+
+// Runs after Meta's own daily stats settle. Reports pending_config, quietly and
+// without alerting, until META_ACCESS_TOKEN and config/meta.adAccountId both exist.
+export const scheduledSyncMetaAdInsights = onSchedule({ region: REGION, schedule: "every day 07:00", timeZone: "America/Chicago", timeoutSeconds: 300, memory: "256MiB", secrets: [metaAccessToken] }, async () => {
+  const result = await runMetaAdInsightsSync("last_7d");
+  logger.info("Meta ad insights sync complete", result);
 });
