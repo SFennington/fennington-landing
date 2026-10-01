@@ -148,3 +148,11 @@ details p { margin-top: 12px; color: var(--muted); }
 @media (min-width: 901px) and (max-width: 1100px) {
   .template-grid, #sections .timeline { grid-template-columns: repeat(2, 1fr); }
 }
+
+.brand { display: inline-flex; align-items: center; gap: 8px; }
+.brand-mark { width: 28px; height: 28px; border-radius: 6px; }
+.product-card .cover-img { display: block; width: 100%; height: auto; border-radius: 14px; margin-bottom: 16px; }
+.photo-band img, .inline-photo { display: block; width: 100%; height: auto; }
+.photo-band { max-height: 420px; overflow: hidden; }
+.photo-band img { object-fit: cover; max-height: 420px; }
+.inline-photo { max-width: 960px; margin: 0 auto 40px; border-radius: var(--radius); box-shadow: var(--shadow); }
