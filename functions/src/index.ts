@@ -11,6 +11,7 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import Stripe from "stripe";
+import { adLandingUrl, adParams, creativeParams, imageHashFrom, metaAdName, metaGraphPost, normalizeAdAccountId, parseAdConcept } from "./meta-ads";
 
 loadLocalEnvFile();
 
@@ -24,6 +25,9 @@ const stripePriceChoreTracker = defineSecret("STRIPE_PRICE_CHORE_TRACKER");
 const fdPosServiceSecret = defineSecret("FD_POS_SERVICE_SECRET");
 const resendApiKey = defineSecret("RESEND_API_KEY");
 const metaAccessToken = defineSecret("META_ACCESS_TOKEN");
+// Separate from the insights token on purpose: that one stays read-only, and this
+// one is only ever used through the paused-ads-only path in meta-ads.ts.
+const metaAdsWriteToken = defineSecret("META_ADS_WRITE_TOKEN");
 
 const REGION = "us-central1";
 const TRADE = "hvac";
@@ -2798,6 +2802,79 @@ apiApp.get("/admin/ad-performance", asyncRoute(async (req, res) => {
   res.json({ window: datePreset, concepts });
 }));
 
+// Ad Studio calls this, one picked concept at a time, after the owner chooses which
+// ads to run. Each becomes a PAUSED ad in the owner's existing ad set; nothing spends
+// until they press Start in Ads Manager. Idempotent per tracking code, so a retry
+// after a partial failure picks up where it stopped instead of duplicating ads.
+apiApp.post("/digital-products/:slug/meta/upload-ads", asyncRoute(async (req, res) => {
+  const actor = await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  if (!product.salesPagePath) throw Object.assign(new Error("Sales page path is required before ads can link to it."), { statusCode: 409 });
+
+  const rawConcepts = Array.isArray(req.body?.concepts) ? req.body.concepts : [];
+  if (rawConcepts.length < 1 || rawConcepts.length > 5) throw Object.assign(new Error("Send between 1 and 5 concepts."), { statusCode: 400 });
+  const concepts = rawConcepts.map(parseAdConcept);
+
+  const token = secretValue("META_ADS_WRITE_TOKEN", metaAdsWriteToken).trim();
+  const config = await db.collection("config").doc("meta").get();
+  const accountId = normalizeAdAccountId(safeString(config.get("adAccountId")));
+  const pageId = safeString(config.get("pageId")).trim();
+  const adSetId = safeString(config.get("defaultAdSetId")).trim();
+  const missing = [
+    !token && "META_ADS_WRITE_TOKEN",
+    !accountId && "config/meta.adAccountId",
+    !/^\d+$/.test(pageId) && "config/meta.pageId",
+    !/^\d+$/.test(adSetId) && "config/meta.defaultAdSetId"
+  ].filter(Boolean);
+  if (missing.length) {
+    res.status(412).json({ status: "pending_config", missing });
+    return;
+  }
+
+  const results: Record<string, unknown>[] = [];
+  for (const concept of concepts) {
+    const ref = db.collection("metaAdUploads").doc(concept.trackingCode);
+    const existing = (await ref.get()).data() || {};
+    if (existing.adId) {
+      results.push({ trackingCode: concept.trackingCode, status: "skipped", reason: "already uploaded", adId: existing.adId });
+      continue;
+    }
+    if (existing.productSlug && existing.productSlug !== product.slug) {
+      results.push({ trackingCode: concept.trackingCode, status: "failed", error: `Tracking code already belongs to ${existing.productSlug}.` });
+      continue;
+    }
+
+    const link = adLandingUrl(SITE_URL, product.salesPagePath, product.slug, concept.trackingCode);
+    const record = { trackingCode: concept.trackingCode, productSlug: product.slug, adName: metaAdName(concept), link, adSetId, uploadedBy: actor.email || actor.uid };
+    let imageHash = safeString(existing.imageHash);
+    let creativeId = safeString(existing.creativeId);
+    try {
+      // Each step is saved as it succeeds, so a retry reuses the image and creative
+      // rather than leaving orphans behind in the ad account.
+      if (!imageHash) {
+        imageHash = imageHashFrom(await metaGraphPost(accountId, "adimages", { bytes: concept.imageBase64 }, token));
+        await ref.set({ ...record, imageHash, status: "image_uploaded", updatedAt: serverTimestamp() }, { merge: true });
+      }
+      if (!creativeId) {
+        creativeId = safeString((await metaGraphPost(accountId, "adcreatives", creativeParams(concept, pageId, imageHash, link), token)).id);
+        if (!creativeId) throw Object.assign(new Error("Meta did not return a creative id."), { statusCode: 502 });
+        await ref.set({ ...record, imageHash, creativeId, status: "creative_created", updatedAt: serverTimestamp() }, { merge: true });
+      }
+      const adId = safeString((await metaGraphPost(accountId, "ads", adParams(concept, adSetId, creativeId), token)).id);
+      if (!adId) throw Object.assign(new Error("Meta did not return an ad id."), { statusCode: 502 });
+      await ref.set({ ...record, imageHash, creativeId, adId, status: "uploaded_paused", error: FieldValue.delete(), uploadedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+      results.push({ trackingCode: concept.trackingCode, status: "uploaded_paused", adId, adName: record.adName });
+    } catch (error: any) {
+      const message = safeString(error?.message, "Upload failed.");
+      await ref.set({ ...record, status: "failed", error: message, updatedAt: serverTimestamp() }, { merge: true });
+      results.push({ trackingCode: concept.trackingCode, status: "failed", error: message });
+    }
+  }
+
+  const failed = results.filter((r) => r.status === "failed").length;
+  res.status(failed === results.length ? 502 : 200).json({ ok: failed === 0, slug: product.slug, results });
+}));
+
 apiApp.get("/admin/support-alerts", asyncRoute(async (req, res) => {
   await requireAdmin(req);
   const status = safeString(req.query.status) || "open";
@@ -2901,7 +2978,7 @@ apiApp.post("/admin/support-alerts/:alertId/resend-access", asyncRoute(async (re
   res.json({ ok: true, emailStatus: emailResult.status, purchaseId: purchaseRef.id });
 }));
 
-export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [stripeSecretKey, stripeWebhookSecret, stripePriceChoreTracker, fdPosServiceSecret, resendApiKey, metaAccessToken] }, apiApp);
+export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [stripeSecretKey, stripeWebhookSecret, stripePriceChoreTracker, fdPosServiceSecret, resendApiKey, metaAccessToken, metaAdsWriteToken] }, apiApp);
 
 // Financial categorization is its own function (functions-financial/) so it can
 // deploy independently of the Stripe secrets this codebase's api function needs
