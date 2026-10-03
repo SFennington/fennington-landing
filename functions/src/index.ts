@@ -1466,7 +1466,13 @@ apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1
   const eventSession = event.data.object as Stripe.Checkout.Session;
   const productSlug = safeString(eventSession.metadata?.product_slug);
   const productId = safeString(eventSession.metadata?.product_id);
-  if (!productSlug && !productId) throw Object.assign(new Error("Checkout session is missing product metadata."), { statusCode: 400 });
+  // The Stripe account also bills Livestock Tracker subscriptions through Checkout.
+  // Those sessions carry no digital-product metadata and are not ours to fulfil; a 400
+  // would make Stripe retry them for days and eventually disable this endpoint.
+  if (!productSlug && !productId) {
+    res.json({ received: true, ignored: true });
+    return;
+  }
   const product = productId ? await getDigitalProductById(productId) : await getDigitalProductBySlug(productSlug);
 
   const session = await stripe.checkout.sessions.retrieve(eventSession.id);
