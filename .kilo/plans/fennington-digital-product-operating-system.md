@@ -667,6 +667,137 @@ Implementation agent should validate in this order:
 12. Sales page does not show live checkout before product is enabled.
 13. Content Reactor dry-run consumes approved product metadata only.
 
+## Next Tier: Idea To Ads-Ready, 2026-10-02
+
+Owner request, 2026-10-02: automate as much of the run from "here is an idea" to
+"package finished, ads uploaded and waiting for me to press start" as possible,
+every new product goes straight to live sale (no sandbox pass per product), and
+ad results feed the next batch of ads.
+
+### End-to-end flow
+
+```mermaid
+flowchart TD
+  A[Owner tells the assistant the idea] --> B{Approve idea + intake}
+  B --> C[Brand Kit core: palette, cover, logo]
+  C --> D{Approve cover + logo}
+  D --> E[Product Builder: ebook with cover + worksheets]
+  E --> F{Review ebook + worksheets}
+  F --> G[Add-On proposals]
+  G --> H{Pick add-ons}
+  H --> I[Add-On Builder]
+  F --> J[Brand Kit site: hero, secondary, header]
+  J --> K[Sales page generated from brand kit + pillars]
+  I --> K
+  K --> L{Owner gives price(s) in chat}
+  L --> M[Live Stripe product + price created, IDs saved]
+  M --> N[Register fulfilment package]
+  N --> O{Approve sales page + publish}
+  O --> P[Ad Studio: concepts + creatives]
+  P --> Q{Pick ads}
+  Q --> R[Upload to Meta as PAUSED ads]
+  R --> S[Owner presses Start in Meta]
+  S --> T[Nightly insights sync per tracking code]
+  T --> U[Winners report in the assistant]
+  U --> P
+```
+
+Diamonds are approvals. Each one is an existing FD-POS approval record; deciding it
+in the assistant fires the next box. Nothing in the flow spends ad money: ads are
+always created paused.
+
+### 1. Drive folder layout
+
+Every product lands in one folder named after the ebook, with three subfolders:
+
+```
+Business/Digital Products/<Ebook Name>/
+  Main Package/   ebook (with cover) + worksheets
+  Add Ons/        add-on .xlsx + guide PDFs
+  Brand & Ads/    brand kit images, ad-concepts.md, ad creatives
+```
+
+- No date in the folder name; reruns overwrite inside the same folder.
+- A small shared n8n sub-workflow, `PERC - Drive Product Folder`, takes the product
+  name and a section (`main`, `addons`, `brand`) and returns the subfolder id,
+  creating the parent and subfolder only if they do not exist (search by name under
+  the parent first). All four PERC workflows call it instead of creating their own
+  dated folders.
+- Homestead Command Center is being moved into this layout by hand.
+
+### 2. Chaining the stages
+
+- Add an `n8n` hook to the FD-POS approval decide route: when an approval with a
+  `nextStage` field is approved, call that stage's n8n webhook with the product slug.
+- The assistant shows each pending approval with its artifacts (Drive links, images)
+  so the owner approves from one place.
+- Ad Studio stays re-runnable outside the chain.
+
+### 3. Sales page generator
+
+- New Website Builder step: render the sales page from a template using brand kit
+  colours and images, pillar titles, worksheet list, add-on list, and the prices.
+- Output is a PR to this repo, never a direct deploy. Publishing stays manual.
+
+### 4. Live pricing from chat
+
+Today `POST /digital-products/:slug/create-stripe-product` already creates the
+Stripe Product and Price from `priceCents` on the product doc and saves both IDs.
+The owner never needs to copy IDs around.
+
+- New assistant tool `set_digital_product_price` (approval: always): takes slug,
+  tier (`base`/`bundle`), and price in dollars; writes `priceCents`, then calls the
+  create-stripe-product route. The reply shows the created live IDs.
+- Bundles become their own `digitalProducts` doc (`<slug>-bundle`) as Homestead
+  already does, so each tier is one product + one price.
+- Changing a price creates a new Stripe Price and archives the old one; Stripe
+  Prices are immutable.
+- **Prerequisite (one time):** production secrets switched to live
+  (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) and a live webhook endpoint created.
+  Confirm first whether this Stripe account also bills Livestock Tracker; if so,
+  every live write needs the owner's explicit OK per the global deploy rules.
+- **Risk:** Homestead's existing IDs are test-mode. After the switch, clear
+  `stripeProductId`/`stripePriceId` on both Homestead docs and re-run the tool so
+  live objects are created.
+
+### 5. Meta upload (paused only)
+
+- Needs a system-user token with `ads_management` on the ad account, stored as a new
+  secret `META_ADS_WRITE_TOKEN` (the existing read token stays read-only), plus
+  `config/meta.pageId` and a default `campaignId`/`adSetId` the owner creates once.
+- New admin route `POST /digital-products/:slug/meta/upload-ads`: for each picked
+  concept uploads the creative image, creates an ad creative (primary text,
+  headline, CTA, link to the sales page with `utm_content=<tracking code>`), and an
+  ad named `<tracking code> <hook>` with `status: PAUSED`.
+- Guardrails in code: refuses any status other than PAUSED, never creates or edits
+  budgets or campaigns, idempotent per tracking code (skips codes already uploaded).
+- Ad Studio calls this route after the owner picks ads.
+
+### 6. Results and "make more like the winner"
+
+Already built: nightly sync into `adInsights` and per-code rollups in
+`adPerformance`. Missing:
+
+- Stripe sales attributed by `utm_content` (pass it into Checkout metadata from the
+  sales page) so ranking uses real revenue, not just Meta's pixel.
+- An assistant view: per product, each ad code with spend, clicks, CTR, purchases,
+  cost per purchase, ranked.
+- Ad Studio input `basedOn: <tracking code>`: reads the winning concept's angle,
+  hook and image brief and generates variations of it, numbered after the last code.
+
+### Build order
+
+1. Drive folder layout (small, unblocks tidy output).
+2. Live pricing tool + one-time live switch.
+3. Meta paused upload.
+4. Results view + winner-based Ad Studio input.
+5. Stage chaining from approvals.
+6. Sales page generator.
+
+Steps 1-3 cost no AI credits to test; 3 needs the owner to create the Meta system
+user token. Steps 2 and 3 touch live Stripe and Meta, so each first run needs the
+owner present.
+
 ## Implementation Order
 - [x] 1. Create schemas/config docs for product manifest, statuses, approvals, promise classifications, and quality gates.
 - [x] 2. Add/genericize Firebase backend data model and endpoints.
