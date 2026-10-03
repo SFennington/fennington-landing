@@ -89,21 +89,28 @@
       message.textContent = "No checkout session was provided. Use access recovery if you already purchased.";
       return;
     }
-    const result = await fetchPurchaseStatus(sessionId);
+    // The webhook usually lands a few seconds after Stripe redirects here, so keep
+    // checking for a short while instead of reporting the first "pending" answer.
+    message.textContent = "Payment received. Preparing your download link...";
+    let result = null;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      result = await fetchPurchaseStatus(sessionId);
+      if (result && result.data.status === "fulfilled") break;
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
     if (!result) {
-      message.textContent = "Unable to verify purchase status right now. If checkout was completed, use access recovery or contact support.";
+      message.textContent = "We could not confirm your purchase right now. If you were charged, check your email for your download link, or use access recovery below.";
       return;
     }
     const { slug, data } = result;
     if (data.status === "fulfilled") {
-      message.textContent = "Payment is confirmed and fulfillment has been recorded. Check the email used at checkout for your secure access link.";
+      message.textContent = "You're all set. Your download link has been sent to the email you used at checkout.";
       analytics.track("planner_purchase_confirmed", { slug, sessionId });
     } else if (data.status === "paid_pending_fulfillment") {
-      message.textContent = "Stripe shows the payment as complete. Fulfillment is still pending; refresh shortly or contact support if the email does not arrive.";
+      message.textContent = "Your payment went through. Your download link is on its way to the email you used at checkout and usually arrives within a few minutes. Check your spam folder if you don't see it.";
     } else {
-      message.textContent = "The purchase is not fulfilled yet. If checkout was completed, the webhook may still be processing.";
+      message.textContent = "Your checkout is still processing. Check your email in a few minutes, or use access recovery below.";
     }
-    setText(document.getElementById("successStatus"), data.emailStatus ? `Email status: ${data.emailStatus}` : "");
   }
 
   function setupDownloads() {
