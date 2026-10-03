@@ -724,6 +724,14 @@ Business/Digital Products/<Ebook Name>/
   the parent first). All four PERC workflows call it instead of creating their own
   dated folders.
 - Homestead Command Center is being moved into this layout by hand.
+- **Built 2026-10-02** (n8n repo, `workflows/PERC - Drive Product Folder.json`). Each
+  caller keeps a node named `Create Drive Folder`, now an Execute Workflow call fed by a
+  `Drive Folder Request` node, so downstream `.json.id` references are unchanged. After
+  importing, pick the sub-workflow in that node once per caller (n8n stores it by id).
+  The folder is matched on the exact `productTitle`, so all four workflows must be given
+  the same title. Ad Studio reruns upload new files beside the old ones (Drive does not
+  overwrite by name); tracking codes keep the creatives distinct, but `ad-concepts.md`
+  will repeat.
 
 ### 2. Chaining the stages
 
