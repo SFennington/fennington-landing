@@ -780,6 +780,14 @@ The owner never needs to copy IDs around.
 - Guardrails in code: refuses any status other than PAUSED, never creates or edits
   budgets or campaigns, idempotent per tracking code (skips codes already uploaded).
 - Ad Studio calls this route after the owner picks ads.
+- **Built and deployed 2026-10-03.** Route in `functions/src/index.ts`, guardrails in
+  `functions/src/meta-ads.ts` (tests: `npm test` in `functions/`). n8n workflow
+  `PERC - Meta Upload v1` (webhook `perc-meta-upload`, script `find-ad-concepts.ps1`)
+  is live. Assistant tool `upload_meta_ads` (approval: always) sends the picked codes;
+  results come back as a `meta-upload` stage comment. Uploads are recorded per code in
+  `metaAdUploads`. Config read from `config/meta`: `adAccountId`, `pageId`,
+  `defaultAdSetId`. Until the `META_ADS_WRITE_TOKEN` secret (created blank) and those
+  fields are set, an upload reports `pending_config` and creates nothing.
 
 ### 6. Results and "make more like the winner"
 
