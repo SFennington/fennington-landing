@@ -788,6 +788,14 @@ The owner never needs to copy IDs around.
   `metaAdUploads`. Config read from `config/meta`: `adAccountId`, `pageId`,
   `defaultAdSetId`. Until the `META_ADS_WRITE_TOKEN` secret (created blank) and those
   fields are set, an upload reports `pending_config` and creates nothing.
+- **Connected 2026-10-05.** Ad account `1805585060579047` (Fennington Solutions), Page
+  `1434913379694374`, campaign `6983277455049`, ad set `6983277455249` ($5/day,
+  Purchase), pixel `4207276016235953`, all in `config/meta`. The Meta app had to be
+  switched to Live (needs `/privacy-policy`). HCC-A1..A3 uploaded paused. n8n reaches
+  the landing API through the `FD-POS service secret` header credential, not `$env`.
+- Pixel and sale attribution (part of section 6) are live: `assets/js/meta-pixel.js`
+  on the Homestead sales and thank-you pages; checkout sends `adCode` from
+  `utm_content`, stored as Stripe metadata `ad_code` and `digitalPurchases.adCode`.
 
 ### 6. Results and "make more like the winner"
 
