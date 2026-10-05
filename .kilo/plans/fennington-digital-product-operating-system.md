@@ -808,6 +808,15 @@ Already built: nightly sync into `adInsights` and per-code rollups in
   cost per purchase, ranked.
 - Ad Studio input `basedOn: <tracking code>`: reads the winning concept's angle,
   hook and image brief and generates variations of it, numbered after the last code.
+- **Built 2026-10-05.** Ranking: `GET /admin/ad-performance` (admin or FD-POS
+  secret, `window`, `prefix`) ranks by Stripe sales per `adCode`, then cost per sale,
+  cost per click, CTR; `enoughData` false under $10 spend and 20 clicks. Assistant
+  tools `get_ad_ranking` (read) and `pause_meta_ads` (approval: always; landing route
+  `POST /digital-products/:slug/meta/pause-ads`, pause only, own ads only).
+  `start_ad_studio` takes `basedOn`; Ad Studio's `Find Winner` + `Winner Brief` nodes
+  feed the winner into the prompt and refuse a `startIndex` that reuses a code. The
+  nightly insights sync now has a token (same system-user token, read use only).
+  Not built: an automatic 7-day report; the owner asks the assistant instead.
 
 ### Build order
 
