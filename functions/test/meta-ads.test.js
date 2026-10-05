@@ -104,3 +104,43 @@ test("normalizes ad account ids", () => {
   assert.equal(meta.normalizeAdAccountId("act_12345"), "act_12345");
   assert.equal(meta.normalizeAdAccountId("act_abc"), "");
 });
+
+test("pause sends only status PAUSED to the ad itself", async () => {
+  const { calls, impl } = fakeFetch([{ success: true }]);
+  await meta.metaPauseAd("120200", "secret-token", impl);
+  assert.equal(calls[0].url, "https://graph.facebook.com/v21.0/120200");
+  assert.deepEqual([...calls[0].params.entries()], [["status", "PAUSED"]]);
+  await assert.rejects(meta.metaPauseAd("act_1/campaigns", "t", impl), /ad id is invalid/);
+  assert.equal(calls.length, 1);
+});
+
+test("ranking puts real Stripe sales first, then cheaper clicks", () => {
+  const rows = [
+    { trackingCode: "HCC-A1", clicks: 40, spend: 12, impressions: 3000, ctr: 1.3 },
+    { trackingCode: "HCC-A2", clicks: 20, spend: 12, impressions: 2500, ctr: 0.8 },
+    { trackingCode: "HCC-A3", clicks: 50, spend: 11, impressions: 3500, ctr: 1.4, purchases: 0 }
+  ];
+  const sales = new Map([["HCC-A2", { count: 1, revenueCents: 1700 }]]);
+  const ranked = meta.rankAds(rows, sales);
+  assert.deepEqual(ranked.map((r) => r.trackingCode), ["HCC-A2", "HCC-A3", "HCC-A1"]);
+  assert.equal(ranked[0].revenue, 17);
+  assert.equal(ranked[0].costPerSale, 12);
+  assert.equal(ranked[1].costPerClick, 0.22);
+});
+
+test("ranking flags ads that have not had enough spend to judge", () => {
+  const ranked = meta.rankAds([
+    { trackingCode: "HCC-A1", clicks: 3, spend: 2 },
+    { trackingCode: "HCC-A2", clicks: 25, spend: 4 }
+  ], new Map());
+  assert.equal(ranked.find((r) => r.trackingCode === "HCC-A1").enoughData, false);
+  assert.equal(ranked.find((r) => r.trackingCode === "HCC-A2").enoughData, true);
+});
+
+test("an ad with no clicks ranks below one with clicks", () => {
+  const ranked = meta.rankAds([
+    { trackingCode: "HCC-A1", clicks: 0, spend: 0 },
+    { trackingCode: "HCC-A2", clicks: 5, spend: 3 }
+  ], new Map());
+  assert.deepEqual(ranked.map((r) => r.trackingCode), ["HCC-A2", "HCC-A1"]);
+});

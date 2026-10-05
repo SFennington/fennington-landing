@@ -11,7 +11,7 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import Stripe from "stripe";
-import { adLandingUrl, adParams, creativeParams, imageHashFrom, metaAdName, metaGraphPost, normalizeAdAccountId, parseAdConcept } from "./meta-ads";
+import { adLandingUrl, adParams, creativeParams, imageHashFrom, metaAdName, metaGraphPost, metaPauseAd, normalizeAdAccountId, parseAdConcept, rankAds, TRACKING_CODE_PATTERN, type AdPerformanceRow } from "./meta-ads";
 
 loadLocalEnvFile();
 
@@ -2802,18 +2802,81 @@ apiApp.post("/admin/jobs/sync-meta-insights", asyncRoute(async (req, res) => {
   res.json(await runMetaAdInsightsSync(datePreset));
 }));
 
+const AD_WINDOW_DAYS: Record<string, number | null> = { last_7d: 7, last_14d: 14, last_30d: 30, maximum: null };
+
 apiApp.get("/admin/ad-performance", asyncRoute(async (req, res) => {
-  await requireAdmin(req);
+  await requireAdminOrServiceSecret(req);
   const datePreset = safeString(req.query.window) || "last_7d";
+  if (!(datePreset in AD_WINDOW_DAYS)) throw Object.assign(new Error("window must be last_7d, last_14d, last_30d or maximum."), { statusCode: 400 });
+  // Optional: only one product's ads, by its tracking prefix (HCC for HCC-A1).
+  const prefix = safeString(req.query.prefix).toUpperCase();
+  if (prefix && !/^[A-Z]{2,6}$/.test(prefix)) throw Object.assign(new Error("prefix must be 2 to 6 letters."), { statusCode: 400 });
+
   const snapshot = await db.collection("adPerformance").where("window", "==", datePreset).get();
+  const rows = snapshot.docs.map((doc) => doc.data() as AdPerformanceRow)
+    .filter((row) => !prefix || row.trackingCode.startsWith(`${prefix}-`));
 
-  // Best first: sales settle it where there are any, engagement where there are not.
-  const concepts = snapshot.docs.map((doc) => doc.data()).sort((a: any, b: any) =>
-    (Number(b.purchases) || 0) - (Number(a.purchases) || 0)
-    || (Number(b.roas) || 0) - (Number(a.roas) || 0)
-    || (Number(b.ctr) || 0) - (Number(a.ctr) || 0));
+  // Real sales from Stripe, attributed by the ad code checkout stored on the order.
+  const days = AD_WINDOW_DAYS[datePreset];
+  let purchasesQuery: Query = db.collection("digitalPurchases");
+  if (days) purchasesQuery = purchasesQuery.where("purchasedAt", ">=", new Date(Date.now() - days * 86_400_000));
+  const purchases = await purchasesQuery.limit(2000).get();
+  const sales = new Map<string, { count: number; revenueCents: number }>();
+  for (const doc of purchases.docs) {
+    const code = safeString(doc.get("adCode"));
+    if (!code || (prefix && !code.startsWith(`${prefix}-`))) continue;
+    const entry = sales.get(code) || { count: 0, revenueCents: 0 };
+    entry.count += 1;
+    entry.revenueCents += Number(doc.get("amountTotal")) || 0;
+    sales.set(code, entry);
+  }
+  // A sale can come from an ad Meta has not reported yet; it still belongs in the list.
+  for (const code of sales.keys()) {
+    if (!rows.some((row) => row.trackingCode === code)) rows.push({ trackingCode: code });
+  }
 
-  res.json({ window: datePreset, concepts });
+  const lastSync = await db.collection("adInsights").orderBy("syncedAt", "desc").limit(1).get();
+  res.json({
+    window: datePreset,
+    lastSyncedAt: lastSync.empty ? null : lastSync.docs[0].get("syncedAt")?.toDate?.() || null,
+    ads: rankAds(rows, sales)
+  });
+}));
+
+// Pause only. Used once the owner has picked a winner; it can never start an ad,
+// and it only touches ads this system uploaded for this product.
+apiApp.post("/digital-products/:slug/meta/pause-ads", asyncRoute(async (req, res) => {
+  const actor = await requireAdminOrServiceSecret(req);
+  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  const codes = (Array.isArray(req.body?.trackingCodes) ? req.body.trackingCodes : []).map((c: unknown) => safeString(c).toUpperCase());
+  if (codes.length < 1 || codes.length > 10 || codes.some((c: string) => !TRACKING_CODE_PATTERN.test(c))) {
+    throw Object.assign(new Error("Send 1 to 10 tracking codes like HCC-A1."), { statusCode: 400 });
+  }
+  const token = secretValue("META_ADS_WRITE_TOKEN", metaAdsWriteToken).trim();
+  if (!token) {
+    res.status(412).json({ status: "pending_config", missing: ["META_ADS_WRITE_TOKEN"] });
+    return;
+  }
+
+  const results: Record<string, unknown>[] = [];
+  for (const code of [...new Set<string>(codes)]) {
+    const ref = db.collection("metaAdUploads").doc(code);
+    const upload = (await ref.get()).data() || {};
+    const adId = safeString(upload.adId);
+    if (!adId || upload.productSlug !== product.slug) {
+      results.push({ trackingCode: code, status: "failed", error: `No uploaded ad ${code} for ${product.slug}.` });
+      continue;
+    }
+    try {
+      await metaPauseAd(adId, token);
+      await ref.set({ pausedAt: serverTimestamp(), pausedBy: actor.email || actor.uid, updatedAt: serverTimestamp() }, { merge: true });
+      results.push({ trackingCode: code, status: "paused", adId });
+    } catch (error: any) {
+      results.push({ trackingCode: code, status: "failed", error: safeString(error?.message, "Pause failed.") });
+    }
+  }
+  const failed = results.filter((r) => r.status === "failed").length;
+  res.status(failed === results.length ? 502 : 200).json({ ok: failed === 0, slug: product.slug, results });
 }));
 
 // Ad Studio calls this, one picked concept at a time, after the owner chooses which

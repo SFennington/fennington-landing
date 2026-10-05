@@ -138,9 +138,19 @@ export async function metaGraphPost(
   for (const [key, value] of Object.entries(params)) {
     form.set(key, typeof value === "string" ? value : JSON.stringify(value));
   }
+  return graphFormPost(`${accountId}/${edge}`, form, token, fetchImpl, edge);
+}
 
+// The only change ever made to an existing ad: set it to PAUSED. Pausing can only
+// lower spend, so it is the one edit allowed; starting an ad stays with the owner.
+export async function metaPauseAd(adId: string, token: string, fetchImpl: typeof fetch = fetch): Promise<any> {
+  if (!/^\d+$/.test(adId)) throw new Error("Meta ad id is invalid.");
+  return graphFormPost(adId, new URLSearchParams({ status: "PAUSED" }), token, fetchImpl, "pause");
+}
+
+async function graphFormPost(path: string, form: URLSearchParams, token: string, fetchImpl: typeof fetch, label: string): Promise<any> {
   // Token in the header, never the URL, so it cannot end up in an error message.
-  const response = await fetchImpl(`https://graph.facebook.com/${META_GRAPH_VERSION}/${accountId}/${edge}`, {
+  const response = await fetchImpl(`https://graph.facebook.com/${META_GRAPH_VERSION}/${path}`, {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/x-www-form-urlencoded" },
     body: form.toString()
@@ -148,9 +158,69 @@ export async function metaGraphPost(
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok || body?.error) {
     const reason = [body?.error?.message, body?.error?.error_user_msg].filter(Boolean).join(" - ") || `Meta returned ${response.status}.`;
-    throw Object.assign(new Error(`Meta ${edge} request failed: ${reason}`), { statusCode: 502 });
+    throw Object.assign(new Error(`Meta ${label} request failed: ${reason}`), { statusCode: 502 });
   }
   return body;
+}
+
+export type AdPerformanceRow = {
+  trackingCode: string;
+  impressions?: number;
+  clicks?: number;
+  spend?: number;
+  purchases?: number;
+  ctr?: number;
+};
+
+export type RankedAd = {
+  trackingCode: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  ctr: number;
+  costPerClick: number | null;
+  sales: number;
+  revenue: number;
+  costPerSale: number | null;
+  enoughData: boolean;
+};
+
+// Below this an ad has not been shown enough to judge. Roughly a week at $5/day
+// split three ways, or enough clicks that a click-rate gap means something.
+const MIN_SPEND_TO_JUDGE = 10;
+const MIN_CLICKS_TO_JUDGE = 20;
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Sales are counted from Stripe, by the tracking code checkout stored with the
+// order, not from Meta's pixel, which can miss or double-count. Meta purchases are
+// only a fallback for ads with no recorded sale. With no sales anywhere (the usual
+// case at a small budget), cheaper clicks win, then the higher click rate.
+export function rankAds(rows: AdPerformanceRow[], sales: Map<string, { count: number; revenueCents: number }>): RankedAd[] {
+  const ranked = rows.map((row) => {
+    const clicks = Number(row.clicks) || 0;
+    const spend = Number(row.spend) || 0;
+    const sale = sales.get(row.trackingCode);
+    const salesCount = sale ? sale.count : Number(row.purchases) || 0;
+    return {
+      trackingCode: row.trackingCode,
+      impressions: Number(row.impressions) || 0,
+      clicks,
+      spend: round2(spend),
+      ctr: Number(row.ctr) || 0,
+      costPerClick: clicks > 0 ? round2(spend / clicks) : null,
+      sales: salesCount,
+      revenue: sale ? round2(sale.revenueCents / 100) : 0,
+      costPerSale: salesCount > 0 ? round2(spend / salesCount) : null,
+      enoughData: spend >= MIN_SPEND_TO_JUDGE || clicks >= MIN_CLICKS_TO_JUDGE
+    };
+  });
+  const cpc = (ad: RankedAd) => (ad.costPerClick === null ? Number.POSITIVE_INFINITY : ad.costPerClick);
+  return ranked.sort((a, b) =>
+    b.sales - a.sales
+    || (a.costPerSale ?? Infinity) - (b.costPerSale ?? Infinity)
+    || cpc(a) - cpc(b)
+    || b.ctr - a.ctr);
 }
 
 export function imageHashFrom(body: any): string {
