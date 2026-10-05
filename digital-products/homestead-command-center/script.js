@@ -21,6 +21,27 @@
     }
   };
 
+  // Meta pixel, loaded by meta-pixel.js. Absent (blocked or not loaded) is fine.
+  const pixel = window.fenningtonPixel || { adCode: () => "", track: () => {} };
+
+  function reportPurchaseOnce(slug, sessionId, data) {
+    // A reload of the thank-you page must not count the sale twice. The eventID
+    // also lets Meta drop a duplicate if storage is unavailable.
+    const key = `fenningtonPurchaseReported:${sessionId}`;
+    try {
+      if (window.localStorage.getItem(key)) return;
+      window.localStorage.setItem(key, "1");
+    } catch (error) {
+      // Fall through and rely on the eventID.
+    }
+    pixel.track("Purchase", {
+      value: (Number(data.amountTotal) || 0) / 100,
+      currency: String(data.currency || "usd").toUpperCase(),
+      content_ids: [slug],
+      content_type: "product"
+    }, `purchase-${sessionId}`);
+  }
+
   function setText(element, message) {
     if (element) element.textContent = message || "";
   }
@@ -53,10 +74,12 @@
       const status = document.querySelector(`[data-checkout-status="${slug}"]`);
       button.addEventListener("click", async () => {
         analytics.track("planner_checkout_click", { slug });
+        pixel.track("InitiateCheckout", { content_ids: [slug], content_type: "product" });
         button.disabled = true;
         setText(status, "Creating secure checkout...");
         try {
-          const data = await postJson(api(`/digital-products/${encodeURIComponent(slug)}/create-checkout-session`));
+          // adCode tags the Stripe sale with the ad that brought the buyer, if any.
+          const data = await postJson(api(`/digital-products/${encodeURIComponent(slug)}/create-checkout-session`), { adCode: pixel.adCode() });
           analytics.track("planner_checkout_created", { slug, sessionId: data.sessionId });
           window.location.assign(data.url);
         } catch (error) {
@@ -103,6 +126,9 @@
       return;
     }
     const { slug, data } = result;
+    if (data.status === "fulfilled" || data.status === "paid_pending_fulfillment") {
+      reportPurchaseOnce(slug, sessionId, data);
+    }
     if (data.status === "fulfilled") {
       message.textContent = "You're all set. Your download link has been sent to the email you used at checkout.";
       analytics.track("planner_purchase_confirmed", { slug, sessionId });

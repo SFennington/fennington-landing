@@ -1522,6 +1522,7 @@ apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1
       stripePriceId: product.stripePriceId,
       amountTotal: session.amount_total || 0,
       currency: safeString(session.currency || "usd"),
+      adCode: checkoutAdCode(session.metadata?.ad_code),
       customerEmail,
       emailHash,
       latestTokenHash: tokenHash,
@@ -2430,7 +2431,14 @@ apiApp.post("/digital-products/:slug/create-stripe-product", asyncRoute(async (r
   res.json({ ok: true, productId: product.productId, slug: product.slug, stripeProductId: stripeProduct.id, stripePriceId: price.id });
 }));
 
-async function createCheckoutSessionForSlug(slug: string) {
+// The ad that brought the buyer, from the sales page's utm_content. Only a
+// well-formed tracking code is kept, so nothing else a visitor sends reaches Stripe.
+function checkoutAdCode(value: unknown): string {
+  const code = safeString(value).trim().toUpperCase();
+  return /^[A-Z]{2,6}-A\d{1,2}$/.test(code) ? code : "";
+}
+
+async function createCheckoutSessionForSlug(slug: string, adCode = "") {
   const stripe = stripeClient();
   const product = await getDigitalProductBySlug(slug);
   assertCheckoutEnabled(product);
@@ -2445,7 +2453,8 @@ async function createCheckoutSessionForSlug(slug: string) {
       product_slug: product.slug,
       product_id: product.productId,
       package_version: product.fulfillmentVersion,
-      environment: process.env.FUNCTIONS_EMULATOR === "true" ? "emulator" : "production"
+      environment: process.env.FUNCTIONS_EMULATOR === "true" ? "emulator" : "production",
+      ...(adCode ? { ad_code: adCode } : {})
     },
     payment_intent_data: {
       metadata: {
@@ -2459,7 +2468,7 @@ async function createCheckoutSessionForSlug(slug: string) {
 }
 
 apiApp.post("/digital-products/:slug/create-checkout-session", asyncRoute(async (req, res) => {
-  const session = await createCheckoutSessionForSlug(safeString(req.params.slug));
+  const session = await createCheckoutSessionForSlug(safeString(req.params.slug), checkoutAdCode(req.body?.adCode));
   res.json({ sessionId: session.id, url: session.url });
 }));
 
@@ -2477,7 +2486,10 @@ apiApp.get("/digital-products/:slug/purchase-status", asyncRoute(async (req, res
     res.json({
       status: safeString(purchase.get("status"), "fulfilled"),
       emailStatus: safeString(purchase.get("fulfillmentEmailStatus"), "pending"),
-      productSlug: slug
+      productSlug: slug,
+      // Lets the thank-you page report the sale to the Meta pixel at its real value.
+      amountTotal: Number(purchase.get("amountTotal")) || 0,
+      currency: safeString(purchase.get("currency"), "usd")
     });
     return;
   }
@@ -2488,7 +2500,9 @@ apiApp.get("/digital-products/:slug/purchase-status", asyncRoute(async (req, res
     res.json({
       status: session.payment_status === "paid" ? "paid_pending_fulfillment" : "pending",
       emailStatus: "pending",
-      productSlug: session.metadata?.product_slug || ""
+      productSlug: session.metadata?.product_slug || "",
+      amountTotal: session.amount_total || 0,
+      currency: safeString(session.currency, "usd")
     });
   } catch {
     res.json({ status: "pending", emailStatus: "pending", productSlug: "" });
