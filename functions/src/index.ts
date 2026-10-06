@@ -2796,10 +2796,104 @@ async function runMetaAdInsightsSync(datePreset: string): Promise<Record<string,
   };
 }
 
+const META_SYNC_PRESETS = new Set(["today", "yesterday", "last_7d", "last_14d", "last_30d"]);
+
+// The dashboard's refresh button calls this with "today" through the assistant.
 apiApp.post("/admin/jobs/sync-meta-insights", asyncRoute(async (req, res) => {
-  await requireAdmin(req);
+  await requireAdminOrServiceSecret(req);
   const datePreset = safeString(req.body?.datePreset) || "last_7d";
+  if (!META_SYNC_PRESETS.has(datePreset)) throw Object.assign(new Error("Unsupported datePreset."), { statusCode: 400 });
   res.json(await runMetaAdInsightsSync(datePreset));
+}));
+
+// Everything the ads dashboard draws, in one call: per-ad daily rows for the chart,
+// period totals ranked the same way as get_ad_ranking, Stripe sales by day, and
+// each ad's live status from Meta so a paused or rejected ad is obvious.
+apiApp.get("/admin/ad-dashboard", asyncRoute(async (req, res) => {
+  await requireAdminOrServiceSecret(req);
+  const prefix = safeString(req.query.prefix).toUpperCase();
+  if (prefix && !/^[A-Z]{2,6}$/.test(prefix)) throw Object.assign(new Error("prefix must be 2 to 6 letters."), { statusCode: 400 });
+  const days = Math.min(90, Math.max(1, Number(req.query.days) || 14));
+  const ofPrefix = (code: string) => Boolean(code) && (!prefix || code.startsWith(`${prefix}-`));
+
+  // Meta reports in the ad account's timezone; the dashboard only needs whole days.
+  const since = new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  const insightRows = await db.collection("adInsights").where("date", ">=", since).get();
+  const daily = insightRows.docs.map((doc) => doc.data())
+    .filter((row) => ofPrefix(safeString(row.trackingCode)))
+    .map((row) => ({
+      trackingCode: safeString(row.trackingCode),
+      date: safeString(row.date),
+      impressions: Number(row.impressions) || 0,
+      clicks: Number(row.clicks) || 0,
+      spend: Number(row.spend) || 0
+    }));
+
+  const purchases = await db.collection("digitalPurchases").where("purchasedAt", ">=", new Date(`${since}T00:00:00Z`)).limit(2000).get();
+  const salesByDay: { trackingCode: string; date: string; revenue: number }[] = [];
+  const salesTotals = new Map<string, { count: number; revenueCents: number }>();
+  for (const doc of purchases.docs) {
+    const code = safeString(doc.get("adCode"));
+    if (!ofPrefix(code)) continue;
+    const cents = Number(doc.get("amountTotal")) || 0;
+    const when = doc.get("purchasedAt")?.toDate?.() as Date | undefined;
+    salesByDay.push({ trackingCode: code, date: when ? when.toISOString().slice(0, 10) : since, revenue: cents / 100 });
+    const entry = salesTotals.get(code) || { count: 0, revenueCents: 0 };
+    entry.count += 1;
+    entry.revenueCents += cents;
+    salesTotals.set(code, entry);
+  }
+
+  const totals = new Map<string, AdPerformanceRow>();
+  for (const row of daily) {
+    const t = totals.get(row.trackingCode) || { trackingCode: row.trackingCode, impressions: 0, clicks: 0, spend: 0 };
+    t.impressions = (t.impressions || 0) + row.impressions;
+    t.clicks = (t.clicks || 0) + row.clicks;
+    t.spend = (t.spend || 0) + row.spend;
+    totals.set(row.trackingCode, t);
+  }
+  const uploads = await db.collection("metaAdUploads").get();
+  for (const doc of uploads.docs) {
+    const code = doc.id;
+    if (ofPrefix(code) && !totals.has(code)) totals.set(code, { trackingCode: code, impressions: 0, clicks: 0, spend: 0 });
+  }
+  for (const code of salesTotals.keys()) {
+    if (!totals.has(code)) totals.set(code, { trackingCode: code });
+  }
+  for (const t of totals.values()) {
+    t.ctr = (t.impressions || 0) > 0 ? Math.round(((t.clicks || 0) / (t.impressions || 1)) * 10000) / 100 : 0;
+  }
+
+  // Live status is a nice-to-have: the dashboard still draws if Meta is unreachable.
+  const status: Record<string, { name: string; effectiveStatus: string }> = {};
+  const token = secretValue("META_ACCESS_TOKEN", metaAccessToken).trim();
+  const accountId = normalizeAdAccountId(safeString((await db.collection("config").doc("meta").get()).get("adAccountId")));
+  if (token && accountId) {
+    try {
+      const url = new URL(`https://graph.facebook.com/${META_GRAPH_VERSION}/${accountId}/ads`);
+      url.searchParams.set("fields", "name,effective_status");
+      url.searchParams.set("limit", "200");
+      const response = await fetch(url.toString(), { headers: { authorization: `Bearer ${token}` } });
+      const body: any = await response.json().catch(() => ({}));
+      for (const ad of Array.isArray(body?.data) ? body.data : []) {
+        const code = (safeString(ad.name).toUpperCase().match(AD_TRACKING_CODE_PATTERN) || [])[1] || "";
+        if (ofPrefix(code)) status[code] = { name: safeString(ad.name), effectiveStatus: safeString(ad.effective_status) };
+      }
+    } catch (error) {
+      logger.warn("Meta ad status lookup failed", { error: safeString((error as Error)?.message) });
+    }
+  }
+
+  const lastSync = await db.collection("adInsights").orderBy("syncedAt", "desc").limit(1).get();
+  res.json({
+    prefix,
+    days,
+    since,
+    lastSyncedAt: lastSync.empty ? null : lastSync.docs[0].get("syncedAt")?.toDate?.() || null,
+    ads: rankAds([...totals.values()], salesTotals).map((ad) => ({ ...ad, ...(status[ad.trackingCode] || {}) })),
+    daily,
+    sales: salesByDay
+  });
 }));
 
 const AD_WINDOW_DAYS: Record<string, number | null> = { last_7d: 7, last_14d: 14, last_30d: 30, maximum: null };
@@ -3125,4 +3219,11 @@ export const scheduledMonitorStripeFulfillment = onSchedule({ region: REGION, sc
 export const scheduledSyncMetaAdInsights = onSchedule({ region: REGION, schedule: "every day 07:00", timeZone: "America/Chicago", timeoutSeconds: 300, memory: "256MiB", secrets: [metaAccessToken] }, async () => {
   const result = await runMetaAdInsightsSync("last_7d");
   logger.info("Meta ad insights sync complete", result);
+});
+
+// Keeps today's numbers fresh for the ads dashboard between the nightly full syncs.
+// Read-only against Meta, one small request, so hourly costs nothing that matters.
+export const scheduledSyncMetaAdInsightsToday = onSchedule({ region: REGION, schedule: "every 60 minutes", timeZone: "America/Chicago", timeoutSeconds: 120, memory: "256MiB", secrets: [metaAccessToken] }, async () => {
+  const result = await runMetaAdInsightsSync("today");
+  logger.info("Meta ad insights sync (today) complete", result);
 });
