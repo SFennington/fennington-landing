@@ -817,6 +817,11 @@ Already built: nightly sync into `adInsights` and per-code rollups in
   feed the winner into the prompt and refuse a `startIndex` that reuses a code. The
   nightly insights sync now has a token (same system-user token, read use only).
   Not built: an automatic 7-day report; the owner asks the assistant instead.
+- **Dashboard 2026-10-06.** Assistant → Projects → Digital products → "Ad results"
+  (`src/components/ads-dashboard.tsx`, `/api/ads/dashboard`, `/api/ads/refresh`).
+  Landing `GET /admin/ad-dashboard` serves daily rows, ranked totals, Stripe sales and
+  live Meta status; new `scheduledSyncMetaAdInsightsToday` syncs today hourly, and the
+  page's refresh button syncs today on demand.
 
 ### Build order
 
