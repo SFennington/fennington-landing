@@ -742,6 +742,9 @@ function firestoreDate(value: any): Date | null {
   return null;
 }
 
+// One wording for checkout and the delivery email; the full page is refund-policy.html.
+const DIGITAL_REFUND_POLICY_TEXT = "Digital download: you keep the files as soon as you buy. Refunds are available within 7 days of purchase; email support@fennington.com. Full policy: fennington.com/refund-policy";
+
 async function sendDigitalProductAccessEmail(product: DigitalProduct, toEmail: string, accessUrl: string): Promise<PurchaseEmailResult> {
   const emailConfig = await db.collection("config").doc("email").get();
   const fromEmail = safeString(emailConfig.get("transactionalFromEmail") || emailConfig.get("fromEmail") || process.env.RESEND_FROM_EMAIL);
@@ -749,8 +752,8 @@ async function sendDigitalProductAccessEmail(product: DigitalProduct, toEmail: s
   if (!fromEmail || !apiKey) return { status: "pending_config" };
 
   const subject = `Your ${product.name} access link`;
-  const text = `Thank you for purchasing ${product.name}.\n\nAccess your files here: ${accessUrl}\n\nThis link is time-limited. If it expires, request a fresh link from the access page.\n\nSupport: ${product.supportEmail}`;
-  const html = `<p>Thank you for purchasing <strong>${escapeHtml(product.name)}</strong>.</p><p><a href="${escapeHtml(accessUrl)}">Access your files</a></p><p>This link is time-limited. If it expires, request a fresh link from the access page.</p><p>Support: <a href="mailto:${escapeHtml(product.supportEmail)}">${escapeHtml(product.supportEmail)}</a></p>`;
+  const text = `Thank you for purchasing ${product.name}.\n\nAccess your files here: ${accessUrl}\n\nThis link is time-limited. If it expires, request a fresh link from the access page.\n\nRefunds: available within 7 days of purchase. https://fennington.com/refund-policy\n\nSupport: ${product.supportEmail}`;
+  const html = `<p>Thank you for purchasing <strong>${escapeHtml(product.name)}</strong>.</p><p><a href="${escapeHtml(accessUrl)}">Access your files</a></p><p>This link is time-limited. If it expires, request a fresh link from the access page.</p><p>Refunds are available within 7 days of purchase. <a href="https://fennington.com/refund-policy">Refund policy</a></p><p>Support: <a href="mailto:${escapeHtml(product.supportEmail)}">${escapeHtml(product.supportEmail)}</a></p>`;
 
   const resendResponse = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -2449,6 +2452,9 @@ async function createCheckoutSessionForSlug(slug: string, adCode = "") {
     success_url: `${SITE_URL}${salesPath.startsWith("/") ? salesPath : `/${salesPath}`}/success.html?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${SITE_URL}${salesPath.startsWith("/") ? salesPath : `/${salesPath}`}?checkout=cancelled`,
     allow_promotion_codes: true,
+    // Shown above the Pay button, so the policy is in front of the buyer at the moment
+    // they pay, not only on the sales page.
+    custom_text: { submit: { message: DIGITAL_REFUND_POLICY_TEXT } },
     metadata: {
       product_slug: product.slug,
       product_id: product.productId,
