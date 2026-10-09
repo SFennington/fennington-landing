@@ -30,6 +30,15 @@
     adCode: function () {
       try { return window.sessionStorage.getItem(AD_CODE_KEY) || ""; } catch (error) { return ""; }
     },
+    // Meta's browser cookies, sent with checkout so the server-side Purchase
+    // (Conversions API) can be matched to the same visitor and ad click.
+    browserIds: function () {
+      var read = function (name) {
+        var match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+        return match ? decodeURIComponent(match[1]) : "";
+      };
+      return { fbp: read("_fbp"), fbc: read("_fbc") };
+    },
     track: function (eventName, params, eventId) {
       if (typeof window.fbq !== "function") return;
       window.fbq("track", eventName, params || {}, eventId ? { eventID: eventId } : undefined);

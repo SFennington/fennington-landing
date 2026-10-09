@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase-admin/app";
 import { getAuth, type DecodedIdToken } from "firebase-admin/auth";
-import { FieldValue, getFirestore, type DocumentSnapshot, type Query } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type DocumentReference, type DocumentSnapshot, type Query } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { defineSecret } from "firebase-functions/params";
 import { onRequest } from "firebase-functions/v2/https";
@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import Stripe from "stripe";
 import { adLandingUrl, adParams, creativeParams, imageHashFrom, metaAdName, metaGraphPost, metaPauseAd, normalizeAdAccountId, parseAdConcept, rankAds, TRACKING_CODE_PATTERN, type AdPerformanceRow } from "./meta-ads";
+import { cleanBrowserIds, clientIpFrom, sendPurchaseEvent, type BrowserIds } from "./meta-capi";
 
 loadLocalEnvFile();
 
@@ -28,6 +29,8 @@ const metaAccessToken = defineSecret("META_ACCESS_TOKEN");
 // Separate from the insights token on purpose: that one stays read-only, and this
 // one is only ever used through the paused-ads-only path in meta-ads.ts.
 const metaAdsWriteToken = defineSecret("META_ADS_WRITE_TOKEN");
+// Conversions API token from Events Manager; only sends Purchase events for the pixel.
+const metaCapiToken = defineSecret("META_CAPI_TOKEN");
 
 const REGION = "us-central1";
 const TRADE = "hvac";
@@ -1443,6 +1446,31 @@ apiApp.use((req, _res, next) => {
   next();
 });
 
+// Server-side Purchase for Meta, so sales the browser pixel misses (ad blockers,
+// closed tabs) still count. Never blocks fulfilment: a failure is logged and kept
+// on the purchase record, and the buyer has their files either way.
+async function reportPurchaseToMeta(product: { slug: string; salesPagePath?: string }, session: Stripe.Checkout.Session, emailHash: string, purchaseRef: DocumentReference) {
+  const token = secretValue("META_CAPI_TOKEN", metaCapiToken);
+  if (!token || process.env.FUNCTIONS_EMULATOR === "true") return;
+  const salesPath = product.salesPagePath || `/digital-products/${product.slug}`;
+  try {
+    const result = await sendPurchaseEvent({
+      sessionId: session.id,
+      productSlug: product.slug,
+      amountTotal: session.amount_total || 0,
+      currency: safeString(session.currency || "usd"),
+      emailHash,
+      purchasedAt: (session.created || Math.floor(Date.now() / 1000)) * 1000,
+      sourceUrl: `${SITE_URL}${salesPath.startsWith("/") ? salesPath : `/${salesPath}`}`,
+      browser: cleanBrowserIds({ fbp: session.metadata?.meta_fbp, fbc: session.metadata?.meta_fbc, ip: session.metadata?.meta_ip, userAgent: session.metadata?.meta_ua })
+    }, token);
+    await purchaseRef.set({ metaCapiStatus: "sent", metaCapiEventsReceived: result.eventsReceived, metaCapiError: null }, { merge: true });
+  } catch (error: any) {
+    logger.warn("Meta Conversions API purchase failed", { sessionId: session.id, error: error?.message });
+    await purchaseRef.set({ metaCapiStatus: "failed", metaCapiError: safeString(error?.message).slice(0, 500) }, { merge: true });
+  }
+}
+
 apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1mb" }), asyncRoute(async (req, res) => {
   const stripe = stripeClient();
   const webhookSecret = secretValue("STRIPE_WEBHOOK_SECRET", stripeWebhookSecret);
@@ -1565,6 +1593,7 @@ apiApp.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1
       updatedAt: serverTimestamp()
     }, { merge: true });
     await tokenRef.set({ emailStatus: emailResult.status, updatedAt: serverTimestamp() }, { merge: true });
+    await reportPurchaseToMeta(product, session, emailHash, purchaseRef);
   }
 
   res.json({ received: true, fulfilled: shouldSendEmail });
@@ -2441,7 +2470,7 @@ function checkoutAdCode(value: unknown): string {
   return /^[A-Z]{2,6}-A\d{1,2}$/.test(code) ? code : "";
 }
 
-async function createCheckoutSessionForSlug(slug: string, adCode = "") {
+async function createCheckoutSessionForSlug(slug: string, adCode = "", browser?: BrowserIds) {
   const stripe = stripeClient();
   const product = await getDigitalProductBySlug(slug);
   assertCheckoutEnabled(product);
@@ -2460,7 +2489,12 @@ async function createCheckoutSessionForSlug(slug: string, adCode = "") {
       product_id: product.productId,
       package_version: product.fulfillmentVersion,
       environment: process.env.FUNCTIONS_EMULATOR === "true" ? "emulator" : "production",
-      ...(adCode ? { ad_code: adCode } : {})
+      ...(adCode ? { ad_code: adCode } : {}),
+      // Lets the webhook's Conversions API event match the buyer to the ad click.
+      ...(browser?.fbp ? { meta_fbp: browser.fbp } : {}),
+      ...(browser?.fbc ? { meta_fbc: browser.fbc } : {}),
+      ...(browser?.ip ? { meta_ip: browser.ip } : {}),
+      ...(browser?.userAgent ? { meta_ua: browser.userAgent } : {})
     },
     payment_intent_data: {
       metadata: {
@@ -2474,7 +2508,13 @@ async function createCheckoutSessionForSlug(slug: string, adCode = "") {
 }
 
 apiApp.post("/digital-products/:slug/create-checkout-session", asyncRoute(async (req, res) => {
-  const session = await createCheckoutSessionForSlug(safeString(req.params.slug), checkoutAdCode(req.body?.adCode));
+  const browser = cleanBrowserIds({
+    fbp: req.body?.fbp,
+    fbc: req.body?.fbc,
+    ip: clientIpFrom(req.header("x-forwarded-for"), req.ip),
+    userAgent: req.header("user-agent")
+  });
+  const session = await createCheckoutSessionForSlug(safeString(req.params.slug), checkoutAdCode(req.body?.adCode), browser);
   res.json({ sessionId: session.id, url: session.url });
 }));
 
@@ -3155,7 +3195,7 @@ apiApp.post("/admin/support-alerts/:alertId/resend-access", asyncRoute(async (re
   res.json({ ok: true, emailStatus: emailResult.status, purchaseId: purchaseRef.id });
 }));
 
-export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [stripeSecretKey, stripeWebhookSecret, stripePriceChoreTracker, fdPosServiceSecret, resendApiKey, metaAccessToken, metaAdsWriteToken] }, apiApp);
+export const api = onRequest({ region: REGION, timeoutSeconds: 120, memory: "512MiB", secrets: [stripeSecretKey, stripeWebhookSecret, stripePriceChoreTracker, fdPosServiceSecret, resendApiKey, metaAccessToken, metaAdsWriteToken, metaCapiToken] }, apiApp);
 
 // Financial categorization is its own function (functions-financial/) so it can
 // deploy independently of the Stripe secrets this codebase's api function needs

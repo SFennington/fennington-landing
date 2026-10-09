@@ -22,7 +22,7 @@
   };
 
   // Meta pixel, loaded by meta-pixel.js. Absent (blocked or not loaded) is fine.
-  const pixel = window.fenningtonPixel || { adCode: () => "", track: () => {} };
+  const pixel = window.fenningtonPixel || { adCode: () => "", browserIds: () => ({}), track: () => {} };
 
   function reportPurchaseOnce(slug, sessionId, data) {
     // A reload of the thank-you page must not count the sale twice. The eventID
@@ -79,7 +79,7 @@
         setText(status, "Creating secure checkout...");
         try {
           // adCode tags the Stripe sale with the ad that brought the buyer, if any.
-          const data = await postJson(api(`/digital-products/${encodeURIComponent(slug)}/create-checkout-session`), { adCode: pixel.adCode() });
+          const data = await postJson(api(`/digital-products/${encodeURIComponent(slug)}/create-checkout-session`), { adCode: pixel.adCode(), ...(pixel.browserIds ? pixel.browserIds() : {}) });
           analytics.track("planner_checkout_created", { slug, sessionId: data.sessionId });
           window.location.assign(data.url);
         } catch (error) {
