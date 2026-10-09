@@ -144,3 +144,15 @@ test("an ad with no clicks ranks below one with clicks", () => {
   ], new Map());
   assert.deepEqual(ranked.map((r) => r.trackingCode), ["HCC-A2", "HCC-A1"]);
 });
+
+test("ranking reports link clicks beside all clicks, without changing the order", () => {
+  const ranked = meta.rankAds([
+    { trackingCode: "HCC-A1", clicks: 40, linkClicks: 8, spend: 10 },
+    { trackingCode: "HCC-A2", clicks: 20, spend: 10 }
+  ], new Map());
+  assert.deepEqual(ranked.map((r) => r.trackingCode), ["HCC-A1", "HCC-A2"]);
+  assert.equal(ranked[0].linkClicks, 8);
+  assert.equal(ranked[0].costPerLinkClick, 1.25);
+  assert.equal(ranked[1].linkClicks, 0);
+  assert.equal(ranked[1].costPerLinkClick, null);
+});

@@ -167,6 +167,7 @@ export type AdPerformanceRow = {
   trackingCode: string;
   impressions?: number;
   clicks?: number;
+  linkClicks?: number;
   spend?: number;
   purchases?: number;
   ctr?: number;
@@ -176,9 +177,11 @@ export type RankedAd = {
   trackingCode: string;
   impressions: number;
   clicks: number;
+  linkClicks: number;
   spend: number;
   ctr: number;
   costPerClick: number | null;
+  costPerLinkClick: number | null;
   sales: number;
   revenue: number;
   costPerSale: number | null;
@@ -199,6 +202,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export function rankAds(rows: AdPerformanceRow[], sales: Map<string, { count: number; revenueCents: number }>): RankedAd[] {
   const ranked = rows.map((row) => {
     const clicks = Number(row.clicks) || 0;
+    const linkClicks = Number(row.linkClicks) || 0;
     const spend = Number(row.spend) || 0;
     const sale = sales.get(row.trackingCode);
     const salesCount = sale ? sale.count : Number(row.purchases) || 0;
@@ -206,9 +210,11 @@ export function rankAds(rows: AdPerformanceRow[], sales: Map<string, { count: nu
       trackingCode: row.trackingCode,
       impressions: Number(row.impressions) || 0,
       clicks,
+      linkClicks,
       spend: round2(spend),
       ctr: Number(row.ctr) || 0,
       costPerClick: clicks > 0 ? round2(spend / clicks) : null,
+      costPerLinkClick: linkClicks > 0 ? round2(spend / linkClicks) : null,
       sales: salesCount,
       revenue: sale ? round2(sale.revenueCents / 100) : 0,
       costPerSale: salesCount > 0 ? round2(spend / salesCount) : null,

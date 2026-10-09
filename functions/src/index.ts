@@ -2701,6 +2701,7 @@ type MetaInsightRow = {
   date_start?: string;
   impressions?: string;
   clicks?: string;
+  inline_link_clicks?: string;
   spend?: string;
   ctr?: string;
   cpc?: string;
@@ -2716,7 +2717,9 @@ function metaActionTotal(rows: MetaActionRow[] | undefined, actionTypes: string[
 }
 
 async function fetchMetaInsights(accountId: string, token: string, datePreset: string): Promise<MetaInsightRow[]> {
-  const fields = ["ad_id", "ad_name", "impressions", "clicks", "spend", "ctr", "cpc", "actions", "action_values"].join(",");
+  // clicks is every tap on the ad (likes, comments, "see more"); inline_link_clicks
+  // is only the taps through to the landing page, so the dashboard shows both.
+  const fields = ["ad_id", "ad_name", "impressions", "clicks", "inline_link_clicks", "spend", "ctr", "cpc", "actions", "action_values"].join(",");
   const rows: MetaInsightRow[] = [];
   let after = "";
 
@@ -2763,7 +2766,7 @@ async function runMetaAdInsightsSync(datePreset: string): Promise<Record<string,
   const accountId = configuredAccount.startsWith("act_") ? configuredAccount : `act_${configuredAccount}`;
   const rows = await fetchMetaInsights(accountId, token, datePreset);
 
-  type ConceptTotals = { impressions: number; clicks: number; spend: number; purchases: number; revenue: number; adIds: Set<string> };
+  type ConceptTotals = { impressions: number; clicks: number; linkClicks: number; spend: number; purchases: number; revenue: number; adIds: Set<string> };
   const totals = new Map<string, ConceptTotals>();
   const unmatchedNames = new Set<string>();
 
@@ -2780,12 +2783,13 @@ async function runMetaAdInsightsSync(datePreset: string): Promise<Record<string,
     const trackingCode = (adName.toUpperCase().match(AD_TRACKING_CODE_PATTERN) || [])[1] || "";
     const impressions = Number(row.impressions) || 0;
     const clicks = Number(row.clicks) || 0;
+    const linkClicks = Number(row.inline_link_clicks) || 0;
     const spend = Number(row.spend) || 0;
     const purchases = metaActionTotal(row.actions, META_PURCHASE_ACTIONS);
     const revenue = metaActionTotal(row.action_values, META_PURCHASE_ACTIONS);
 
     batch.set(db.collection("adInsights").doc(`${adId}_${date}`), {
-      adId, adName, trackingCode, date, impressions, clicks, spend, purchases, revenue,
+      adId, adName, trackingCode, date, impressions, clicks, linkClicks, spend, purchases, revenue,
       ctr: Number(row.ctr) || 0,
       cpc: Number(row.cpc) || 0,
       syncedAt: serverTimestamp()
@@ -2801,9 +2805,10 @@ async function runMetaAdInsightsSync(datePreset: string): Promise<Record<string,
     matched++;
 
     const totalsForCode = totals.get(trackingCode)
-      || { impressions: 0, clicks: 0, spend: 0, purchases: 0, revenue: 0, adIds: new Set<string>() };
+      || { impressions: 0, clicks: 0, linkClicks: 0, spend: 0, purchases: 0, revenue: 0, adIds: new Set<string>() };
     totalsForCode.impressions += impressions;
     totalsForCode.clicks += clicks;
+    totalsForCode.linkClicks += linkClicks;
     totalsForCode.spend += spend;
     totalsForCode.purchases += purchases;
     totalsForCode.revenue += revenue;
@@ -2819,6 +2824,7 @@ async function runMetaAdInsightsSync(datePreset: string): Promise<Record<string,
       window: datePreset,
       impressions: t.impressions,
       clicks: t.clicks,
+      linkClicks: t.linkClicks,
       spend: Math.round(t.spend * 100) / 100,
       purchases: t.purchases,
       revenue: Math.round(t.revenue * 100) / 100,
@@ -2872,6 +2878,7 @@ apiApp.get("/admin/ad-dashboard", asyncRoute(async (req, res) => {
       date: safeString(row.date),
       impressions: Number(row.impressions) || 0,
       clicks: Number(row.clicks) || 0,
+      linkClicks: Number(row.linkClicks) || 0,
       spend: Number(row.spend) || 0
     }));
 
@@ -2892,16 +2899,17 @@ apiApp.get("/admin/ad-dashboard", asyncRoute(async (req, res) => {
 
   const totals = new Map<string, AdPerformanceRow>();
   for (const row of daily) {
-    const t = totals.get(row.trackingCode) || { trackingCode: row.trackingCode, impressions: 0, clicks: 0, spend: 0 };
+    const t = totals.get(row.trackingCode) || { trackingCode: row.trackingCode, impressions: 0, clicks: 0, linkClicks: 0, spend: 0 };
     t.impressions = (t.impressions || 0) + row.impressions;
     t.clicks = (t.clicks || 0) + row.clicks;
+    t.linkClicks = (t.linkClicks || 0) + row.linkClicks;
     t.spend = (t.spend || 0) + row.spend;
     totals.set(row.trackingCode, t);
   }
   const uploads = await db.collection("metaAdUploads").get();
   for (const doc of uploads.docs) {
     const code = doc.id;
-    if (ofPrefix(code) && !totals.has(code)) totals.set(code, { trackingCode: code, impressions: 0, clicks: 0, spend: 0 });
+    if (ofPrefix(code) && !totals.has(code)) totals.set(code, { trackingCode: code, impressions: 0, clicks: 0, linkClicks: 0, spend: 0 });
   }
   for (const code of salesTotals.keys()) {
     if (!totals.has(code)) totals.set(code, { trackingCode: code });
