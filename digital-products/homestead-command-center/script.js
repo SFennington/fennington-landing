@@ -71,7 +71,9 @@
   function setupCheckout() {
     document.querySelectorAll("[data-checkout-slug]").forEach((button) => {
       const slug = button.getAttribute("data-checkout-slug");
-      const status = document.querySelector(`[data-checkout-status="${slug}"]`);
+      // The same tier can be bought from the hero and the pricing section, so each
+      // button reports into the status line next to it.
+      const status = button.parentElement.querySelector(`[data-checkout-status="${slug}"]`);
       button.addEventListener("click", async () => {
         analytics.track("planner_checkout_click", { slug });
         pixel.track("InitiateCheckout", { content_ids: [slug], content_type: "product" });
