@@ -80,7 +80,10 @@ export function metaAdName(concept: Pick<AdConcept, "trackingCode" | "angle">): 
 // utm_content carries the tracking code to the sales page, which is what lets a
 // sale be tied back to the ad that produced it.
 export function adLandingUrl(siteUrl: string, salesPagePath: string, productSlug: string, trackingCode: string): string {
-  const path = salesPagePath.startsWith("/") ? salesPagePath : `/${salesPagePath}`;
+  let path = salesPagePath.startsWith("/") ? salesPagePath : `/${salesPagePath}`;
+  // The site redirects a folder path without its trailing slash, which costs an ad
+  // visitor an extra round trip before the page starts loading.
+  if (!path.endsWith("/") && !/\.[a-z0-9]+$/i.test(path)) path += "/";
   const url = new URL(`${siteUrl.replace(/\/$/, "")}${path}`);
   url.searchParams.set("utm_source", "facebook");
   url.searchParams.set("utm_medium", "paid_social");

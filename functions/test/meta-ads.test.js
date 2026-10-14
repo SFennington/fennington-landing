@@ -48,7 +48,7 @@ test("accepts a data URL prefix on the image", () => {
 
 test("landing link carries the tracking code for attribution", () => {
   const url = new URL(meta.adLandingUrl("https://fennington.com/", "/digital-products/hcc", "homestead-command-center", "HCC-A4"));
-  assert.equal(url.origin + url.pathname, "https://fennington.com/digital-products/hcc");
+  assert.equal(url.origin + url.pathname, "https://fennington.com/digital-products/hcc/");
   assert.equal(url.searchParams.get("utm_content"), "HCC-A4");
   assert.equal(url.searchParams.get("utm_campaign"), "homestead-command-center");
 });
@@ -155,4 +155,9 @@ test("ranking reports link clicks beside all clicks, without changing the order"
   assert.equal(ranked[0].costPerLinkClick, 1.25);
   assert.equal(ranked[1].linkClicks, 0);
   assert.equal(ranked[1].costPerLinkClick, null);
+});
+
+test("landing link keeps a trailing slash or file name as given", () => {
+  assert.equal(new URL(meta.adLandingUrl("https://x.test", "/p/", "s", "HCC-A1")).pathname, "/p/");
+  assert.equal(new URL(meta.adLandingUrl("https://x.test", "p/page.html", "s", "HCC-A1")).pathname, "/p/page.html");
 });
