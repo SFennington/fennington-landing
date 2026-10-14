@@ -126,6 +126,46 @@
     });
   }
 
+  // Google reviews from assets/reviews.json. The section stays hidden until the file has reviews.
+  const reviewSection = document.querySelector('[data-reviews-section]');
+  if (reviewSection && window.fetch) {
+    fetch(reviewSection.dataset.src)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const box = reviewSection.querySelector('[data-reviews]');
+        const list = ((data && data.reviews) || [])
+          .filter((r) => r.rating >= 4 && r.text)
+          .slice(0, Number(box.dataset.limit) || 6);
+        if (!list.length) return;
+        list.forEach((r) => {
+          const card = document.createElement('figure');
+          card.className = 'review';
+          const stars = document.createElement('p');
+          stars.className = 'review-stars';
+          stars.textContent = '★'.repeat(Math.round(r.rating));
+          stars.setAttribute('aria-label', `${r.rating} out of 5 stars`);
+          const quote = document.createElement('blockquote');
+          quote.textContent = r.text;
+          const by = document.createElement('figcaption');
+          const when = r.date
+            ? new Date(`${r.date}T00:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+            : '';
+          by.textContent = when ? `${r.name} · ${when}` : r.name;
+          card.append(stars, quote, by);
+          box.append(card);
+        });
+        const summary = reviewSection.querySelector('[data-reviews-summary]');
+        if (data.rating && data.count) summary.textContent = `Rated ${data.rating} on Google from ${data.count} reviews`;
+        [['[data-reviews-all]', data.profileUrl], ['[data-reviews-write]', data.writeReviewUrl]].forEach(([selector, url]) => {
+          const link = reviewSection.querySelector(selector);
+          if (url) link.href = url;
+          else link.remove();
+        });
+        reviewSection.hidden = false;
+      })
+      .catch(() => {});
+  }
+
   // Load heavy third-party embeds (3-D tour) only when asked.
   document.querySelectorAll('[data-embed]').forEach((btn) => btn.addEventListener('click', () => {
     const box = btn.closest('.embed');
