@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Chauncey</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="70%">
+      <stop offset="0" stop-color="#1d3527"/>
+      <stop offset="1" stop-color="#0b1510"/>
+    </radialGradient>
+    <path id="lapel" d="M190 178 L116 222 L146 242 L118 264 C138 320 178 372 224 414 C206 344 194 270 190 178 Z"/>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(256 256) scale(1.1) translate(-256 -278)" fill="#d5ff68" stroke="#d5ff68" stroke-linejoin="round">
+    <g stroke-width="5">
+      <use href="#lapel"/>
+      <use href="#lapel" transform="translate(512 0) scale(-1 1)"/>
+      <path d="M220 122 L248 136 L248 150 L220 164 Z M292 122 L264 136 L264 150 L292 164 Z"/>
+      <rect x="245" y="133" width="22" height="20" rx="4"/>
+    </g>
+    <g stroke="none">
+      <circle cx="256" cy="226" r="12"/>
+      <circle cx="256" cy="282" r="12"/>
+      <circle cx="256" cy="338" r="12"/>
+    </g>
+  </g>
+</svg>
