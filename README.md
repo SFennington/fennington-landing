@@ -43,4 +43,4 @@ fennington-landing/
 
 Fennington Solutions  
 Email: contact@fenningtonsolutions.com  
-Phone: 631-245-5856
+Phone: 413-225-1777

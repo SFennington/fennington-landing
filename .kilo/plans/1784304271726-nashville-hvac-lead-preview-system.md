@@ -224,7 +224,7 @@ Use the HVAC template and dynamic Firestore data to render:
 - Address/hours where available.
 - HVAC service list.
 - Google review snippets if returned and acceptable to display.
-- Clear CTA: call `413-255-1777`, email `Contact@fennington.com`, and future claim/activate button.
+- Clear CTA: call `413-225-1777`, email `Contact@fennington.com`, and future claim/activate button.
 
 Preview mode must include:
 
@@ -293,7 +293,7 @@ Sending rules:
 - Record all sends in `outreach`.
 - Keep body under ~100 words for initial variants.
 - Include specific personalization: business name, actual rating/review count, website-gap observation, preview link.
-- Include CTAs: preview link, call `413-255-1777`, reply to `Contact@fennington.com`.
+- Include CTAs: preview link, call `413-225-1777`, reply to `Contact@fennington.com`.
 - Include compliant footer and one-click unsubscribe.
 
 Initial email variants:
@@ -348,7 +348,7 @@ Secrets/config:
 - `RESEND_API_KEY`.
 - `RESEND_FROM_EMAIL`.
 - `CONTACT_EMAIL=Contact@fennington.com`.
-- `BUSINESS_PHONE=413-255-1777`.
+- `BUSINESS_PHONE=413-225-1777`.
 - `ADMIN_EMAILS`.
 - `OUTREACH_PHYSICAL_ADDRESS` required before send enabled.
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID` future.

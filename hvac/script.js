@@ -2,7 +2,7 @@ const CONFIG = {
   businessName: "Fennington HVAC",
   nicheName: "HVAC",
   city: "Nashville",
-  phone: "413-255-1777",
+  phone: "413-225-1777",
   email: "Contact@fennington.com",
   address: "Nashville, TN",
   hours: "HVAC previews, local landing pages, and activation workflow.",
