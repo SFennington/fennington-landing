@@ -1,15 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Updated: 2026-02-04 - Auto-deploy test -->
-    
-    <title>Fennington Solutions | Website Solutions, AI Integrations & Automation</title>
-    <meta name="description" content="Professional website solutions, AI integrations, and business automation services. Transform your business with cutting-edge technology.">
-    
-    <link rel="icon" type="image/png" href="assets/images/FennSol Logo.png">
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fennington Solutions | Websites, Automation &amp; AI for Small Businesses</title>
+  <meta name="description" content="Fennington Solutions designs and builds websites, business automation, AI assistants, custom apps and online stores for small businesses. Free consultation and a written quote before any work starts.">
+  <link rel="canonical" href="https://fennington.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://fennington.com/">
+  <meta property="og:title" content="Fennington Solutions | Websites, Automation & AI">
+  <meta property="og:description" content="Websites that bring in customers, automation that saves hours each week, and AI that handles the busywork. Free consultation.">
+  <meta property="og:image" content="https://fennington.com/assets/images/FennSol%20Logo%20large.png">
+  <meta name="theme-color" content="#0b1b33">
+
+  <link rel="icon" type="image/png" href="assets/images/FennSol Logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="home.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfessionalService",
+    "name": "Fennington Solutions",
+    "url": "https://fennington.com/",
+    "logo": "https://fennington.com/assets/images/FennSol%20Logo%20large.png",
+    "email": "contact@fennington.com",
+    "telephone": "+1-413-225-1777",
+    "address": { "@type": "PostalAddress", "addressRegion": "MA", "addressCountry": "US" },
+    "areaServed": "US",
+    "description": "Websites, business automation, AI assistants, custom apps and online stores for small businesses."
+  }
+  </script>
+
   <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-V4VCLWXVZR"></script>
   <script>
@@ -21,383 +45,592 @@
 </head>
 <body>
 
-  <!-- SECTION 1: STICKY HEADER -->
+  <!-- Line icons, used with <svg><use href="#i-name"/></svg> -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="i-flow" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect x="13" y="13" width="8" height="8" rx="2"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></symbol>
+    <symbol id="i-phone-app" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+    <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+    <symbol id="i-shirt" viewBox="0 0 24 24"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  </svg>
+
+  <!-- HEADER -->
   <header class="header" id="header">
-    <div class="container">
-      <a href="#hero" class="logo">
-        <img src="assets/images/FennSol Logo large.png" alt="Fennington Solutions" style="height: 40px;">
+    <div class="container header-inner">
+      <a href="#top" class="logo" aria-label="Fennington Solutions home">
+        <img src="assets/images/FennSol Logo large.png" alt="Fennington Solutions" width="143" height="40">
       </a>
-      
-      <nav class="nav" id="mainNav">
+
+      <nav class="nav" id="mainNav" aria-label="Main">
         <a href="#services">Services</a>
-        <a href="#products">Products</a>
-        <a href="#about-me">About</a>
-        <a href="#contact">Contact</a>
+        <a href="#work">Our Work</a>
+        <a href="#process">Process</a>
+        <a href="#about">About</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contact" class="nav-cta-mobile">Request Info</a>
       </nav>
-      
+
       <div class="header-actions">
-        <a href="mailto:contact@fennington.com" class="phone-link">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          contact@fennington.com
+        <a href="tel:+14132251777" class="header-phone">
+          <svg class="icon" aria-hidden="true"><use href="#i-phone"/></svg>
+          (413) 225-1777
         </a>
-        <a href="#contact" class="btn btn-primary">Get Started</a>
+        <a href="#contact" class="btn btn-primary">Request Info</a>
       </div>
-      
-      <button class="mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
+
+      <button class="menu-toggle" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mainNav">
         <span></span><span></span><span></span>
       </button>
     </div>
   </header>
 
-  <!-- SECTION 2: HERO -->
-  <section class="hero" id="hero">
-    <div class="container">
-      <h1>Modern Business Solutions</h1>
-      <p class="hero-subtitle">Website development, AI integrations, and automation solutions to transform your business operations</p>
-      
-      <div class="hero-cta">
-        <a href="#contact" class="btn btn-primary btn-lg">Start Your Project</a>
-        <a href="#services" class="btn btn-secondary btn-lg">Explore Services</a>
-      </div>
-      
-      <div class="trust-badges">
-        <div class="badge">
-          <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <div><strong>Trusted Solutions</strong><span>Proven Results</span></div>
-        </div>
-        <div class="badge">
-          <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          <div><strong>Custom Built</strong><span>For Your Needs</span></div>
-        </div>
-        <div class="badge">
-          <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          <div><strong>Fast Delivery</strong><span>Quality Assured</span></div>
-        </div>
-      </div>
-    </div>
-  </section>
+  <main id="top">
 
-  <!-- SECTION 3: SERVICES -->
-  <section class="services" id="services">
-    <div class="container">
-      <h2>Our Services</h2>
-      <p class="section-subtitle">Comprehensive digital solutions for modern businesses</p>
-      
-      <div class="services-grid">
-        <div class="service-card">
-          <div class="service-icon">🌐</div>
-          <h3>Website Solutions</h3>
-          <p>Custom websites, landing pages, and e-commerce platforms built with modern technologies for optimal performance and user experience.</p>
-        </div>
-        
-        <div class="service-card">
-          <div class="service-icon">🤖</div>
-          <h3>AI Integrations</h3>
-          <p>Intelligent automation and AI-powered features to enhance your business operations, customer service, and decision-making processes.</p>
-        </div>
-        
-        <div class="service-card">
-          <div class="service-icon">⚡</div>
-          <h3>Automation Solutions</h3>
-          <p>Streamline workflows, automate repetitive tasks, and integrate your business tools for maximum efficiency and productivity.</p>
-        </div>
-        
-        <div class="service-card">
-          <div class="service-icon">📊</div>
-          <h3>Data & Analytics</h3>
-          <p>Transform your data into actionable insights with custom dashboards, reporting tools, and business intelligence solutions.</p>
-        </div>
-        
-        <div class="service-card">
-          <div class="service-icon">🔧</div>
-          <h3>API Development</h3>
-          <p>Build robust APIs and integrations to connect your systems, extend functionality, and create seamless data flows.</p>
-        </div>
-        
-        <div class="service-card">
-          <div class="service-icon">💼</div>
-          <h3>Consulting</h3>
-          <p>Strategic technology consulting to help you identify opportunities, plan implementations, and optimize your digital infrastructure.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 4: PRODUCTS -->
-  <section class="products" id="products">
-    <div class="container">
-      <h2>Our Products & Portfolio</h2>
-      <p class="section-subtitle">Explore our apps, website templates, and partner products</p>
-      
-      <div class="products-categories">
-        <!-- Apps -->
-        <div class="product-category">
-          <h3>📱 Apps</h3>
-          <div class="product-cards">
-            <a href="/livestock-tracker" class="product-card">
-              <div class="product-icon product-icon-image-wrap">
-                <img src="assets/images/livestock-adaptive-icon.png" alt="Livestock Tracker app icon" class="product-icon-image">
-              </div>
-              <div class="product-info">
-                <h4>Livestock Tracker</h4>
-                <p>Farm management app for tracking chickens, ducks, rabbits, breeding, health records, and finances. Free to start with premium features.</p>
-                <span class="product-link">Learn More →</span>
-              </div>
-            </a>
-
-            <a href="/firelife" class="product-card">
-              <div class="product-icon product-icon-image-wrap">
-                <img src="assets/images/firelife-adaptive-icon.png" alt="FireLife Discipleship app icon" class="product-icon-image">
-              </div>
-              <div class="product-info">
-                <h4>FireLife Discipleship</h4>
-                <p>Daily Christian discipleship app for Scripture, prayer, worship, reflection, repentance, and spiritual growth. Privacy-focused and free to start.</p>
-                <span class="product-link">Learn More →</span>
-              </div>
-            </a>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow eyebrow-light">Websites &middot; Automation &middot; AI &middot; Apps</p>
+          <h1>Technology that wins you customers and gives you back your time.</h1>
+          <p class="hero-lead">We design and build the systems small businesses run on: websites that bring in calls and bookings, automations that save hours every week, and AI assistants that handle the busywork. Built carefully, explained in plain English, and supported after launch.</p>
+          <div class="hero-actions">
+            <a href="#contact" class="btn btn-primary btn-lg">Request a free consultation</a>
+            <a href="#work" class="btn btn-ghost btn-lg">See our work</a>
           </div>
-        </div>
-        
-        <!-- Website Templates -->
-        <div class="product-category">
-          <h3>🌐 Website Templates</h3>
-          <div class="product-cards">
-            <a href="/landscaping" class="product-card">
-              <div class="product-icon">🌿</div>
-              <div class="product-info">
-                <h4>Landscaping Template</h4>
-                <p>Professional landing page for landscaping businesses with services, gallery, and contact features.</p>
-                <span class="product-link">View Demo →</span>
-              </div>
-            </a>
-            
-            <a href="/electrical" class="product-card">
-              <div class="product-icon">⚡</div>
-              <div class="product-info">
-                <h4>Electrical Services Template</h4>
-                <p>Complete website template for electrical contractors with service listings and lead capture.</p>
-                <span class="product-link">View Demo →</span>
-              </div>
-            </a>
-            
-            <a href="/snow-removal" class="product-card">
-              <div class="product-icon">❄️</div>
-              <div class="product-info">
-                <h4>Snow Removal Template</h4>
-                <p>Seasonal service website template optimized for snow removal and winter maintenance businesses.</p>
-                <span class="product-link">View Demo →</span>
-              </div>
-            </a>
-          </div>
-        </div>
-        
-        <!-- Partner Products -->
-        <div class="product-category">
-          <h3>🛍️ Products</h3>
-          <div class="product-cards">
-            <a href="/financial/app.html" class="product-card">
-              <div class="product-icon">💳</div>
-              <div class="product-info">
-                <h4>Fennington Financial</h4>
-                <p>CSV-first personal finance web app for importing transactions, reviewing categories, tracking income, and viewing spending reports.</p>
-                <span class="product-link">Open App →</span>
-              </div>
-            </a>
-            <a href="https://fennington-assistant--fennington-assistant.us-central1.hosted.app" target="_blank" rel="noopener noreferrer" class="product-card">
-              <div class="product-icon product-icon-image-wrap">
-                <img src="assets/images/chauncey-icon.svg" alt="Chauncey app icon" class="product-icon-image">
-              </div>
-              <div class="product-info">
-                <h4>Chauncey</h4>
-                <p>Private AI-powered butler that handles support tickets, tasks, and day-to-day operations.</p>
-                <span class="product-link">Open App →</span>
-              </div>
-            </a>
-            <a href="https://cuylescustoms.com" target="_blank" rel="noopener noreferrer" class="product-card">
-              <div class="product-icon">🎨</div>
-              <div class="product-info">
-                <h4>Cuyle's Customs</h4>
-                <p>Custom handcrafted products and personalized creations. Unique gifts and custom designs.</p>
-                <span class="product-link">Visit Site →</span>
-              </div>
-            </a>
-            <a href="/digital-products/homestead-command-center/" class="product-card">
-              <div class="product-icon">📋</div>
-              <div class="product-info">
-                <h4>Homestead Command Center</h4>
-                <p>An ebook plus twelve blank worksheets for running a busy homestead: recurring chores, livestock records, garden logs, supplies, expenses, and a weekly review.</p>
-                <span class="product-link">View Product →</span>
-              </div>
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION: ABOUT ME (FAMILY STORY) -->
-  <section class="about-me" id="about-me">
-    <div class="container">
-      <div class="about-me-grid">
-        <div class="about-me-content">
-          <h2>The Fennington Family</h2>
-          <p class="about-me-eyebrow">The people behind Fennington Solutions</p>
-          <p>We're the Fennington family — an engineer, his wife, and four kids, six of us in the house. Here in Massachusetts, we're in the early days of starting our own homestead: raising chickens, growing a garden, and learning as we go.</p>
-          <p>We're a Christian family, and that's at the center of how we show up for each other and for the work I do. Fennington Solutions grew out of that same mindset — building practical, dependable tools, like the Livestock Tracker and the Homestead Chore Tracker, for real families and businesses, not just flashy tech for its own sake.</p>
-          <p>When I'm not writing code, you'll find us out in the yard tending chickens, working the garden, or planning the next homestead project together.</p>
-        </div>
-
-        <div class="about-me-facts">
-          <div class="about-fact">
-            <div class="about-fact-icon">💻</div>
-            <div><strong>Engineer</strong><p>Building Fennington Solutions</p></div>
-          </div>
-          <div class="about-fact">
-            <div class="about-fact-icon">👨‍👩‍👧‍👦</div>
-            <div><strong>Family of 6</strong><p>Four kids, one big adventure</p></div>
-          </div>
-          <div class="about-fact">
-            <div class="about-fact-icon">🐓</div>
-            <div><strong>Homesteading</strong><p>Chickens & garden, Massachusetts</p></div>
-          </div>
-          <div class="about-fact">
-            <div class="about-fact-icon">✝️</div>
-            <div><strong>Christian</strong><p>Faith guides how we live and work</p></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SECTION 5: ABOUT -->
-  <section class="why-us" id="about">
-    <div class="container">
-      <div class="why-grid">
-        <div class="why-content">
-          <h2>Why Choose Fennington Solutions</h2>
-          <ul class="benefits">
-            <li>
-              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <div><strong>Modern Technology Stack</strong><p>We use cutting-edge tools and frameworks to build scalable, maintainable solutions</p></div>
-            </li>
-            <li>
-              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <div><strong>Tailored Solutions</strong><p>Every project is customized to your specific business requirements and goals</p></div>
-            </li>
-            <li>
-              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <div><strong>Transparent Communication</strong><p>Clear updates, honest timelines, and collaborative development process</p></div>
-            </li>
-            <li>
-              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <div><strong>Ongoing Support</strong><p>We're here to help maintain, update, and evolve your solutions over time</p></div>
-            </li>
+          <ul class="hero-points">
+            <li><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Free consultation</li>
+            <li><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Written quote before work starts</li>
+            <li><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Support after launch</li>
           </ul>
         </div>
-        
-        <div class="process">
-          <h3>How We Work</h3>
-          <div class="process-steps">
-            <div class="step">
-              <div class="step-num">1</div>
-              <div><h4>Discovery</h4><p>Understand your needs, goals, and challenges</p></div>
+
+        <div class="hero-card">
+          <form class="inquiry-form" data-inquiry-type="quick" novalidate>
+            <h2 class="hero-card-title">Tell us what you need</h2>
+            <p class="hero-card-sub">A real person replies within one business day.</p>
+            <div class="field">
+              <label for="q-name">Name</label>
+              <input id="q-name" name="name" type="text" autocomplete="name" required>
             </div>
-            <div class="step">
-              <div class="step-num">2</div>
-              <div><h4>Design & Plan</h4><p>Create a strategic approach and technical roadmap</p></div>
+            <div class="field">
+              <label for="q-email">Email</label>
+              <input id="q-email" name="email" type="email" autocomplete="email" required>
             </div>
-            <div class="step">
-              <div class="step-num">3</div>
-              <div><h4>Build & Deploy</h4><p>Develop, test, and launch your solution</p></div>
+            <div class="field">
+              <label for="q-message">How can we help?</label>
+              <textarea id="q-message" name="message" rows="3" required placeholder="e.g. I need a new website that books appointments"></textarea>
             </div>
+            <div class="hp" aria-hidden="true"><label>Leave this empty <input name="extra_info" tabindex="-1" autocomplete="off"></label></div>
+            <button type="submit" class="btn btn-primary btn-block">Send request</button>
+            <p class="form-status" role="status" aria-live="polite"></p>
+            <p class="form-fine">We only use your details to reply to you.</p>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROOF STRIP -->
+    <section class="proof" aria-label="Highlights">
+      <div class="container proof-grid">
+        <div class="proof-item">
+          <svg class="icon" aria-hidden="true"><use href="#i-phone-app"/></svg>
+          <div><strong>Apps in the stores</strong><span>Live on the App Store and Google Play</span></div>
+        </div>
+        <div class="proof-item">
+          <svg class="icon" aria-hidden="true"><use href="#i-cart"/></svg>
+          <div><strong>Online sales</strong><span>Secure checkout and automatic delivery</span></div>
+        </div>
+        <div class="proof-item">
+          <svg class="icon" aria-hidden="true"><use href="#i-bot"/></svg>
+          <div><strong>AI in daily use</strong><span>Assistants that sort email and support</span></div>
+        </div>
+        <div class="proof-item">
+          <svg class="icon" aria-hidden="true"><use href="#i-tool"/></svg>
+          <div><strong>Engineer-led</strong><span>You work directly with the builder</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SERVICES -->
+    <section class="section" id="services">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Services</p>
+          <h2>Everything your business needs to run online</h2>
+          <p class="section-lead">Pick one service or combine them. Every project starts with your goals, not a template.</p>
+        </div>
+
+        <div class="services-grid">
+          <article class="service-card">
+            <div class="service-icon"><svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg></div>
+            <h3>Websites &amp; Landing Pages</h3>
+            <p>Fast, mobile-friendly websites built to turn visitors into calls, bookings and sales.</p>
+            <ul class="ticks">
+              <li>Custom design for your brand</li>
+              <li>Lead forms and online booking</li>
+              <li>Search-friendly and quick on phones</li>
+            </ul>
+            <button type="button" class="link-btn" data-service="Website">Ask about websites <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+          </article>
+
+          <article class="service-card">
+            <div class="service-icon"><svg class="icon" aria-hidden="true"><use href="#i-flow"/></svg></div>
+            <h3>Business Automation</h3>
+            <p>Stop doing the same task twice. We connect your tools so work moves along on its own.</p>
+            <ul class="ticks">
+              <li>Lead follow-up and reminders</li>
+              <li>Orders, invoices and records kept in sync</li>
+              <li>Email, spreadsheet and CRM workflows</li>
+            </ul>
+            <button type="button" class="link-btn" data-service="Automation">Ask about automation <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+          </article>
+
+          <article class="service-card">
+            <div class="service-icon"><svg class="icon" aria-hidden="true"><use href="#i-bot"/></svg></div>
+            <h3>AI Assistants &amp; Integrations</h3>
+            <p>Put AI to work on real tasks: answering customers, sorting requests and drafting replies for your approval.</p>
+            <ul class="ticks">
+              <li>Website chat and support assistants</li>
+              <li>Email and request sorting</li>
+              <li>A human approves what matters</li>
+            </ul>
+            <button type="button" class="link-btn" data-service="AI assistant">Ask about AI <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+          </article>
+
+          <article class="service-card">
+            <div class="service-icon"><svg class="icon" aria-hidden="true"><use href="#i-phone-app"/></svg></div>
+            <h3>Custom Apps</h3>
+            <p>Mobile and web apps for your customers or your team, from first idea to the app stores.</p>
+            <ul class="ticks">
+              <li>iPhone, Android and web</li>
+              <li>Accounts, subscriptions and payments</li>
+              <li>Updates and new features over time</li>
+            </ul>
+            <button type="button" class="link-btn" data-service="Custom app">Ask about apps <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+          </article>
+
+          <article class="service-card">
+            <div class="service-icon"><svg class="icon" aria-hidden="true"><use href="#i-cart"/></svg></div>
+            <h3>Online Stores &amp; Payments</h3>
+            <p>Sell products, digital downloads or services online with secure, simple checkout.</p>
+            <ul class="ticks">
+              <li>Stripe checkout on your own site</li>
+              <li>Automatic delivery and receipts</li>
+              <li>Print-on-demand connections</li>
+            </ul>
+            <button type="button" class="link-btn" data-service="Online store">Ask about online stores <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+          </article>
+
+          <article class="service-card">
+            <div class="service-icon"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg></div>
+            <h3>Dashboards &amp; Reporting</h3>
+            <p>See what's working at a glance: sales, ad spend, leads and operations in one place.</p>
+            <ul class="ticks">
+              <li>Custom dashboards for your numbers</li>
+              <li>Ad and sales reporting</li>
+              <li>Spreadsheet and CSV imports</li>
+            </ul>
+            <button type="button" class="link-btn" data-service="Dashboards and reporting">Ask about reporting <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- WORK -->
+    <section class="section section-soft" id="work">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Our Work</p>
+          <h2>Built by us, used every day</h2>
+          <p class="section-lead">We run our own apps, stores and tools on the same technology we build for clients, so we know what holds up in the real world.</p>
+        </div>
+
+        <article class="work-feature">
+          <div class="work-feature-copy">
+            <div class="work-brand">
+              <img src="assets/images/livestock-adaptive-icon.png" alt="" width="48" height="48" loading="lazy">
+              <div>
+                <h3>Livestock Tracker</h3>
+                <p class="tags"><span>Mobile app</span><span>Subscriptions</span><span>Web app</span></p>
+              </div>
+            </div>
+            <p>A farm management app for iPhone, Android and the web. Farmers track animals, breeding, health records, egg counts and finances, with a free plan and paid premium features.</p>
+            <ul class="ticks">
+              <li>Published on the App Store and Google Play</li>
+              <li>In-app subscriptions and account sync</li>
+              <li>Built-in support assistant on the website</li>
+            </ul>
+            <a href="/livestock-tracker" class="text-link">View the app <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+          <div class="work-feature-media">
+            <img src="assets/images/Main Preview.png" alt="Livestock Tracker dashboard showing eggs today, return on investment and total livestock" loading="lazy" width="1077" height="2309">
+          </div>
+        </article>
+
+        <div class="work-grid">
+          <article class="work-card">
+            <div class="work-brand">
+              <img src="assets/images/chauncey-icon.svg" alt="" width="44" height="44" loading="lazy">
+              <div>
+                <h3>Chauncey</h3>
+                <p class="tags"><span>AI assistant</span><span>Automation</span></p>
+              </div>
+            </div>
+            <p>Our in-house AI operations assistant. It turns support emails into tickets, drafts replies for approval and keeps projects moving from a phone.</p>
+            <span class="text-muted-small">Private tool</span>
+          </article>
+
+          <article class="work-card">
+            <div class="work-brand">
+              <div class="work-mark"><svg class="icon" aria-hidden="true"><use href="#i-book"/></svg></div>
+              <div>
+                <h3>Homestead Command Center</h3>
+                <p class="tags"><span>Digital product</span><span>Instant delivery</span></p>
+              </div>
+            </div>
+            <p>An ebook and worksheet kit sold online with secure checkout. Buyers get their files automatically the moment they pay.</p>
+            <a href="/digital-products/homestead-command-center/" class="text-link">View the product <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </article>
+
+          <article class="work-card">
+            <div class="work-brand">
+              <div class="work-mark"><svg class="icon" aria-hidden="true"><use href="#i-shirt"/></svg></div>
+              <div>
+                <h3>Cuyle's Customs</h3>
+                <p class="tags"><span>Online store</span><span>Print on demand</span></p>
+              </div>
+            </div>
+            <p>A custom apparel shop with on-site checkout, connected to print-on-demand so orders are made and shipped without manual steps.</p>
+            <a href="https://cuylescustoms.com" target="_blank" rel="noopener noreferrer" class="text-link">Visit the store <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </article>
+        </div>
+
+        <div class="more-work">
+          <div class="more-col">
+            <h4>More apps</h4>
+            <a href="/firelife">FireLife Discipleship <span>Daily Christian discipleship app</span></a>
+            <a href="/financial/app.html">Fennington Financial <span>Personal finance web app</span></a>
+          </div>
+          <div class="more-col">
+            <h4>Website starters for trades</h4>
+            <a href="/landscaping">Landscaping <span>View demo site</span></a>
+            <a href="/electrical">Electrical contractors <span>View demo site</span></a>
+            <a href="/snow-removal">Snow removal <span>View demo site</span></a>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- SECTION 6: CONTACT -->
-  <section class="contact" id="contact">
-    <div class="container">
-      <h2>Let's Build Something Great</h2>
-      <p class="section-subtitle">Ready to transform your business with modern technology?</p>
-      
-      <div class="contact-grid">
-        <div class="contact-info">
-          <h3>Get In Touch</h3>
-          
-          <div class="contact-item">
-            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            <div><strong>Email</strong><a href="mailto:contact@fennington.com">contact@fennington.com</a></div>
-          </div>
-          
-          <div class="trust-icons">
-            <span>✓ Custom Solutions</span>
-            <span>✓ Modern Tech</span>
-            <span>✓ Reliable Support</span>
-          </div>
+    <!-- PROCESS -->
+    <section class="section" id="process">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">How We Work</p>
+          <h2>A clear process, no surprises</h2>
+          <p class="section-lead">You always know what's being built, what it costs and when it will be ready.</p>
         </div>
-        
-        <form class="contact-form" id="contactForm">
-          <h3>Start Your Project</h3>
-          
-          <div class="form-group">
-            <label for="name">Full Name *</label>
-            <input type="text" id="name" name="name" required placeholder="John Smith">
+        <ol class="steps">
+          <li class="step">
+            <span class="step-num">01</span>
+            <h3>Free consultation</h3>
+            <p>A short call to understand your business, your goals and your budget.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">02</span>
+            <h3>Written plan &amp; quote</h3>
+            <p>Clear scope, price and timeline in writing before any work starts.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">03</span>
+            <h3>Build &amp; launch</h3>
+            <p>Regular check-ins and a working preview you can click through before launch.</p>
+          </li>
+          <li class="step">
+            <span class="step-num">04</span>
+            <h3>Support &amp; improve</h3>
+            <p>Updates, fixes and new features as your business grows.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- FREE WEBSITE REVIEW -->
+    <section class="review-band" id="review">
+      <div class="container review-grid">
+        <div class="review-copy">
+          <p class="eyebrow eyebrow-light">Free offer</p>
+          <h2>Already have a website? Get a free review.</h2>
+          <p>Send us your link and we'll reply with practical fixes to bring in more calls and leads: speed, mobile layout, search basics and how visitors get in touch.</p>
+        </div>
+        <form class="inquiry-form review-form" data-inquiry-type="website-review" novalidate>
+          <div class="field">
+            <label for="r-website">Your website</label>
+            <input id="r-website" name="website" type="url" inputmode="url" placeholder="https://yourbusiness.com" required>
           </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label for="email">Email *</label>
-              <input type="email" id="email" name="email" required placeholder="john@example.com">
+          <div class="field-row">
+            <div class="field">
+              <label for="r-name">Name</label>
+              <input id="r-name" name="name" type="text" autocomplete="name" required>
             </div>
-            <div class="form-group">
-              <label for="phone">Phone</label>
-              <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567">
+            <div class="field">
+              <label for="r-email">Email</label>
+              <input id="r-email" name="email" type="email" autocomplete="email" required>
             </div>
           </div>
-          
-          <div class="form-group">
-            <label for="service">Service Interested In *</label>
-            <select id="service" name="service" required>
-              <option value="">Select a service...</option>
-              <option value="website">Website Solutions</option>
-              <option value="ai">AI Integrations</option>
-              <option value="automation">Automation Solutions</option>
-              <option value="data-analytics">Data & Analytics</option>
-              <option value="api">API Development</option>
-              <option value="consulting">Consulting</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label for="message">Project Details</label>
-            <textarea id="message" name="message" rows="4" placeholder="Tell us about your project..."></textarea>
-          </div>
-          
-          <button type="submit" class="btn btn-primary btn-block">Send Message</button>
-          
-          <p class="form-note">We'll respond within 24 hours</p>
+          <div class="hp" aria-hidden="true"><label>Leave this empty <input name="extra_info" tabindex="-1" autocomplete="off"></label></div>
+          <button type="submit" class="btn btn-primary btn-block">
+            <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+            Request my free review
+          </button>
+          <p class="form-status" role="status" aria-live="polite"></p>
         </form>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- SECTION 7: FOOTER -->
+    <!-- ABOUT -->
+    <section class="section" id="about">
+      <div class="container about-grid">
+        <div class="about-copy">
+          <p class="eyebrow">About</p>
+          <h2>A family business with an engineer's discipline</h2>
+          <p>Fennington Solutions is a family-owned business in Massachusetts, led by an engineer. We build practical, dependable technology for real businesses: tools that bring in customers and save time, not flashy tech for its own sake.</p>
+          <p>You work directly with the person building your project. No hand-offs, no jargon, and honest advice, including when you don't need to spend money.</p>
+          <p>We're a Christian family, and that shapes how we work: honest, careful, and committed to doing right by every client.</p>
+        </div>
+        <ul class="about-facts">
+          <li>
+            <span class="fact-icon"><svg class="icon" aria-hidden="true"><use href="#i-tool"/></svg></span>
+            <div><strong>Engineer-led</strong><p>Every project is planned and built with care</p></div>
+          </li>
+          <li>
+            <span class="fact-icon"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg></span>
+            <div><strong>Family-owned</strong><p>Based in Massachusetts, serving clients anywhere</p></div>
+          </li>
+          <li>
+            <span class="fact-icon"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></span>
+            <div><strong>Proven in production</strong><p>Our own apps and stores run on what we build</p></div>
+          </li>
+          <li>
+            <span class="fact-icon"><svg class="icon" aria-hidden="true"><use href="#i-heart"/></svg></span>
+            <div><strong>Faith-driven values</strong><p>Integrity in every conversation and every line of code</p></div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section section-soft" id="faq">
+      <div class="container faq-wrap">
+        <div class="section-head">
+          <p class="eyebrow">FAQ</p>
+          <h2>Common questions</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>What kinds of businesses do you work with?<svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <p>Small and growing businesses of all kinds: trades and home services, venues, farms, shops, and service companies. If you have a process that takes too long or a website that isn't bringing in leads, we can help.</p>
+          </details>
+          <details>
+            <summary>How much does a project cost?<svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <p>It depends on what you need. After a free consultation you get a written quote with the scope, price and timeline, before any work starts. No surprise bills.</p>
+          </details>
+          <details>
+            <summary>How long does it take?<svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <p>Your timeline is set in the written plan. A simple website is usually the quickest. Larger automation and app projects are delivered in stages, so you see progress early.</p>
+          </details>
+          <details>
+            <summary>Can you work with what I already have?<svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <p>Yes. We can improve your current website, connect the tools you already use, or automate a task you do by hand today. You don't have to start over.</p>
+          </details>
+          <details>
+            <summary>What happens after launch?<svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <p>Ongoing support and updates are available, so your website and systems keep working as your business grows. You'll always have a direct line to us.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT / REQUEST INFO -->
+    <section class="section" id="contact">
+      <div class="container contact-grid">
+        <div class="contact-side">
+          <p class="eyebrow">Request Information</p>
+          <h2>Tell us about your project</h2>
+          <p class="section-lead">Share as much or as little as you like. The more detail you give, the more useful our reply.</p>
+
+          <ul class="contact-list">
+            <li>
+              <span class="fact-icon"><svg class="icon" aria-hidden="true"><use href="#i-mail"/></svg></span>
+              <div><strong>Email</strong><a href="mailto:contact@fennington.com">contact@fennington.com</a></div>
+            </li>
+            <li>
+              <span class="fact-icon"><svg class="icon" aria-hidden="true"><use href="#i-phone"/></svg></span>
+              <div><strong>Phone</strong><a href="tel:+14132251777">(413) 225-1777</a></div>
+            </li>
+            <li>
+              <span class="fact-icon"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg></span>
+              <div><strong>Response time</strong><span>Within one business day</span></div>
+            </li>
+          </ul>
+
+          <div class="next-steps">
+            <h3>What happens next</h3>
+            <ol>
+              <li>We read your request and reply within one business day.</li>
+              <li>If it's a fit, we set up a free call at a time that suits you.</li>
+              <li>You get a written plan and quote. No obligation.</li>
+            </ol>
+          </div>
+        </div>
+
+        <form class="inquiry-form contact-form" id="contactForm" data-inquiry-type="project" novalidate>
+          <div class="field-row">
+            <div class="field">
+              <label for="c-name">Name <span class="req">*</span></label>
+              <input id="c-name" name="name" type="text" autocomplete="name" required>
+            </div>
+            <div class="field">
+              <label for="c-email">Email <span class="req">*</span></label>
+              <input id="c-email" name="email" type="email" autocomplete="email" required>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="c-phone">Phone</label>
+              <input id="c-phone" name="phone" type="tel" autocomplete="tel">
+            </div>
+            <div class="field">
+              <label for="c-company">Business name</label>
+              <input id="c-company" name="company" type="text" autocomplete="organization">
+            </div>
+          </div>
+          <div class="field">
+            <label for="c-website">Current website <span class="optional">(if you have one)</span></label>
+            <input id="c-website" name="website" type="text" inputmode="url" placeholder="yourbusiness.com">
+          </div>
+
+          <fieldset class="field">
+            <legend>What are you interested in?</legend>
+            <div class="chips">
+              <label class="chip"><input type="checkbox" name="services" value="Website"><span>Website</span></label>
+              <label class="chip"><input type="checkbox" name="services" value="Automation"><span>Automation</span></label>
+              <label class="chip"><input type="checkbox" name="services" value="AI assistant"><span>AI assistant</span></label>
+              <label class="chip"><input type="checkbox" name="services" value="Custom app"><span>Custom app</span></label>
+              <label class="chip"><input type="checkbox" name="services" value="Online store"><span>Online store</span></label>
+              <label class="chip"><input type="checkbox" name="services" value="Dashboards and reporting"><span>Dashboards &amp; reporting</span></label>
+              <label class="chip"><input type="checkbox" name="services" value="Consulting"><span>Consulting</span></label>
+              <label class="chip"><input type="checkbox" name="services" value="Not sure yet"><span>Not sure yet</span></label>
+            </div>
+          </fieldset>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="c-budget">Budget</label>
+              <select id="c-budget" name="budget">
+                <option value="">Select a range</option>
+                <option>Under $1,000</option>
+                <option>$1,000 to $5,000</option>
+                <option>$5,000 to $15,000</option>
+                <option>$15,000 or more</option>
+                <option>Not sure yet</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="c-timeline">Timeline</label>
+              <select id="c-timeline" name="timeline">
+                <option value="">Select a timeline</option>
+                <option>As soon as possible</option>
+                <option>Within a month</option>
+                <option>1 to 3 months</option>
+                <option>Just exploring</option>
+              </select>
+            </div>
+          </div>
+
+          <fieldset class="field">
+            <legend>Best way to reach you</legend>
+            <div class="radios">
+              <label><input type="radio" name="contactMethod" value="Email" checked> Email</label>
+              <label><input type="radio" name="contactMethod" value="Phone"> Phone</label>
+              <label><input type="radio" name="contactMethod" value="Either"> Either</label>
+            </div>
+          </fieldset>
+
+          <div class="field">
+            <label for="c-message">Your request <span class="req">*</span></label>
+            <textarea id="c-message" name="message" rows="5" required placeholder="What would you like to build, fix or automate? Any questions for us?"></textarea>
+          </div>
+
+          <div class="hp" aria-hidden="true"><label>Leave this empty <input name="extra_info" tabindex="-1" autocomplete="off"></label></div>
+          <button type="submit" class="btn btn-primary btn-lg btn-block">Send request</button>
+          <p class="form-status" role="status" aria-live="polite"></p>
+          <p class="form-fine">We only use your details to reply to your request. See our <a href="/privacy-policy.html">privacy policy</a>.</p>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
   <footer class="footer">
-    <div class="container">
-      <nav class="footer-nav">
-        <a href="#hero">Home</a>
-        <a href="#services">Services</a>
-        <a href="#products">Products</a>
-        <a href="#about-me">About</a>
-        <a href="#contact">Contact</a>
-      </nav>
-      <p>&copy; 2026 Fennington Solutions. All rights reserved.</p>
-      <p class="disclaimer">Professional web solutions and technology consulting services.</p>
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a href="#top" class="footer-logo">
+          <img src="assets/images/FennSol Logo.png" alt="" width="36" height="34">
+          <span>Fennington Solutions</span>
+        </a>
+        <p>Websites, automation, AI and apps for small businesses. Family-owned in Massachusetts.</p>
+        <a href="#contact" class="btn btn-primary">Request Info</a>
+      </div>
+      <div class="footer-col">
+        <h4>Services</h4>
+        <a href="#services">Websites</a>
+        <a href="#services">Automation</a>
+        <a href="#services">AI assistants</a>
+        <a href="#services">Custom apps</a>
+        <a href="#review">Free website review</a>
+      </div>
+      <div class="footer-col">
+        <h4>Products</h4>
+        <a href="/livestock-tracker">Livestock Tracker</a>
+        <a href="/firelife">FireLife Discipleship</a>
+        <a href="/digital-products/homestead-command-center/">Homestead Command Center</a>
+        <a href="/financial/app.html">Fennington Financial</a>
+        <a href="https://fennington-assistant--fennington-assistant.us-central1.hosted.app" target="_blank" rel="noopener noreferrer">Chauncey sign-in</a>
+      </div>
+      <div class="footer-col">
+        <h4>Contact</h4>
+        <a href="mailto:contact@fennington.com">contact@fennington.com</a>
+        <a href="tel:+14132251777">(413) 225-1777</a>
+        <a href="/privacy-policy.html">Privacy policy</a>
+        <a href="/refund-policy.html">Refund policy</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>&copy; <span id="year">2026</span> Fennington Solutions. All rights reserved.</p>
     </div>
   </footer>
+
+  <!-- Mobile quick actions -->
+  <div class="mobile-bar">
+    <a href="tel:+14132251777" class="btn btn-outline"><svg class="icon" aria-hidden="true"><use href="#i-phone"/></svg>Call</a>
+    <a href="#contact" class="btn btn-primary"><svg class="icon" aria-hidden="true"><use href="#i-message"/></svg>Request Info</a>
+  </div>
 
   <script src="script.js"></script>
 </body>
