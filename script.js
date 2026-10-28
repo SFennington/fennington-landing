@@ -12,7 +12,62 @@ const CONTACT_EMAIL = "contact@fennington.com";
 const CONTACT_PHONE = "(413) 225-1777";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Ads link here with ?service=<key> (the same keys as AD_SERVICE_KEYS in
+// functions/src/meta-ads.ts), and the hero swaps to that service so the visitor
+// lands on what they tapped. Unknown or missing keys keep the general page.
+const SERVICE_HEROES = {
+  websites: {
+    eyebrow: "Websites & Landing Pages",
+    title: "A website that brings in calls, bookings and sales.",
+    lead: "Fast, mobile-friendly websites built around your business, with lead forms and online booking that turn visitors into customers. Free consultation and a written quote before any work starts.",
+    placeholder: "e.g. I need a new website that books appointments",
+    chip: "Website"
+  },
+  automation: {
+    eyebrow: "Business Automation",
+    title: "Stop doing the same task twice.",
+    lead: "We connect the tools you already use so follow-ups, orders, invoices and records move along on their own, and you get hours back every week. Free consultation and a written quote before any work starts.",
+    placeholder: "e.g. I copy every new order into a spreadsheet by hand",
+    chip: "Automation"
+  },
+  ai: {
+    eyebrow: "AI Assistants & Integrations",
+    title: "Put AI to work on the busywork.",
+    lead: "Assistants that answer customer questions, sort incoming requests and draft replies for your approval. Built carefully, with a person in charge of what goes out.",
+    placeholder: "e.g. I want help answering customer emails",
+    chip: "AI assistant"
+  },
+  apps: {
+    eyebrow: "Custom Apps",
+    title: "Your app, from first idea to the app stores.",
+    lead: "Mobile and web apps for your customers or your team, with accounts, subscriptions and payments. We build and run our own apps on iPhone, Android and the web.",
+    placeholder: "e.g. I have an idea for an app for my customers",
+    chip: "Custom app"
+  },
+  stores: {
+    eyebrow: "Online Stores & Payments",
+    title: "Sell online with simple, secure checkout.",
+    lead: "Products, digital downloads or services, sold on your own site with Stripe checkout, automatic delivery and receipts, and print-on-demand connections.",
+    placeholder: "e.g. I want to sell my products online",
+    chip: "Online store"
+  },
+  dashboards: {
+    eyebrow: "Dashboards & Reporting",
+    title: "See what's working at a glance.",
+    lead: "Sales, ad spend, leads and operations in one place, so decisions come from your own numbers instead of guesswork.",
+    placeholder: "e.g. I want one place to see sales and ad results",
+    chip: "Dashboards and reporting"
+  },
+  review: {
+    eyebrow: "Free website review",
+    title: "Is your website bringing in customers?",
+    lead: "Send us your link and we'll reply with practical fixes to bring in more calls and leads: speed, mobile layout, search basics and how visitors get in touch. Free, with no obligation.",
+    cta: { text: "Get my free website review", href: "#review" }
+  }
+};
+
 document.addEventListener("DOMContentLoaded", () => {
+  applyServiceHero();
   setupHeader();
   setupMobileMenu();
   setupServiceButtons();
@@ -21,6 +76,40 @@ document.addEventListener("DOMContentLoaded", () => {
   const year = document.getElementById("year");
   if (year) year.textContent = String(new Date().getFullYear());
 });
+
+// ========== SERVICE-MATCHED HERO ==========
+function applyServiceHero() {
+  let key = "";
+  try {
+    key = (new URLSearchParams(window.location.search).get("service") || "").trim().toLowerCase();
+  } catch (error) {
+    return;
+  }
+  const hero = Object.prototype.hasOwnProperty.call(SERVICE_HEROES, key) ? SERVICE_HEROES[key] : null;
+  if (!hero) return;
+
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && value) el.textContent = value;
+  };
+  setText("heroEyebrow", hero.eyebrow);
+  setText("heroTitle", hero.title);
+  setText("heroLead", hero.lead);
+  if (hero.cta) {
+    const cta = document.getElementById("heroCta");
+    if (cta) {
+      cta.textContent = hero.cta.text;
+      cta.setAttribute("href", hero.cta.href);
+    }
+  }
+  const quick = document.getElementById("q-message");
+  if (quick && hero.placeholder) quick.setAttribute("placeholder", hero.placeholder);
+  if (hero.chip) {
+    document.querySelectorAll('#contactForm input[name="services"]').forEach((box) => {
+      if (box.value === hero.chip) box.checked = true;
+    });
+  }
+}
 
 // ========== HEADER + MOBILE BAR ==========
 function setupHeader() {
@@ -119,6 +208,10 @@ function setupInquiryForm(form) {
       }
       if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
       track("generate_lead", { form_type: data.type });
+      // Same event id as the server's copy, so Meta counts this lead once.
+      if (window.fenningtonPixel && body.id) {
+        window.fenningtonPixel.track("Lead", { content_name: data.type }, `lead-${body.id}`);
+      }
       showSuccess(form, data);
     } catch (error) {
       button.disabled = false;
@@ -131,7 +224,11 @@ function setupInquiryForm(form) {
 function readForm(form) {
   const formData = new FormData(form);
   const value = (name) => String(formData.get(name) || "").trim();
+  // meta-pixel.js keeps the ad's tracking code (utm_content) for the whole visit.
+  const pixel = window.fenningtonPixel;
   return {
+    adCode: pixel ? pixel.adCode() : "",
+    browser: pixel ? pixel.browserIds() : {},
     type: form.getAttribute("data-inquiry-type") || "project",
     name: value("name"),
     email: value("email"),
