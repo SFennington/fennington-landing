@@ -1605,6 +1605,125 @@ apiApp.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "fennington-lead-preview" });
 });
 
+// Request-info forms on the fennington.com home page. Public by design: anyone may
+// ask for information, so it is guarded by a honeypot field and a per-IP hourly cap
+// instead of auth. Each request is kept in `inquiries` and emailed to contact@,
+// which the email worker files as a Chauncey ticket; Reply-To is the visitor.
+const INQUIRY_TYPES = ["quick", "project", "website-review"];
+const INQUIRY_HOURLY_LIMIT = 5;
+
+type Inquiry = {
+  type: string;
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  website: string;
+  services: string[];
+  budget: string;
+  timeline: string;
+  contactMethod: string;
+  message: string;
+  pageUrl: string;
+};
+
+async function allowInquiryFrom(ip: string): Promise<boolean> {
+  const hour = new Date().toISOString().slice(0, 13);
+  const ipHash = crypto.createHash("sha256").update(ip || "unknown").digest("hex").slice(0, 32);
+  const ref = db.collection("inquiryRateLimits").doc(`${ipHash}_${hour}`);
+  return db.runTransaction(async (tx) => {
+    const count = Number((await tx.get(ref)).get("count") || 0);
+    if (count >= INQUIRY_HOURLY_LIMIT) return false;
+    tx.set(ref, { count: count + 1, hour, updatedAt: serverTimestamp() }, { merge: true });
+    return true;
+  });
+}
+
+async function sendInquiryEmail(inquiry: Inquiry): Promise<PurchaseEmailResult> {
+  const emailConfig = await db.collection("config").doc("email").get();
+  const fromEmail = safeString(emailConfig.get("transactionalFromEmail") || emailConfig.get("fromEmail") || process.env.RESEND_FROM_EMAIL);
+  const toEmail = safeString(emailConfig.get("inquiryToEmail")) || "contact@fennington.com";
+  const apiKey = secretValue("RESEND_API_KEY", resendApiKey);
+  if (!fromEmail || !apiKey) return { status: "pending_config" };
+
+  // The visitor's name as the sender name, so Gmail and the Chauncey ticket show who asked.
+  const fromAddress = /<([^<>]+)>/.exec(fromEmail)?.[1] || fromEmail;
+  const senderName = inquiry.name.replace(/["<>\\\r\n]/g, "").slice(0, 60) || "Website visitor";
+  const topic = inquiry.type === "website-review" ? "Free website review" : inquiry.services[0] || "General question";
+  const details: Array<[string, string]> = [
+    ["Name", inquiry.name],
+    ["Email", inquiry.email],
+    ["Phone", inquiry.phone],
+    ["Company", inquiry.company],
+    ["Website", inquiry.website],
+    ["Interested in", inquiry.services.join(", ")],
+    ["Budget", inquiry.budget],
+    ["Timeline", inquiry.timeline],
+    ["Best way to reach them", inquiry.contactMethod],
+    ["Form", inquiry.type],
+    ["Sent from", inquiry.pageUrl]
+  ];
+  const text = `${inquiry.message || "(No message, see details below.)"}\n\n${details.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`).join("\n")}`;
+
+  const resendResponse = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      from: `${senderName} via Fennington.com <${fromAddress}>`,
+      to: [toEmail],
+      reply_to: inquiry.email,
+      subject: `Website inquiry: ${topic} (${senderName})`,
+      text
+    })
+  });
+  const resendBody = await resendResponse.json().catch(() => ({}));
+  if (!resendResponse.ok) return { status: "failed", error: resendBody };
+  return { status: "sent", resendEmailId: resendBody.id || null };
+}
+
+apiApp.post("/inquiries", asyncRoute(async (req, res) => {
+  const body = req.body || {};
+  // Hidden field people never see. Bots fill it; answer as if it worked so they move on.
+  if (safeString(body.extra_info)) {
+    res.json({ ok: true });
+    return;
+  }
+
+  const inquiry: Inquiry = {
+    type: INQUIRY_TYPES.includes(safeString(body.type)) ? safeString(body.type) : "project",
+    name: safeString(body.name).slice(0, 120),
+    email: normalizeEmail(body.email),
+    phone: safeString(body.phone).slice(0, 40),
+    company: safeString(body.company).slice(0, 160),
+    website: safeString(body.website).slice(0, 300),
+    services: Array.isArray(body.services) ? body.services.map((item: unknown) => safeString(item).slice(0, 80)).filter(Boolean).slice(0, 10) : [],
+    budget: safeString(body.budget).slice(0, 80),
+    timeline: safeString(body.timeline).slice(0, 80),
+    contactMethod: safeString(body.contactMethod).slice(0, 40),
+    message: safeLongString(body.message, "", 5000),
+    pageUrl: safeString(body.pageUrl).slice(0, 300)
+  };
+  if (!inquiry.name || !isValidEmail(inquiry.email)) throw Object.assign(new Error("Please add your name and a valid email address."), { statusCode: 400 });
+  if (!inquiry.message && !(inquiry.type === "website-review" && inquiry.website)) throw Object.assign(new Error("Please tell us a little about what you need."), { statusCode: 400 });
+  if (!(await allowInquiryFrom(clientIpFrom(req.header("x-forwarded-for"), req.ip)))) {
+    throw Object.assign(new Error("Too many requests from this connection. Please email contact@fennington.com instead."), { statusCode: 429 });
+  }
+
+  const ref = db.collection("inquiries").doc();
+  await ref.create({ ...inquiry, emailStatus: "pending", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  const emailResult: PurchaseEmailResult = await sendInquiryEmail(inquiry).catch((error: any) => ({ status: "failed", error: safeString(error?.message) }));
+  await ref.set({ emailStatus: emailResult.status, resendEmailId: emailResult.resendEmailId || null, emailError: emailResult.error || null, updatedAt: serverTimestamp() }, { merge: true });
+  // Saved but not delivered is as good as lost, so tell the page and let it offer email instead.
+  if (emailResult.status !== "sent") {
+    logger.error("Inquiry email was not sent", { inquiryId: ref.id, status: emailResult.status, error: emailResult.error });
+    throw Object.assign(new Error("Your request could not be sent right now. Please email contact@fennington.com."), { statusCode: 502 });
+  }
+  res.json({ ok: true });
+}));
+
 apiApp.get("/admin/leads", asyncRoute(async (req, res) => {
   await requireAdmin(req);
   let query: Query = db.collection("leads");
