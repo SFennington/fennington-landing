@@ -12,7 +12,7 @@ import fs from "fs";
 import path from "path";
 import Stripe from "stripe";
 import { adLandingUrl, adParams, creativeParams, imageHashFrom, metaAdName, metaGraphPost, metaPauseAd, normalizeAdAccountId, parseAdConcept, rankAds, TRACKING_CODE_PATTERN, type AdPerformanceRow } from "./meta-ads";
-import { cleanBrowserIds, clientIpFrom, sendPurchaseEvent, type BrowserIds } from "./meta-capi";
+import { cleanBrowserIds, clientIpFrom, sendLeadEvent, sendPurchaseEvent, type BrowserIds } from "./meta-capi";
 
 loadLocalEnvFile();
 
@@ -1625,6 +1625,9 @@ type Inquiry = {
   contactMethod: string;
   message: string;
   pageUrl: string;
+  // The ad that brought the visitor (utm_content, e.g. FS-A2), so ads are ranked by
+  // the leads they produce. Empty for everyone who did not arrive from an ad.
+  adCode: string;
 };
 
 async function allowInquiryFrom(ip: string): Promise<boolean> {
@@ -1661,6 +1664,7 @@ async function sendInquiryEmail(inquiry: Inquiry): Promise<PurchaseEmailResult> 
     ["Timeline", inquiry.timeline],
     ["Best way to reach them", inquiry.contactMethod],
     ["Form", inquiry.type],
+    ["Came from ad", inquiry.adCode],
     ["Sent from", inquiry.pageUrl]
   ];
   const text = `${inquiry.message || "(No message, see details below.)"}\n\n${details.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`).join("\n")}`;
@@ -1704,7 +1708,8 @@ apiApp.post("/inquiries", asyncRoute(async (req, res) => {
     timeline: safeString(body.timeline).slice(0, 80),
     contactMethod: safeString(body.contactMethod).slice(0, 40),
     message: safeLongString(body.message, "", 5000),
-    pageUrl: safeString(body.pageUrl).slice(0, 300)
+    pageUrl: safeString(body.pageUrl).slice(0, 300),
+    adCode: TRACKING_CODE_PATTERN.test(safeString(body.adCode).toUpperCase()) ? safeString(body.adCode).toUpperCase() : ""
   };
   if (!inquiry.name || !isValidEmail(inquiry.email)) throw Object.assign(new Error("Please add your name and a valid email address."), { statusCode: 400 });
   if (!inquiry.message && !(inquiry.type === "website-review" && inquiry.website)) throw Object.assign(new Error("Please tell us a little about what you need."), { statusCode: 400 });
@@ -1721,8 +1726,32 @@ apiApp.post("/inquiries", asyncRoute(async (req, res) => {
     logger.error("Inquiry email was not sent", { inquiryId: ref.id, status: emailResult.status, error: emailResult.error });
     throw Object.assign(new Error("Your request could not be sent right now. Please email contact@fennington.com."), { statusCode: 502 });
   }
-  res.json({ ok: true });
+  await reportLeadToMeta(inquiry, ref, cleanBrowserIds({ ...body.browser, ip: clientIpFrom(req.header("x-forwarded-for"), req.ip), userAgent: req.header("user-agent") }));
+  // The id lets the page give its pixel Lead the same event id as the server's copy.
+  res.json({ ok: true, id: ref.id });
 }));
+
+// Server-side Lead for Meta, so ads can be optimised for form sends even when the
+// browser pixel is blocked. Like the Purchase copy, it never blocks the visitor:
+// a failure is logged and kept on the inquiry.
+async function reportLeadToMeta(inquiry: Inquiry, ref: DocumentReference, browser: BrowserIds) {
+  const token = secretValue("META_CAPI_TOKEN", metaCapiToken);
+  if (!token || process.env.FUNCTIONS_EMULATOR === "true") return;
+  try {
+    const result = await sendLeadEvent({
+      inquiryId: ref.id,
+      formType: inquiry.type,
+      emailHash: hashEmail(inquiry.email),
+      createdAt: Date.now(),
+      sourceUrl: /^https:\/\/fennington\.com\//.test(inquiry.pageUrl) ? inquiry.pageUrl : `${SITE_URL}/`,
+      browser
+    }, token);
+    await ref.set({ metaCapiStatus: "sent", metaCapiEventsReceived: result.eventsReceived }, { merge: true });
+  } catch (error: any) {
+    logger.warn("Meta Conversions API lead failed", { inquiryId: ref.id, error: error?.message });
+    await ref.set({ metaCapiStatus: "failed", metaCapiError: safeString(error?.message).slice(0, 500) }, { merge: true });
+  }
+}
 
 apiApp.get("/admin/leads", asyncRoute(async (req, res) => {
   await requireAdmin(req);
@@ -2977,6 +3006,25 @@ apiApp.post("/admin/jobs/sync-meta-insights", asyncRoute(async (req, res) => {
   res.json(await runMetaAdInsightsSync(datePreset));
 }));
 
+// Leads per ad from the home page's request forms, by the tracking code the page kept
+// from the ad's link. Spam caught by the hidden field is never saved, and a visitor
+// who did not come from an ad has no code, so neither counts.
+async function leadsByAdCode(since: Date | null, include: (code: string) => boolean) {
+  let query: Query = db.collection("inquiries");
+  if (since) query = query.where("createdAt", ">=", since);
+  const snapshot = await query.limit(2000).get();
+  const totals = new Map<string, number>();
+  const byDay: { trackingCode: string; date: string }[] = [];
+  for (const doc of snapshot.docs) {
+    const code = safeString(doc.get("adCode"));
+    if (!code || !include(code)) continue;
+    totals.set(code, (totals.get(code) || 0) + 1);
+    const when = doc.get("createdAt")?.toDate?.() as Date | undefined;
+    byDay.push({ trackingCode: code, date: when ? when.toISOString().slice(0, 10) : "" });
+  }
+  return { totals, byDay };
+}
+
 // Everything the ads dashboard draws, in one call: per-ad daily rows for the chart,
 // period totals ranked the same way as get_ad_ranking, Stripe sales by day, and
 // each ad's live status from Meta so a paused or rejected ad is obvious.
@@ -3030,7 +3078,8 @@ apiApp.get("/admin/ad-dashboard", asyncRoute(async (req, res) => {
     const code = doc.id;
     if (ofPrefix(code) && !totals.has(code)) totals.set(code, { trackingCode: code, impressions: 0, clicks: 0, linkClicks: 0, spend: 0 });
   }
-  for (const code of salesTotals.keys()) {
+  const leads = await leadsByAdCode(new Date(`${since}T00:00:00Z`), ofPrefix);
+  for (const code of [...salesTotals.keys(), ...leads.totals.keys()]) {
     if (!totals.has(code)) totals.set(code, { trackingCode: code });
   }
   for (const t of totals.values()) {
@@ -3063,9 +3112,10 @@ apiApp.get("/admin/ad-dashboard", asyncRoute(async (req, res) => {
     days,
     since,
     lastSyncedAt: lastSync.empty ? null : lastSync.docs[0].get("syncedAt")?.toDate?.() || null,
-    ads: rankAds([...totals.values()], salesTotals).map((ad) => ({ ...ad, ...(status[ad.trackingCode] || {}) })),
+    ads: rankAds([...totals.values()], salesTotals, leads.totals).map((ad) => ({ ...ad, ...(status[ad.trackingCode] || {}) })),
     daily,
-    sales: salesByDay
+    sales: salesByDay,
+    leads: leads.byDay
   });
 }));
 
@@ -3097,8 +3147,9 @@ apiApp.get("/admin/ad-performance", asyncRoute(async (req, res) => {
     entry.revenueCents += Number(doc.get("amountTotal")) || 0;
     sales.set(code, entry);
   }
-  // A sale can come from an ad Meta has not reported yet; it still belongs in the list.
-  for (const code of sales.keys()) {
+  const leads = await leadsByAdCode(days ? new Date(Date.now() - days * 86_400_000) : null, (code) => !prefix || code.startsWith(`${prefix}-`));
+  // A sale or lead can come from an ad Meta has not reported yet; it still belongs in the list.
+  for (const code of [...sales.keys(), ...leads.totals.keys()]) {
     if (!rows.some((row) => row.trackingCode === code)) rows.push({ trackingCode: code });
   }
 
@@ -3106,15 +3157,35 @@ apiApp.get("/admin/ad-performance", asyncRoute(async (req, res) => {
   res.json({
     window: datePreset,
     lastSyncedAt: lastSync.empty ? null : lastSync.docs[0].get("syncedAt")?.toDate?.() || null,
-    ads: rankAds(rows, sales)
+    ads: rankAds(rows, sales, leads.totals)
   });
 }));
+
+// What an ad can point at. Each digital product is one; the business's own services
+// are another, so the same Ad Studio, upload, pause and ranking serve both. Service
+// ads land on the home page (which matches its headline to the ad's service), report
+// leads rather than sales, and run in their own ad set, since they are optimised for
+// a different result than a product's purchases.
+const BUSINESS_AD_SLUG = "fennington-solutions";
+
+type AdTarget = {
+  slug: string;
+  landingPath: string;
+  adSetField: "defaultAdSetId" | "businessAdSetId";
+  serviceLinks: boolean;
+};
+
+async function getAdTarget(slug: string): Promise<AdTarget> {
+  if (slug === BUSINESS_AD_SLUG) return { slug, landingPath: "/", adSetField: "businessAdSetId", serviceLinks: true };
+  const product = await getDigitalProductBySlug(slug);
+  return { slug: product.slug, landingPath: product.salesPagePath || "", adSetField: "defaultAdSetId", serviceLinks: false };
+}
 
 // Pause only. Used once the owner has picked a winner; it can never start an ad,
 // and it only touches ads this system uploaded for this product.
 apiApp.post("/digital-products/:slug/meta/pause-ads", asyncRoute(async (req, res) => {
   const actor = await requireAdminOrServiceSecret(req);
-  const product = await getDigitalProductBySlug(safeString(req.params.slug));
+  const product = await getAdTarget(safeString(req.params.slug));
   const codes = (Array.isArray(req.body?.trackingCodes) ? req.body.trackingCodes : []).map((c: unknown) => safeString(c).toUpperCase());
   if (codes.length < 1 || codes.length > 10 || codes.some((c: string) => !TRACKING_CODE_PATTERN.test(c))) {
     throw Object.assign(new Error("Send 1 to 10 tracking codes like HCC-A1."), { statusCode: 400 });
@@ -3152,8 +3223,8 @@ apiApp.post("/digital-products/:slug/meta/pause-ads", asyncRoute(async (req, res
 // after a partial failure picks up where it stopped instead of duplicating ads.
 apiApp.post("/digital-products/:slug/meta/upload-ads", asyncRoute(async (req, res) => {
   const actor = await requireAdminOrServiceSecret(req);
-  const product = await getDigitalProductBySlug(safeString(req.params.slug));
-  if (!product.salesPagePath) throw Object.assign(new Error("Sales page path is required before ads can link to it."), { statusCode: 409 });
+  const product = await getAdTarget(safeString(req.params.slug));
+  if (!product.landingPath) throw Object.assign(new Error("Sales page path is required before ads can link to it."), { statusCode: 409 });
 
   const rawConcepts = Array.isArray(req.body?.concepts) ? req.body.concepts : [];
   if (rawConcepts.length < 1 || rawConcepts.length > 5) throw Object.assign(new Error("Send between 1 and 5 concepts."), { statusCode: 400 });
@@ -3163,12 +3234,12 @@ apiApp.post("/digital-products/:slug/meta/upload-ads", asyncRoute(async (req, re
   const config = await db.collection("config").doc("meta").get();
   const accountId = normalizeAdAccountId(safeString(config.get("adAccountId")));
   const pageId = safeString(config.get("pageId")).trim();
-  const adSetId = safeString(config.get("defaultAdSetId")).trim();
+  const adSetId = safeString(config.get(product.adSetField)).trim();
   const missing = [
     !token && "META_ADS_WRITE_TOKEN",
     !accountId && "config/meta.adAccountId",
     !/^\d+$/.test(pageId) && "config/meta.pageId",
-    !/^\d+$/.test(adSetId) && "config/meta.defaultAdSetId"
+    !/^\d+$/.test(adSetId) && `config/meta.${product.adSetField}`
   ].filter(Boolean);
   if (missing.length) {
     res.status(412).json({ status: "pending_config", missing });
@@ -3188,7 +3259,7 @@ apiApp.post("/digital-products/:slug/meta/upload-ads", asyncRoute(async (req, re
       continue;
     }
 
-    const link = adLandingUrl(SITE_URL, product.salesPagePath, product.slug, concept.trackingCode);
+    const link = adLandingUrl(SITE_URL, product.landingPath, product.slug, concept.trackingCode, product.serviceLinks ? concept.service : "");
     const record = { trackingCode: concept.trackingCode, productSlug: product.slug, adName: metaAdName(concept), link, adSetId, uploadedBy: actor.email || actor.uid };
     let imageHash = safeString(existing.imageHash);
     let creativeId = safeString(existing.creativeId);

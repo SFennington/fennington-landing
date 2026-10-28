@@ -58,3 +58,13 @@ test("surfaces Meta's error message", async () => {
   const fetchImpl = async () => ({ ok: false, status: 400, json: async () => ({ error: { message: "Invalid parameter" } }) });
   await assert.rejects(capi.sendPurchaseEvent(input(), "t", fetchImpl), /Invalid parameter/);
 });
+
+test("builds a Lead whose event_id matches the page's pixel", () => {
+  const event = capi.leadEventPayload({ inquiryId: "abc123", formType: "quick", emailHash: "b".repeat(64), createdAt: 1760000000000, sourceUrl: "https://fennington.com/", browser }).data[0];
+  assert.equal(event.event_name, "Lead");
+  assert.equal(event.event_id, "lead-abc123");
+  assert.equal(event.event_time, 1760000000);
+  assert.deepEqual(event.custom_data, { content_name: "quick", content_category: "services" });
+  assert.deepEqual(event.user_data.em, ["b".repeat(64)]);
+  assert.equal(event.user_data.fbc, browser.fbc);
+});

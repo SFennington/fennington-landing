@@ -15,8 +15,15 @@ const CTA_TYPES: Record<string, string> = {
   "shop now": "SHOP_NOW",
   "learn more": "LEARN_MORE",
   "get offer": "GET_OFFER",
-  "sign up": "SIGN_UP"
+  "sign up": "SIGN_UP",
+  // For the business's own services, where the next step is a conversation.
+  "get quote": "GET_QUOTE",
+  "contact us": "CONTACT_US"
 };
+
+// The home page swaps its headline to match the service an ad is about (?service=),
+// so a visitor lands on the thing they tapped. Same keys as the page's script.js.
+export const AD_SERVICE_KEYS = ["websites", "automation", "ai", "apps", "stores", "dashboards", "review"];
 
 // Meta rejects images over 30MB; a 1080x1080 creative is nowhere near, so anything
 // this large is a wrong file rather than a big image.
@@ -32,6 +39,7 @@ export type AdConcept = {
   description: string;
   ctaType: string;
   imageBase64: string;
+  service: string;
 };
 
 function badRequest(message: string): Error {
@@ -51,7 +59,10 @@ export function parseAdConcept(raw: any): AdConcept {
 
   const cta = text(raw?.cta, `${trackingCode} cta`, 20).toLowerCase();
   const ctaType = CTA_TYPES[cta];
-  if (!ctaType) throw badRequest(`${trackingCode} cta must be one of: Shop Now, Learn More, Get Offer, Sign Up.`);
+  if (!ctaType) throw badRequest(`${trackingCode} cta must be one of: Shop Now, Learn More, Get Offer, Sign Up, Get Quote, Contact Us.`);
+
+  const service = text(raw?.service, `${trackingCode} service`, 20, false).toLowerCase();
+  if (service && !AD_SERVICE_KEYS.includes(service)) throw badRequest(`${trackingCode} service must be one of: ${AD_SERVICE_KEYS.join(", ")}.`);
 
   const imageBase64 = typeof raw?.imageBase64 === "string" ? raw.imageBase64.replace(/^data:[^,]*,/, "").replace(/\s+/g, "") : "";
   if (!imageBase64 || !/^[A-Za-z0-9+/]+=*$/.test(imageBase64)) throw badRequest(`${trackingCode} imageBase64 is missing or not base64.`);
@@ -68,7 +79,8 @@ export function parseAdConcept(raw: any): AdConcept {
     headline: text(raw?.headline, `${trackingCode} headline`, 255),
     description: text(raw?.description, `${trackingCode} description`, 255, false),
     ctaType,
-    imageBase64
+    imageBase64,
+    service
   };
 }
 
@@ -79,7 +91,7 @@ export function metaAdName(concept: Pick<AdConcept, "trackingCode" | "angle">): 
 
 // utm_content carries the tracking code to the sales page, which is what lets a
 // sale be tied back to the ad that produced it.
-export function adLandingUrl(siteUrl: string, salesPagePath: string, productSlug: string, trackingCode: string): string {
+export function adLandingUrl(siteUrl: string, salesPagePath: string, productSlug: string, trackingCode: string, service = ""): string {
   let path = salesPagePath.startsWith("/") ? salesPagePath : `/${salesPagePath}`;
   // The site redirects a folder path without its trailing slash, which costs an ad
   // visitor an extra round trip before the page starts loading.
@@ -89,6 +101,7 @@ export function adLandingUrl(siteUrl: string, salesPagePath: string, productSlug
   url.searchParams.set("utm_medium", "paid_social");
   url.searchParams.set("utm_campaign", productSlug);
   url.searchParams.set("utm_content", trackingCode);
+  if (service) url.searchParams.set("service", service);
   return url.toString();
 }
 
@@ -188,6 +201,8 @@ export type RankedAd = {
   sales: number;
   revenue: number;
   costPerSale: number | null;
+  leads: number;
+  costPerLead: number | null;
   enoughData: boolean;
 };
 
@@ -200,15 +215,22 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // Sales are counted from Stripe, by the tracking code checkout stored with the
 // order, not from Meta's pixel, which can miss or double-count. Meta purchases are
-// only a fallback for ads with no recorded sale. With no sales anywhere (the usual
-// case at a small budget), cheaper clicks win, then the higher click rate.
-export function rankAds(rows: AdPerformanceRow[], sales: Map<string, { count: number; revenueCents: number }>): RankedAd[] {
+// only a fallback for ads with no recorded sale. Service ads sell a conversation,
+// not a download, so their result is a lead: a request-info form sent from the home
+// page, counted the same way by tracking code. With neither (the usual case at a
+// small budget), cheaper clicks win, then the higher click rate.
+export function rankAds(
+  rows: AdPerformanceRow[],
+  sales: Map<string, { count: number; revenueCents: number }>,
+  leads: Map<string, number> = new Map()
+): RankedAd[] {
   const ranked = rows.map((row) => {
     const clicks = Number(row.clicks) || 0;
     const linkClicks = Number(row.linkClicks) || 0;
     const spend = Number(row.spend) || 0;
     const sale = sales.get(row.trackingCode);
     const salesCount = sale ? sale.count : Number(row.purchases) || 0;
+    const leadCount = leads.get(row.trackingCode) || 0;
     return {
       trackingCode: row.trackingCode,
       impressions: Number(row.impressions) || 0,
@@ -221,6 +243,8 @@ export function rankAds(rows: AdPerformanceRow[], sales: Map<string, { count: nu
       sales: salesCount,
       revenue: sale ? round2(sale.revenueCents / 100) : 0,
       costPerSale: salesCount > 0 ? round2(spend / salesCount) : null,
+      leads: leadCount,
+      costPerLead: leadCount > 0 ? round2(spend / leadCount) : null,
       enoughData: spend >= MIN_SPEND_TO_JUDGE || clicks >= MIN_CLICKS_TO_JUDGE
     };
   });
@@ -228,6 +252,8 @@ export function rankAds(rows: AdPerformanceRow[], sales: Map<string, { count: nu
   return ranked.sort((a, b) =>
     b.sales - a.sales
     || (a.costPerSale ?? Infinity) - (b.costPerSale ?? Infinity)
+    || b.leads - a.leads
+    || (a.costPerLead ?? Infinity) - (b.costPerLead ?? Infinity)
     || cpc(a) - cpc(b)
     || b.ctr - a.ctr);
 }

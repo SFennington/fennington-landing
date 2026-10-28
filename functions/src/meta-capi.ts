@@ -1,10 +1,12 @@
-// Server-side copy of the pixel's Purchase event (Meta's Conversions API). Kept out
-// of index.ts so what reaches Meta can be tested without Firestore or a network.
+// Server-side copies of the pixel's Purchase and Lead events (Meta's Conversions
+// API). Kept out of index.ts so what reaches Meta can be tested without Firestore or
+// a network.
 //
-// Only digital-product sales are ever sent: the webhook calls this after it has
-// matched the session to a digital product, so Livestock Tracker subscriptions on
-// the shared Stripe account never get here. The event_id matches the one the
-// thank-you page gives the pixel, so Meta counts a sale seen by both only once.
+// Only digital-product sales are ever sent as purchases: the webhook calls this after
+// it has matched the session to a digital product, so Livestock Tracker subscriptions
+// on the shared Stripe account never get here. Leads are the home page's request-info
+// forms. Each event_id matches the one the page gives the pixel, so Meta counts an
+// event seen by both only once.
 
 import { META_GRAPH_VERSION } from "./meta-ads";
 
@@ -70,12 +72,52 @@ export function purchaseEventPayload(input: PurchaseEventInput) {
   };
 }
 
-export async function sendPurchaseEvent(input: PurchaseEventInput, token: string, fetchImpl: typeof fetch = fetch): Promise<{ eventsReceived: number }> {
+export type LeadEventInput = {
+  inquiryId: string;
+  formType: string;
+  emailHash: string;
+  createdAt: number;
+  sourceUrl: string;
+  browser: BrowserIds;
+};
+
+export function leadEventId(inquiryId: string): string {
+  return `lead-${inquiryId}`;
+}
+
+export function leadEventPayload(input: LeadEventInput) {
+  const userData: Record<string, unknown> = { em: [input.emailHash] };
+  if (input.browser.fbp) userData.fbp = input.browser.fbp;
+  if (input.browser.fbc) userData.fbc = input.browser.fbc;
+  if (input.browser.ip) userData.client_ip_address = input.browser.ip;
+  if (input.browser.userAgent) userData.client_user_agent = input.browser.userAgent;
+  return {
+    data: [{
+      event_name: "Lead",
+      event_time: Math.floor(input.createdAt / 1000),
+      event_id: leadEventId(input.inquiryId),
+      action_source: "website",
+      event_source_url: input.sourceUrl,
+      user_data: userData,
+      custom_data: { content_name: input.formType, content_category: "services" }
+    }]
+  };
+}
+
+export function sendPurchaseEvent(input: PurchaseEventInput, token: string, fetchImpl: typeof fetch = fetch): Promise<{ eventsReceived: number }> {
+  return sendEvents(purchaseEventPayload(input), token, fetchImpl);
+}
+
+export function sendLeadEvent(input: LeadEventInput, token: string, fetchImpl: typeof fetch = fetch): Promise<{ eventsReceived: number }> {
+  return sendEvents(leadEventPayload(input), token, fetchImpl);
+}
+
+async function sendEvents(payload: unknown, token: string, fetchImpl: typeof fetch): Promise<{ eventsReceived: number }> {
   // Token in the header, never the URL, so it cannot end up in an error message.
   const response = await fetchImpl(`https://graph.facebook.com/${META_GRAPH_VERSION}/${META_PIXEL_ID}/events`, {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify(purchaseEventPayload(input))
+    body: JSON.stringify(payload)
   });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok || body?.error) {

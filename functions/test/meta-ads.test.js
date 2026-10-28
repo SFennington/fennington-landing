@@ -161,3 +161,34 @@ test("landing link keeps a trailing slash or file name as given", () => {
   assert.equal(new URL(meta.adLandingUrl("https://x.test", "/p/", "s", "HCC-A1")).pathname, "/p/");
   assert.equal(new URL(meta.adLandingUrl("https://x.test", "p/page.html", "s", "HCC-A1")).pathname, "/p/page.html");
 });
+
+test("service ads take the conversation calls to action and a known service", () => {
+  const c = meta.parseAdConcept(concept({ trackingCode: "fs-a1", cta: "Get Quote", service: "Websites" }));
+  assert.equal(c.ctaType, "GET_QUOTE");
+  assert.equal(c.service, "websites");
+  assert.equal(meta.parseAdConcept(concept({ cta: "Contact Us" })).ctaType, "CONTACT_US");
+  assert.equal(meta.parseAdConcept(concept()).service, "");
+  assert.throws(() => meta.parseAdConcept(concept({ service: "plumbing" })), /service must be one of/);
+});
+
+test("a service ad lands on the home page with its service named", () => {
+  const url = new URL(meta.adLandingUrl("https://fennington.com", "/", "fennington-solutions", "FS-A2", "automation"));
+  assert.equal(url.pathname, "/");
+  assert.equal(url.searchParams.get("service"), "automation");
+  assert.equal(url.searchParams.get("utm_content"), "FS-A2");
+  assert.equal(new URL(meta.adLandingUrl("https://x.test", "/p/", "s", "HCC-A1")).searchParams.has("service"), false);
+});
+
+test("leads rank service ads after sales, more leads first, then cheaper leads", () => {
+  const ranked = meta.rankAds([
+    { trackingCode: "FS-A1", clicks: 30, spend: 20 },
+    { trackingCode: "FS-A2", clicks: 10, spend: 20 },
+    { trackingCode: "FS-A3", clicks: 50, spend: 10 },
+    { trackingCode: "HCC-A1", clicks: 5, spend: 9 }
+  ], new Map([["HCC-A1", { count: 1, revenueCents: 900 }]]), new Map([["FS-A1", 1], ["FS-A2", 2]]));
+  assert.deepEqual(ranked.map((r) => r.trackingCode), ["HCC-A1", "FS-A2", "FS-A1", "FS-A3"]);
+  assert.equal(ranked[1].leads, 2);
+  assert.equal(ranked[1].costPerLead, 10);
+  assert.equal(ranked[3].leads, 0);
+  assert.equal(ranked[3].costPerLead, null);
+});
