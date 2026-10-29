@@ -79,35 +79,4 @@
       done.focus();
     });
   });
-
-  // Google reviews from assets/reviews.json. The list stays hidden until the file has reviews.
-  const reviewBox = document.querySelector('[data-reviews]');
-  if (reviewBox && window.fetch) {
-    fetch(reviewBox.dataset.src)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const list = ((data && data.reviews) || [])
-          .filter((r) => r.rating >= 4 && r.text)
-          .slice(0, Number(reviewBox.dataset.limit) || 6);
-        if (!list.length) return;
-        list.forEach((r) => {
-          const card = document.createElement('figure');
-          card.className = 'review';
-          const stars = document.createElement('p');
-          stars.className = 'review-stars';
-          stars.textContent = '★'.repeat(Math.round(r.rating));
-          stars.setAttribute('aria-label', `${r.rating} out of 5 stars`);
-          const quote = document.createElement('blockquote');
-          quote.textContent = r.text;
-          const by = document.createElement('figcaption');
-          by.textContent = r.name;
-          card.append(stars, quote, by);
-          reviewBox.append(card);
-        });
-        const summary = document.querySelector('[data-reviews-summary]');
-        if (summary && data.rating && data.count) summary.textContent = `Rated ${data.rating} on Google from ${data.count} reviews.`;
-        reviewBox.hidden = false;
-      })
-      .catch(() => {});
-  }
 })();
