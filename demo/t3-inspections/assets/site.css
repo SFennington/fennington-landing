@@ -328,7 +328,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .trust-list li:nth-child(n+3) { border-top: 1px solid var(--line); }
   .owner-photo { justify-self: start; }
   .cta-band { grid-template-columns: 1fr; }
-  .mobile-cta { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: rgba(255, 255, 255, .96); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(27, 32, 38, .08); }
+  .mobile-cta { display: grid; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: rgba(255, 255, 255, .96); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(27, 32, 38, .08); }
   .mobile-cta .btn { min-height: 50px; }
   body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 }
