@@ -1,9 +1,40 @@
 {
   "source": "Google",
-  "updated": null,
+  "updated": "2026-10-29",
   "rating": 5.0,
-  "count": null,
-  "profileUrl": "https://www.google.com/maps?cid=11244881141018282837",
-  "writeReviewUrl": "",
-  "reviews": []
+  "count": 82,
+  "profileUrl": "https://www.google.com/search?q=T3+Inspections#lrd=0x89e6d88a7c97d35d:0x9c0dd7d1dfe24b55,1,,,",
+  "writeReviewUrl": "https://www.google.com/search?q=T3+Inspections#lrd=0x89e6d88a7c97d35d:0x9c0dd7d1dfe24b55,3,,,",
+  "reviews": [
+    {
+      "name": "Sagar Patel",
+      "rating": 5.0,
+      "when": "May 2026",
+      "text": "My family and I relocated to the greater Springfield area from New Jersey, which required a steep learning curve regarding the styles of homes we could expect in a typical New England town. Our agent was incredibly knowledgeable, got us up to speed, and thankfully had Ted as his go-to home inspector. The home we ended up moving forward with was quite different from the new-construction townhouse we left behind, as well as the newer homes my wife and I had been accustomed to since childhood.\n\nDuring his inspection, Ted never made me feel like our home was just an item on a to-do list that he was trying to rush through. He took his time to explain every aspect of what he was seeing and documented everything thoroughly in his report. Even after the inspection was complete, he kept the lines of communication open for questions that came up while I reviewed his report, which was delivered the very same day.\n\nTed also provided recommendations that further educated me on general home maintenance. I really don’t think you can go wrong hiring Ted!"
+    },
+    {
+      "name": "Christian Martinez",
+      "rating": 5.0,
+      "when": "June 2026",
+      "text": "I recently had a multi-family home inspection completed by Ted Towne III of T3 Inspections, and I couldn’t be more satisfied with the experience. Ted was extremely knowledgeable in every aspect of the inspection process and took the time to thoroughly explain his findings in a way that was easy to understand.\n\nHe was professional, respectful, and genuinely kind throughout the entire inspection. It’s clear that he takes pride in his work and has a wealth of experience in the field.\n\nI was referred to Ted by my father, who has always spoken highly of him, and after working with him myself, I can see why he is so well respected. I highly recommend T3 Inspections and Ted Towne III to anyone looking for a thorough, honest, and professional home inspector."
+    },
+    {
+      "name": "Stiles Dunn",
+      "rating": 5.0,
+      "when": "April 2026",
+      "text": "As a Realtor I work with Ted and T3 Inspections often. He is professional and informative.  His inspections give buyers peace of mind when making the largest purchase in their life.  I highly recommend T3 Inspections ."
+    },
+    {
+      "name": "Christopher H",
+      "rating": 5.0,
+      "when": "March 2026",
+      "text": "Working with Ted was a great experience! As a home inspector, he impressed us with his thorough analysis of the property we purchased. He addressed all of our questions with clarity and patience, making the process much smoother. I would highly recommend his home inspection service to anyone in the market for a new home. Chris and Bernie"
+    },
+    {
+      "name": "Sandra Mamani",
+      "rating": 5.0,
+      "when": "April 2026",
+      "text": "Ted has a high work ethic, is professional, reliable, and knowledgable.  Highly recommend working with him."
+    }
+  ]
 }

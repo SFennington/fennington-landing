@@ -129,6 +129,25 @@
           else link.remove();
         });
         reviewSection.hidden = false;
+        // Long reviews show a few lines with a Read more toggle.
+        box.querySelectorAll('blockquote').forEach((quote) => {
+          quote.classList.add('clamped');
+          if (quote.scrollHeight <= quote.clientHeight + 2) {
+            quote.classList.remove('clamped');
+            return;
+          }
+          const more = document.createElement('button');
+          more.type = 'button';
+          more.className = 'review-more';
+          more.textContent = 'Read more';
+          more.setAttribute('aria-expanded', 'false');
+          more.addEventListener('click', () => {
+            const open = quote.classList.toggle('clamped') === false;
+            more.textContent = open ? 'Show less' : 'Read more';
+            more.setAttribute('aria-expanded', String(open));
+          });
+          quote.after(more);
+        });
       })
       .catch(() => {});
   }
