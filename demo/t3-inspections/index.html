@@ -116,7 +116,21 @@
   </div>
 </section>
 
-<section class="section section-paper" id="contact">
+<section class="section section-paper reviews-section" data-reviews-section data-src="assets/reviews.json" hidden>
+  <div class="wrap">
+    <div class="reviews-head">
+      <div><p class="eyebrow">Reviews</p><h2 class="h2">What clients <em>are saying.</em></h2></div>
+      <p class="rating-card" data-reviews-summary hidden><b data-rating></b><span class="rating-stars" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span><span data-count></span></p>
+    </div>
+    <div class="reviews" data-reviews data-limit="3"></div>
+    <div class="hero-actions reviews-actions">
+      <a class="btn btn-ghost" data-reviews-all href="https://www.google.com/maps?cid=11244881141018282837" target="_blank" rel="noopener">Read all reviews on Google <svg class="i" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></a>
+      <a class="btn btn-dark" data-reviews-write href="#" target="_blank" rel="noopener">Leave a review</a>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="contact">
   <div class="wrap">
     <div class="contact-grid">
       <div class="form-card reveal">

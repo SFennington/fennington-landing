@@ -79,4 +79,57 @@
       done.focus();
     });
   });
+
+  // Google reviews from assets/reviews.json. The section stays hidden until the file has reviews.
+  const reviewSection = document.querySelector('[data-reviews-section]');
+  if (reviewSection && window.fetch) {
+    fetch(reviewSection.dataset.src)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const box = reviewSection.querySelector('[data-reviews]');
+        const list = ((data && data.reviews) || [])
+          .filter((r) => r.rating >= 4 && r.text)
+          .slice(0, Number(box.dataset.limit) || 3);
+        if (!list.length) return;
+        list.forEach((r) => {
+          const card = document.createElement('figure');
+          card.className = 'review';
+          const stars = document.createElement('p');
+          stars.className = 'review-stars';
+          stars.textContent = '★'.repeat(Math.round(r.rating));
+          stars.setAttribute('aria-label', `${r.rating} out of 5 stars`);
+          const quote = document.createElement('blockquote');
+          quote.textContent = r.text;
+          const by = document.createElement('figcaption');
+          const avatar = document.createElement('span');
+          avatar.className = 'avatar';
+          avatar.setAttribute('aria-hidden', 'true');
+          avatar.textContent = (r.name || '?').trim().charAt(0).toUpperCase();
+          const who = document.createElement('span');
+          who.textContent = r.name;
+          if (r.when) {
+            const when = document.createElement('small');
+            when.textContent = r.when;
+            who.append(when);
+          }
+          by.append(avatar, who);
+          card.append(stars, quote, by);
+          box.append(card);
+        });
+        const summary = reviewSection.querySelector('[data-reviews-summary]');
+        if (data.rating) {
+          summary.querySelector('[data-rating]').textContent = Number(data.rating).toFixed(1);
+          summary.querySelector('[data-count]').textContent = data.count ? `${data.count} Google reviews` : 'on Google';
+          summary.setAttribute('aria-label', `Rated ${data.rating} out of 5${data.count ? ` from ${data.count} Google reviews` : ' on Google'}`);
+          summary.hidden = false;
+        }
+        [['[data-reviews-all]', data.profileUrl], ['[data-reviews-write]', data.writeReviewUrl]].forEach(([selector, url]) => {
+          const link = reviewSection.querySelector(selector);
+          if (url) link.href = url;
+          else link.remove();
+        });
+        reviewSection.hidden = false;
+      })
+      .catch(() => {});
+  }
 })();
