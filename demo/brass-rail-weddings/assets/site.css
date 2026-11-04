@@ -497,6 +497,8 @@ h1 em, h2 em, h3 em { font-style: italic; font-weight: 400; color: var(--brass);
 .suite.dark h3 { color: var(--ivory); }
 .suite-meta { margin: 10px 0 18px; font-size: .74rem; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: var(--brass-ink); }
 .suite.dark .suite-meta { color: var(--brass-soft); }
+/* The photo fills what the shorter card leaves, so it meets the text with no gap. */
+.suite.dark img { flex: 1 1 auto; height: 0; min-height: 240px; aspect-ratio: auto; }
 
 /* ---------- Table ---------- */
 .table-wrap { overflow-x: auto; }
@@ -809,3 +811,11 @@ h1 em, h2 em, h3 em { font-style: italic; font-weight: 400; color: var(--brass);
 .winter-note { margin: 0 0 40px; padding: 22px 26px; background: var(--ivory); border: 1px solid var(--line); }
 .winter-note .eyebrow { margin-bottom: 6px; }
 .winter-note p:last-child { margin: 0; }
+
+/* Blog */
+.prose { max-width: 720px; margin-inline: auto; }
+.prose .post-intro { font-size: 1.15rem; line-height: 1.7; }
+.prose h2 { margin: 2.2em 0 .6em; font-size: clamp(1.6rem, 2.6vw, 2.1rem); }
+.prose ul { margin: 0; padding-left: 1.2em; }
+.prose li { margin-bottom: .75em; line-height: 1.7; }
+.post-meta { margin: 0 0 1.4rem; font-size: .74rem; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: var(--brass-ink); }
