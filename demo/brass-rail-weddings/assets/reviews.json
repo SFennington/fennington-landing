@@ -1,9 +1,52 @@
 {
   "source": "Google",
-  "updated": null,
+  "updated": "2026-11-04",
   "rating": 4.5,
-  "count": 73,
-  "profileUrl": "",
-  "writeReviewUrl": "",
-  "reviews": []
+  "count": 75,
+  "profileUrl": "https://www.google.com/search?q=The+Brass+Rail+Meeting+House#lrd=0x89e71d40863d48bf:0xf374f0b78cae9d2c,1,,,",
+  "writeReviewUrl": "https://g.page/r/CSydroy38HTzEBM/review",
+  "reviews": [
+    {
+      "name": "Courtney Chafer",
+      "rating": 5.0,
+      "date": "2026-09-22",
+      "text": "Jen and the whole Brass Rail team knocked our wedding out of the park. From the beginning, Jen made us feel welcome. The day of our wedding was phenomenal and everyone was absolutely amazing. The service, food, staff, everything was a 10/10. Thank you Jen and the Brass Rail team for making our wedding day perfect!"
+    },
+    {
+      "name": "Lindsey Sprofera",
+      "rating": 5.0,
+      "date": "2025-09-30",
+      "text": "I just had my wedding at the brass rail and 5 stars really isn't enough stars. When we started looking at venues, my fiance (now husband) said we don't need to look at any more venues and we booked them on the spot. The venue was exactly what we were looking for, but what really sold us was Jen (the owner). She was so easy to work with and doesn't nickel and dime you. When we booked, they were advertising a discounted package to fill up their dates for the year, but when some of the options didn't apply to us, she worked with us to customize it to things we actually needed/wanted. Even when I changed my seating chart MULTIPLE times because of changes in guest list, she didn't make me feel bad and just said she was here for whatever we needed. And day of, she was there and made sure we had anything we needed. They even catered to ALL the allergies/dietary restrictions for all our guests with such ease. I seriously couldn't have been happier!"
+    },
+    {
+      "name": "Corey Small",
+      "rating": 5.0,
+      "date": "2024-08-07",
+      "text": "We just had our wedding at The Brass Rail this past weekend and it was everything we wanted it to be! Jen is great and so easy to work with. The portal is so convenient. Between the main dining room, pub side, bridal suite and location on the lake, it is a very accommodating venue and the pricing is reasonable. Our guests kept saying how beautiful it was, and they kept raving about the food. The food is delicious, and it was one of the main reasons we booked here. We had them do the cake and it was delicious and gorgeous. We loved how stress-free the planning was with Jen. And for decorations, we just had to drop everything off and their team did the rest and cleaned up as well. Jen leads by example. We were so impressed that she worked the entire wedding with her team. She was on hand to address anything that came up. Jen goes above and beyond. We were especially thankful at how easily she worked with us to move our wedding date up after we found out that we're expecting our first child. You can really see how experienced she is in the industry and how much she cares. We highly recommend The Brass Rail for any of your future functions. Our wedding will definitely not be the last event we have here."
+    },
+    {
+      "name": "Jocelyn Salvador",
+      "rating": 5.0,
+      "date": "2025-04-22",
+      "text": "We had not only our wedding but jack and jill here too. Jen and her staff were amazing!!! Jen is so easy to work with and made sure we had the most perfect day on both days of our events. the venue was beautiful and made our special day perfect!! Amazing food, great space, and the bridal suite was amazing. Cant say enough good things about this place and Jen!!! Thank you!!!"
+    },
+    {
+      "name": "Jacquelynn Allen",
+      "rating": 5.0,
+      "date": "2021-10-03",
+      "text": "We had our wedding here, staff was amazing and everything was just how I wanted it"
+    },
+    {
+      "name": "sarah leone",
+      "rating": 5.0,
+      "date": "2023-03-05",
+      "text": "Awesome venue! Great staff! So many hidden treasures...the bridal suite upstairs! The hall downstairs! The whole vibe is great!"
+    },
+    {
+      "name": "William Lamb",
+      "rating": 5.0,
+      "date": "2023-09-30",
+      "text": "Went to a wedding here. Beautiful hall and great food!"
+    }
+  ]
 }
