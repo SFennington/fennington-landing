@@ -57,17 +57,6 @@
     if (row.dataset.days.split(',').map(Number).includes(day)) row.classList.add('today');
   });
 
-  // Booking page: ?type=<Acuity appointment type id> opens the calendar on that inspection.
-  const frame = document.querySelector('[data-acuity]');
-  if (frame) {
-    const type = new URLSearchParams(window.location.search).get('type');
-    if (type && /^\d+$/.test(type)) {
-      const url = new URL(frame.src);
-      url.searchParams.set('appointmentType', type);
-      frame.src = url.toString();
-    }
-  }
-
   // Contact forms email Ted. If sending fails, the page offers his phone and email instead.
   const CONTACT_URL = 'https://us-central1-fennington-financial.cloudfunctions.net/api/t3-inspections/contact';
   document.querySelectorAll('form[data-contact]').forEach((form) => {

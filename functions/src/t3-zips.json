@@ -1,0 +1,814 @@
+[
+ {
+  "zip": "01001",
+  "town": "Agawam",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 1.5
+ },
+ {
+  "zip": "01002",
+  "town": "Amherst",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 8.4
+ },
+ {
+  "zip": "01003",
+  "town": "Amherst",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 5.2
+ },
+ {
+  "zip": "01004",
+  "town": "Amherst",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 5.8
+ },
+ {
+  "zip": "01007",
+  "town": "Belchertown",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 11.2
+ },
+ {
+  "zip": "01008",
+  "town": "Blandford",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 16.2
+ },
+ {
+  "zip": "01009",
+  "town": "Bondsville",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 14
+ },
+ {
+  "zip": "01010",
+  "town": "Brimfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 20.6
+ },
+ {
+  "zip": "01011",
+  "town": "Chester",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 18
+ },
+ {
+  "zip": "01012",
+  "town": "Chesterfield",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 10
+ },
+ {
+  "zip": "01013",
+  "town": "Chicopee",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.2
+ },
+ {
+  "zip": "01014",
+  "town": "Chicopee",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01020",
+  "town": "Chicopee",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 1.8
+ },
+ {
+  "zip": "01021",
+  "town": "Chicopee",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01022",
+  "town": "Chicopee",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 3.2
+ },
+ {
+  "zip": "01026",
+  "town": "Cummington",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 15.5
+ },
+ {
+  "zip": "01027",
+  "town": "Easthampton",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 1.9
+ },
+ {
+  "zip": "01028",
+  "town": "East Longmeadow",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 4.5
+ },
+ {
+  "zip": "01030",
+  "town": "Feeding Hills",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 4.2
+ },
+ {
+  "zip": "01032",
+  "town": "Goshen",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 9.2
+ },
+ {
+  "zip": "01033",
+  "town": "Granby",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 5.5
+ },
+ {
+  "zip": "01034",
+  "town": "Granville",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 17.9
+ },
+ {
+  "zip": "01035",
+  "town": "Hadley",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 3.1
+ },
+ {
+  "zip": "01036",
+  "town": "Hampden",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 8.3
+ },
+ {
+  "zip": "01038",
+  "town": "Hatfield",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 0.6
+ },
+ {
+  "zip": "01039",
+  "town": "Haydenville",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 3.8
+ },
+ {
+  "zip": "01040",
+  "town": "Holyoke",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01041",
+  "town": "Holyoke",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.2
+ },
+ {
+  "zip": "01050",
+  "town": "Huntington",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 12.3
+ },
+ {
+  "zip": "01053",
+  "town": "Leeds",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 3.5
+ },
+ {
+  "zip": "01054",
+  "town": "Leverett",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 5.7
+ },
+ {
+  "zip": "01056",
+  "town": "Ludlow",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 7
+ },
+ {
+  "zip": "01057",
+  "town": "Monson",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 13.8
+ },
+ {
+  "zip": "01059",
+  "town": "North Amherst",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 4.7
+ },
+ {
+  "zip": "01060",
+  "town": "Northampton",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 0.4
+ },
+ {
+  "zip": "01061",
+  "town": "Northampton",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01062",
+  "town": "Florence",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 2.7
+ },
+ {
+  "zip": "01063",
+  "town": "Northampton",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 0
+ },
+ {
+  "zip": "01066",
+  "town": "North Hatfield",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 0.1
+ },
+ {
+  "zip": "01069",
+  "town": "Palmer",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 14.2
+ },
+ {
+  "zip": "01070",
+  "town": "Plainfield",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 15.8
+ },
+ {
+  "zip": "01071",
+  "town": "Russell",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 11.8
+ },
+ {
+  "zip": "01072",
+  "town": "Shutesbury",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 9.5
+ },
+ {
+  "zip": "01073",
+  "town": "Southampton",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 4.8
+ },
+ {
+  "zip": "01075",
+  "town": "South Hadley",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 2.3
+ },
+ {
+  "zip": "01077",
+  "town": "Southwick",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 9
+ },
+ {
+  "zip": "01079",
+  "town": "Thorndike",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 14.4
+ },
+ {
+  "zip": "01080",
+  "town": "Three Rivers",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 12.6
+ },
+ {
+  "zip": "01081",
+  "town": "Wales",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 19.9
+ },
+ {
+  "zip": "01082",
+  "town": "Ware",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 18.9
+ },
+ {
+  "zip": "01084",
+  "town": "West Chesterfield",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 12.3
+ },
+ {
+  "zip": "01085",
+  "town": "Westfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 7.6
+ },
+ {
+  "zip": "01086",
+  "town": "Westfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 11.8
+ },
+ {
+  "zip": "01088",
+  "town": "West Hatfield",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 1
+ },
+ {
+  "zip": "01089",
+  "town": "West Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 2.3
+ },
+ {
+  "zip": "01090",
+  "town": "West Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01092",
+  "town": "West Warren",
+  "county": "Worcester",
+  "why": "corridor",
+  "miles": 19.6
+ },
+ {
+  "zip": "01093",
+  "town": "Whately",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 1.8
+ },
+ {
+  "zip": "01095",
+  "town": "Wilbraham",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 7.5
+ },
+ {
+  "zip": "01096",
+  "town": "Williamsburg",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 7.8
+ },
+ {
+  "zip": "01097",
+  "town": "Woronoco",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 11
+ },
+ {
+  "zip": "01098",
+  "town": "Worthington",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 15.3
+ },
+ {
+  "zip": "01101",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0
+ },
+ {
+  "zip": "01102",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01103",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.1
+ },
+ {
+  "zip": "01104",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 1
+ },
+ {
+  "zip": "01105",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.6
+ },
+ {
+  "zip": "01106",
+  "town": "Longmeadow",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 1.4
+ },
+ {
+  "zip": "01107",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.6
+ },
+ {
+  "zip": "01108",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 1.7
+ },
+ {
+  "zip": "01109",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 2
+ },
+ {
+  "zip": "01111",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01115",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0
+ },
+ {
+  "zip": "01116",
+  "town": "Longmeadow",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01118",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 3.2
+ },
+ {
+  "zip": "01119",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 4.3
+ },
+ {
+  "zip": "01128",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 5.2
+ },
+ {
+  "zip": "01129",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 5.4
+ },
+ {
+  "zip": "01138",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01139",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01144",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0
+ },
+ {
+  "zip": "01151",
+  "town": "Indian Orchard",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 5
+ },
+ {
+  "zip": "01152",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.3
+ },
+ {
+  "zip": "01199",
+  "town": "Springfield",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 0.5
+ },
+ {
+  "zip": "01243",
+  "town": "Middlefield",
+  "county": "Hampshire",
+  "why": "county",
+  "miles": 19
+ },
+ {
+  "zip": "01301",
+  "town": "Greenfield",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 1.2
+ },
+ {
+  "zip": "01302",
+  "town": "Greenfield",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 1.1
+ },
+ {
+  "zip": "01330",
+  "town": "Ashfield",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 10.5
+ },
+ {
+  "zip": "01331",
+  "town": "Athol",
+  "county": "Worcester",
+  "why": "corridor",
+  "miles": 17.4
+ },
+ {
+  "zip": "01337",
+  "town": "Bernardston",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 1.6
+ },
+ {
+  "zip": "01338",
+  "town": "Buckland",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 11.2
+ },
+ {
+  "zip": "01339",
+  "town": "Charlemont",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 14.7
+ },
+ {
+  "zip": "01340",
+  "town": "Colrain",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 8.1
+ },
+ {
+  "zip": "01341",
+  "town": "Conway",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 4.9
+ },
+ {
+  "zip": "01342",
+  "town": "Deerfield",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 0.4
+ },
+ {
+  "zip": "01343",
+  "town": "Drury",
+  "county": "Berkshire",
+  "why": "corridor",
+  "miles": 19.8
+ },
+ {
+  "zip": "01344",
+  "town": "Erving",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 7.7
+ },
+ {
+  "zip": "01346",
+  "town": "Heath",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 13.5
+ },
+ {
+  "zip": "01347",
+  "town": "Lake Pleasant",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 4.2
+ },
+ {
+  "zip": "01349",
+  "town": "Millers Falls",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 5.5
+ },
+ {
+  "zip": "01350",
+  "town": "Monroe Bridge",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 20.8
+ },
+ {
+  "zip": "01351",
+  "town": "Montague",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 3.4
+ },
+ {
+  "zip": "01354",
+  "town": "Gill",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 3.5
+ },
+ {
+  "zip": "01355",
+  "town": "New Salem",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 15
+ },
+ {
+  "zip": "01360",
+  "town": "Northfield",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 4.6
+ },
+ {
+  "zip": "01364",
+  "town": "Orange",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 13.9
+ },
+ {
+  "zip": "01367",
+  "town": "Rowe",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 17.8
+ },
+ {
+  "zip": "01368",
+  "town": "Royalston",
+  "county": "Worcester",
+  "why": "corridor",
+  "miles": 17.4
+ },
+ {
+  "zip": "01370",
+  "town": "Shelburne Falls",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 7.1
+ },
+ {
+  "zip": "01373",
+  "town": "South Deerfield",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 0.2
+ },
+ {
+  "zip": "01375",
+  "town": "Sunderland",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 2.4
+ },
+ {
+  "zip": "01376",
+  "town": "Turners Falls",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 2.2
+ },
+ {
+  "zip": "01378",
+  "town": "Warwick",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 10.5
+ },
+ {
+  "zip": "01379",
+  "town": "Wendell",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 10.1
+ },
+ {
+  "zip": "01380",
+  "town": "Wendell Depot",
+  "county": "Franklin",
+  "why": "county",
+  "miles": 10.5
+ },
+ {
+  "zip": "01521",
+  "town": "Holland",
+  "county": "Hampden",
+  "why": "county",
+  "miles": 22.6
+ }
+]

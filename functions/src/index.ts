@@ -14,6 +14,12 @@ import Stripe from "stripe";
 import { adLandingUrl, adParams, creativeParams, imageHashFrom, metaAdName, metaGraphPost, metaPauseAd, normalizeAdAccountId, parseAdConcept, rankAds, TRACKING_CODE_PATTERN, type AdPerformanceRow } from "./meta-ads";
 import { cleanBrowserIds, clientIpFrom, sendLeadEvent, sendPurchaseEvent, type BrowserIds } from "./meta-capi";
 import { t3ContactEmail, type T3ContactMessage } from "./t3-contact";
+import { T3_ADDONS, T3_TYPES } from "./t3-catalog";
+import {
+  addDays, canChangeOnline, findType, isDateString, isTimeString, nyDateOf, nyToMs, openDaysInMonth, priceFor, slotsForDate, t3BookingEmails, t3ChangeEmails,
+  t3ReminderEmail, timeLabel, validateBookingRequest, whenLabel, zipRange, T3_PHONE, T3_SETTINGS,
+  type T3BookingRecord, type T3Hold
+} from "./t3-booking";
 
 loadLocalEnvFile();
 
@@ -1631,13 +1637,14 @@ type Inquiry = {
   adCode: string;
 };
 
-async function allowInquiryFrom(ip: string): Promise<boolean> {
+// `bucket` keeps another form's attempts out of the inquiry count (and the other way round).
+async function allowInquiryFrom(ip: string, limit = INQUIRY_HOURLY_LIMIT, bucket = ""): Promise<boolean> {
   const hour = new Date().toISOString().slice(0, 13);
   const ipHash = crypto.createHash("sha256").update(ip || "unknown").digest("hex").slice(0, 32);
-  const ref = db.collection("inquiryRateLimits").doc(`${ipHash}_${hour}`);
+  const ref = db.collection("inquiryRateLimits").doc(`${bucket}${ipHash}_${hour}`);
   return db.runTransaction(async (tx) => {
     const count = Number((await tx.get(ref)).get("count") || 0);
-    if (count >= INQUIRY_HOURLY_LIMIT) return false;
+    if (count >= limit) return false;
     tx.set(ref, { count: count + 1, hour, updatedAt: serverTimestamp() }, { merge: true });
     return true;
   });
@@ -1807,6 +1814,239 @@ apiApp.post("/t3-inspections/contact", asyncRoute(async (req, res) => {
   }
   res.json({ ok: true });
 }));
+
+// ---- T3 Inspections online booking (replaces Acuity; site in demo/t3-inspections) ----
+// Every route in this block is public by design: customers book without an account. They are
+// guarded like the contact form (hidden field, per-IP hourly cap, server-side re-checks of
+// range, notice and overlap) and a booking can only be changed with a private token that
+// is stored hashed. Ted's own dashboard routes are a later step and will not live here.
+const T3_BOOKINGS = "t3Bookings";
+const T3_DAYS = "t3BookingDays"; // one doc per date: { holds: T3Hold[] }, written in the booking transaction
+const T3_BOOKINGS_PER_HOUR = 15;
+
+function t3Fail(message: string, statusCode: number) {
+  return Object.assign(new Error(message), { statusCode });
+}
+
+async function t3HoldsByDate(dates: string[]): Promise<Record<string, T3Hold[]>> {
+  const snaps = dates.length ? await db.getAll(...dates.map((date) => db.collection(T3_DAYS).doc(date))) : [];
+  return Object.fromEntries(snaps.map((snap, i) => [dates[i], (snap.get("holds") as T3Hold[] | undefined) || []]));
+}
+
+async function t3FromEmail(): Promise<string> {
+  const emailConfig = await db.collection("config").doc("email").get();
+  const configured = safeString(emailConfig.get("transactionalFromEmail") || emailConfig.get("fromEmail") || process.env.RESEND_FROM_EMAIL);
+  return configured || (process.env.FUNCTIONS_EMULATOR === "true" ? "noreply@fennington.com" : "");
+}
+
+type T3Email = ReturnType<typeof t3BookingEmails>[number];
+
+// Under the emulator nothing is ever sent, so testing cannot email Ted or a real customer.
+async function deliverT3Emails(emails: T3Email[]): Promise<{ status: "sent" | "failed" | "pending_config" | "emulator_skipped"; error?: unknown }> {
+  if (process.env.FUNCTIONS_EMULATOR === "true") return { status: "emulator_skipped" };
+  const apiKey = secretValue("RESEND_API_KEY", resendApiKey);
+  if (!apiKey) return { status: "pending_config" };
+  const results = await Promise.allSettled(emails.map(async (email) => {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify(email)
+    });
+    if (!response.ok) throw new Error(`Resend ${response.status}: ${JSON.stringify(await response.json().catch(() => ({})))}`);
+  }));
+  const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected").map((result) => safeString(result.reason?.message));
+  return failures.length ? { status: "failed", error: failures } : { status: "sent" };
+}
+
+function t3TokenMatches(stored: unknown, token: unknown): boolean {
+  const given = Buffer.from(hashDownloadToken(safeString(token)));
+  const expected = Buffer.from(safeString(stored));
+  return expected.length > 0 && given.length === expected.length && crypto.timingSafeEqual(given, expected);
+}
+
+async function t3LoadBooking(id: unknown, token: unknown): Promise<DocumentSnapshot> {
+  const snap = await db.collection(T3_BOOKINGS).doc(safeString(id).slice(0, 40) || "_").get();
+  // The same answer for "no such booking" and "wrong token", so ids cannot be probed.
+  if (!snap.exists || !t3TokenMatches(snap.get("tokenHash"), token)) throw t3Fail("We couldn't find that booking. Please call Ted at " + T3_PHONE + ".", 404);
+  return snap;
+}
+
+function t3RecordFrom(id: string, data: Record<string, any>): T3BookingRecord {
+  return { ...(data as T3BookingRecord), id };
+}
+
+registerT3BookingRoutes();
+function registerT3BookingRoutes() {
+  const base = "/t3-inspections/booking";
+
+  // What the booking page shows: inspection types, add-ons and the rules it explains to customers.
+  apiApp.get(`${base}/catalog`, asyncRoute(async (_req, res) => {
+    res.json({ types: T3_TYPES, addons: T3_ADDONS, noticeHours: T3_SETTINGS.noticeHours, phone: T3_PHONE });
+  }));
+
+  // Can this ZIP book online? Only ever "yes, in <town>" or "no": the page then says contact Ted.
+  apiApp.get(`${base}/range`, asyncRoute(async (req, res) => {
+    res.json(zipRange(req.query.zip));
+  }));
+
+  apiApp.get(`${base}/days`, asyncRoute(async (req, res) => {
+    const type = findType(req.query.type);
+    const month = safeString(req.query.month);
+    if (!type || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw t3Fail("Unknown inspection type or month.", 400);
+    const dates: string[] = [];
+    for (let date = `${month}-01`; date.startsWith(month); date = addDays(date, 1)) dates.push(date);
+    res.json({ days: openDaysInMonth({ month, minutes: type.minutes, holdsByDate: await t3HoldsByDate(dates), nowMs: Date.now() }) });
+  }));
+
+  apiApp.get(`${base}/times`, asyncRoute(async (req, res) => {
+    const type = findType(req.query.type);
+    const date = safeString(req.query.date);
+    if (!type || !isDateString(date)) throw t3Fail("Unknown inspection type or date.", 400);
+    const holds = (await t3HoldsByDate([date]))[date] || [];
+    res.json({ times: slotsForDate({ date, minutes: type.minutes, holds, nowMs: Date.now() }).map((slot) => ({ time: slot.time, label: timeLabel(slot.time) })) });
+  }));
+
+  apiApp.post(base, express.json({ limit: "20kb" }), asyncRoute(async (req, res) => {
+    const body = req.body || {};
+    // Hidden field people never see. Bots fill it; answer as if it worked so they move on.
+    if (safeString(body.extra_info)) {
+      res.json({ ok: true });
+      return;
+    }
+    const parsed = validateBookingRequest(body);
+    if (!parsed.ok) throw t3Fail(parsed.error, 400);
+    const v = parsed.value;
+    if (!zipRange(v.zip).inRange) throw t3Fail(`We can't book this address online. Please call Ted at ${T3_PHONE} for options.`, 422);
+    // Higher than the contact forms: a Realtor's office books several clients from one address,
+    // and a customer who picks a just-taken time tries again.
+    if (!(await allowInquiryFrom(clientIpFrom(req.header("x-forwarded-for"), req.ip), T3_BOOKINGS_PER_HOUR, "t3book_"))) {
+      throw t3Fail(`Too many requests from this connection. Please call Ted at ${T3_PHONE}.`, 429);
+    }
+
+    const nowMs = Date.now();
+    const startMs = nyToMs(v.date, v.time);
+    const endMs = startMs + v.type.minutes * 60_000;
+    const ref = db.collection(T3_BOOKINGS).doc();
+    const token = crypto.randomBytes(24).toString("hex");
+    const record: T3BookingRecord = {
+      id: ref.id, typeName: v.type.name, addonNames: v.addonIds.map((id) => T3_ADDONS.find((a) => a.id === id)?.name || ""), minutes: v.type.minutes,
+      priceCents: priceFor(v.type, v.addonIds), startMs, firstName: v.firstName, lastName: v.lastName, phone: v.phone, emails: v.emails,
+      realtorName: v.realtorName, realtorEmail: v.realtorEmail, realtorPhone: v.realtorPhone, street: v.street, town: v.town, zip: v.zip,
+      unit: v.unit, style: v.style, sqft: v.sqft, basement: v.basement, utilities: v.utilities, paymentStatus: "unpaid"
+    };
+
+    // The check and the write share one transaction, so two people cannot take the same slot.
+    await db.runTransaction(async (tx) => {
+      const dayRef = db.collection(T3_DAYS).doc(v.date);
+      const holds = ((await tx.get(dayRef)).get("holds") as T3Hold[] | undefined) || [];
+      if (!slotsForDate({ date: v.date, minutes: v.type.minutes, holds, nowMs }).some((slot) => slot.time === v.time)) {
+        throw t3Fail("Sorry, that time was just taken. Please pick another.", 409);
+      }
+      tx.set(dayRef, { holds: [...holds, { id: ref.id, startMs, endMs, kind: "booking" }], updatedAt: serverTimestamp() });
+      tx.create(ref, {
+        ...record, typeId: v.type.id, addonIds: v.addonIds, date: v.date, time: v.time, status: "confirmed", source: "website",
+        tokenHash: hashDownloadToken(token), createdMs: nowMs, reminderSentAt: null, emailStatus: "pending", createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+      });
+    });
+
+    // The booking stands even if an email fails; the status is kept on the booking for Ted to see.
+    const emails = t3BookingEmails(record, await t3FromEmail() || "noreply@fennington.com", token);
+    const emailResult = await deliverT3Emails(emails).catch((error: any) => ({ status: "failed" as const, error: safeString(error?.message) }));
+    await ref.set({ emailStatus: emailResult.status, emailError: emailResult.error || null, ...(process.env.FUNCTIONS_EMULATOR === "true" ? { debugEmails: emails, debugToken: token } : {}) }, { merge: true });
+    if (emailResult.status !== "sent" && emailResult.status !== "emulator_skipped") {
+      logger.error("T3 booking email was not fully sent", { bookingId: ref.id, status: emailResult.status, error: emailResult.error });
+    }
+    res.json({ ok: true, id: ref.id, when: whenLabel(startMs), emailStatus: emailResult.status === "sent" || emailResult.status === "emulator_skipped" ? "sent" : "pending" });
+  }));
+
+  // "My inspection" page: look up, reschedule or cancel with the private link from the email.
+  apiApp.get(`${base}/manage`, asyncRoute(async (req, res) => {
+    const snap = await t3LoadBooking(req.query.id, req.query.token);
+    const startMs = Number(snap.get("startMs"));
+    res.json({
+      id: snap.id, status: snap.get("status"), typeId: snap.get("typeId"), typeName: snap.get("typeName"), addonNames: snap.get("addonNames"), when: whenLabel(startMs),
+      minutes: snap.get("minutes"), address: `${snap.get("street")}, ${snap.get("town")} MA ${snap.get("zip")}`, firstName: snap.get("firstName"),
+      canChange: snap.get("status") === "confirmed" && canChangeOnline(startMs, Date.now()), phone: T3_PHONE
+    });
+  }));
+
+  apiApp.post(`${base}/manage/cancel`, express.json({ limit: "5kb" }), asyncRoute(async (req, res) => {
+    const found = await t3LoadBooking(req.body?.id, req.body?.token);
+    const nowMs = Date.now();
+    const data = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(found.ref);
+      if (snap.get("status") !== "confirmed") throw t3Fail("This booking is already cancelled.", 409);
+      if (!canChangeOnline(Number(snap.get("startMs")), nowMs)) throw t3Fail(`It's within ${T3_SETTINGS.noticeHours} hours of the inspection, so please call Ted at ${T3_PHONE}.`, 403);
+      const dayRef = db.collection(T3_DAYS).doc(snap.get("date"));
+      const holds = ((await tx.get(dayRef)).get("holds") as T3Hold[] | undefined) || [];
+      tx.set(dayRef, { holds: holds.filter((hold) => hold.id !== snap.id), updatedAt: serverTimestamp() });
+      tx.update(snap.ref, { status: "cancelled", cancelledMs: nowMs, updatedAt: serverTimestamp() });
+      return snap.data() as Record<string, any>;
+    });
+    const emails = t3ChangeEmails("cancelled", t3RecordFrom(found.id, data), await t3FromEmail() || "noreply@fennington.com", "");
+    const sent = await deliverT3Emails(emails).catch((error: any) => ({ status: "failed" as const, error: safeString(error?.message) }));
+    if (sent.status === "failed" || sent.status === "pending_config") logger.error("T3 cancellation email was not sent", { bookingId: found.id, error: sent.error });
+    res.json({ ok: true });
+  }));
+
+  apiApp.post(`${base}/manage/reschedule`, express.json({ limit: "5kb" }), asyncRoute(async (req, res) => {
+    const found = await t3LoadBooking(req.body?.id, req.body?.token);
+    const date = req.body?.date;
+    const time = req.body?.time;
+    if (!isDateString(date) || !isTimeString(time)) throw t3Fail("Please choose a date and time.", 400);
+    const nowMs = Date.now();
+    const { data, previousStartMs, startMs } = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(found.ref);
+      if (snap.get("status") !== "confirmed") throw t3Fail("This booking was cancelled.", 409);
+      const oldStart = Number(snap.get("startMs"));
+      if (!canChangeOnline(oldStart, nowMs)) throw t3Fail(`It's within ${T3_SETTINGS.noticeHours} hours of the inspection, so please call Ted at ${T3_PHONE}.`, 403);
+      const minutes = Number(snap.get("minutes"));
+      const oldRef = db.collection(T3_DAYS).doc(snap.get("date"));
+      const newRef = db.collection(T3_DAYS).doc(date);
+      const oldSnap = await tx.get(oldRef);
+      const newSnap = oldRef.path === newRef.path ? oldSnap : await tx.get(newRef);
+      const oldHolds = (((oldSnap.get("holds") as T3Hold[] | undefined) || []).filter((hold) => hold.id !== snap.id));
+      const newHolds = oldRef.path === newRef.path ? oldHolds : ((newSnap.get("holds") as T3Hold[] | undefined) || []);
+      if (!slotsForDate({ date, minutes, holds: newHolds, nowMs }).some((slot) => slot.time === time)) throw t3Fail("Sorry, that time isn't available. Please pick another.", 409);
+      const newStart = nyToMs(date, time);
+      const hold: T3Hold = { id: snap.id, startMs: newStart, endMs: newStart + minutes * 60_000, kind: "booking" };
+      if (oldRef.path === newRef.path) {
+        tx.set(newRef, { holds: [...newHolds, hold], updatedAt: serverTimestamp() });
+      } else {
+        tx.set(oldRef, { holds: oldHolds, updatedAt: serverTimestamp() });
+        tx.set(newRef, { holds: [...newHolds, hold], updatedAt: serverTimestamp() });
+      }
+      tx.update(snap.ref, { date, time, startMs: newStart, reminderSentAt: null, updatedAt: serverTimestamp() });
+      return { data: { ...(snap.data() as Record<string, any>), startMs: newStart }, previousStartMs: oldStart, startMs: newStart };
+    });
+    const emails = t3ChangeEmails("rescheduled", t3RecordFrom(found.id, data), await t3FromEmail() || "noreply@fennington.com", safeString(req.body?.token), previousStartMs);
+    const sent = await deliverT3Emails(emails).catch((error: any) => ({ status: "failed" as const, error: safeString(error?.message) }));
+    if (sent.status === "failed" || sent.status === "pending_config") logger.error("T3 reschedule email was not sent", { bookingId: found.id, error: sent.error });
+    res.json({ ok: true, when: whenLabel(startMs) });
+  }));
+}
+
+// Day-before reminder. Bookings made less than a day ahead (only possible by phone, through Ted)
+// get none, since the confirmation was the reminder.
+async function runT3Reminders(): Promise<{ checked: number; sent: number }> {
+  const nowMs = Date.now();
+  const snapshot = await db.collection(T3_BOOKINGS).where("startMs", ">", nowMs).where("startMs", "<=", nowMs + T3_SETTINGS.noticeHours * 3_600_000).get();
+  const fromEmail = await t3FromEmail();
+  let sent = 0;
+  for (const doc of snapshot.docs) {
+    if (doc.get("status") !== "confirmed" || doc.get("reminderSentAt")) continue;
+    if (Number(doc.get("startMs")) - Number(doc.get("createdMs")) < (T3_SETTINGS.noticeHours + 1) * 3_600_000) continue;
+    if (!fromEmail) continue;
+    const result = await deliverT3Emails([t3ReminderEmail(t3RecordFrom(doc.id, doc.data()), fromEmail, "")]).catch((error: any) => ({ status: "failed" as const, error: safeString(error?.message) }));
+    if (result.status === "sent") {
+      sent += 1;
+      await doc.ref.set({ reminderSentAt: nowMs }, { merge: true });
+    } else {
+      logger.error("T3 reminder was not sent", { bookingId: doc.id, status: result.status, error: result.error });
+    }
+  }
+  return { checked: snapshot.size, sent };
+}
 
 apiApp.get("/admin/leads", asyncRoute(async (req, res) => {
   await requireAdmin(req);
@@ -3515,6 +3755,11 @@ export const scheduledMonitorStripeFulfillment = onSchedule({ region: REGION, sc
 
 // Runs after Meta's own daily stats settle. Reports pending_config, quietly and
 // without alerting, until META_ACCESS_TOKEN and config/meta.adAccountId both exist.
+export const scheduledT3BookingReminders = onSchedule({ region: REGION, schedule: "every 60 minutes", timeZone: "America/New_York", timeoutSeconds: 120, memory: "256MiB", secrets: [resendApiKey] }, async () => {
+  const result = await runT3Reminders();
+  logger.info("T3 booking reminders", result);
+});
+
 export const scheduledSyncMetaAdInsights = onSchedule({ region: REGION, schedule: "every day 07:00", timeZone: "America/Chicago", timeoutSeconds: 300, memory: "256MiB", secrets: [metaAccessToken] }, async () => {
   const result = await runMetaAdInsightsSync("last_7d");
   logger.info("Meta ad insights sync complete", result);
