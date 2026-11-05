@@ -224,14 +224,60 @@
     h('span'));
   function step_icon(text) { return text === 'Select Appointment' ? [icon(CALENDAR_ICON), text] : text; }
 
+  // Acuity's long names, tidied for a dropdown. The real name is still what gets booked and emailed.
+  const tidyName = (name) => name
+    .replace(/\s*-\s*Home Inspection/i, '')
+    .replace(/\s*-?\s*Please contact me for pricing/i, '')
+    .replace(/\.?\s*Contact for price\.?/i, '')
+    .replace(/\.?\s*Please (add|allow) extra time/i, '')
+    .replace(/\s+/g, ' ').trim();
+  const moneyShort = (cents) => (cents % 100 ? money(cents) : `$${(cents / 100).toLocaleString('en-US')}`);
+  const priceText = (type) => (type.priceCents ? moneyShort(type.priceCents) : 'Ted confirms price');
+  const categoryName = (c) => c.replace(/^\d+\.\s*/, '').replace(/\s*\/\s*/g, ' / ');
+
   function drawList() {
     const categories = [...new Set(flow.types.map((t) => t.category))];
-    return [intro(), stepTitle('Select Appointment'), ...categories.flatMap((category) => [
-      h('p', { class: 't3b-cat', text: category }),
-      h('ul', { class: 't3b-card t3b-list' }, ...flow.types.filter((t) => t.category === category).map((type) =>
-        h('li', {}, h('div', {}, h('div', { class: 't3b-rowname', text: type.name }), h('span', { class: 't3b-detail', text: detailLine(type, type.priceCents) })),
-          h('button', { type: 'button', class: 't3b-btn t3b-btn-sm', onclick: () => choose(type) }, 'Book'))))
-    ])];
+    const select = h('select', { id: 't3b-size', class: 't3b-in t3b-in-white t3b-size', 'aria-describedby': 't3b-size-help', onchange: (e) => pick(typeById(e.target.value)) },
+      h('option', { value: '', text: 'Choose the size of your home' }),
+      ...categories.map((category) => h('optgroup', { label: categoryName(category) },
+        ...flow.types.filter((t) => t.category === category).map((type) =>
+          h('option', { value: type.id, selected: flow.type && flow.type.id === type.id, text: `${tidyName(type.name)}  ·  ${priceText(type)}` })))));
+    const after = h('div', { class: 't3b-after', 'aria-live': 'polite' });
+    const paintAfter = () => { after.replaceChildren(...afterParts().flat().filter(Boolean)); };
+    function pick(type) {
+      if (type && type !== flow.type) { flow.addonIds = new Set([...flow.addonIds].filter((id) => type.addonIds.includes(id))); flow.date = ''; flow.time = ''; }
+      flow.type = type || null;
+      paintAfter();
+    }
+    function afterParts() {
+      if (!flow.type) return [];
+      const addons = flow.type.addonIds.map((id) => flow.addons.find((a) => a.id === id)).filter(Boolean);
+      const total = h('p', { class: 't3b-total' });
+      const paintTotal = () => {
+        total.replaceChildren(h('span', { text: duration(flow.type.minutes) }), h('b', { text: flow.type.priceCents ? money(totalCents()) : 'Price confirmed by Ted' }));
+      };
+      paintTotal();
+      return [
+        flow.type.priceCents ? null : h('p', { class: 't3b-callout', text: 'Larger homes are priced individually. You can still book a time now, and Ted will confirm the price with you.' }),
+        addons.length ? h('fieldset', { class: 't3b-addonbox' },
+          h('legend', { text: 'Add to your inspection (optional)' }),
+          h('div', { class: 't3b-addons' }, ...addons.map((addon) => {
+            const box = h('input', { type: 'checkbox', id: `t3b-addon-${addon.id}`, checked: flow.addonIds.has(addon.id), onchange: (e) => {
+              if (e.target.checked) flow.addonIds.add(addon.id); else flow.addonIds.delete(addon.id);
+              paintTotal();
+            } });
+            return h('label', { class: 't3b-addon', for: `t3b-addon-${addon.id}` }, box, h('span', {}, h('span', { class: 't3b-addon-name', text: addon.name }), h('small', { text: `+ ${moneyShort(addon.priceCents)}` })));
+          }))) : null,
+        total,
+        h('button', { type: 'button', class: 't3b-btn t3b-btn-lg t3b-btn-block', onclick: () => go('time') }, 'Choose a date & time', icon('<path d="m9 6 6 6-6 6"/>'))
+      ];
+    }
+    paintAfter();
+    return [intro(), stepTitle('Select Appointment'),
+      h('div', { class: 't3b-card t3b-pad t3b-pick' },
+        h('label', { class: 't3b-label', for: 't3b-size', text: 'Size of your home' }),
+        h('p', { class: 't3b-hint', id: 't3b-size-help', text: 'Pick the closest match. The price shown is for the inspection; you can add extras next.' }),
+        select, after)];
   }
   function choose(type) {
     flow.type = type;
@@ -243,7 +289,7 @@
 
   const typeCard = (withWhen) => h('div', { class: 't3b-card t3b-pad t3b-typecard' },
     h('div', {},
-      h('div', { class: 't3b-rowname', text: flow.type.name }),
+      h('div', { class: 't3b-rowname', text: tidyName(flow.type.name) }),
       ...[...flow.addonIds].map((id) => h('div', { class: 't3b-detail', text: `+ ${flow.addons.find((a) => a.id === id).name}` })),
       h('div', { class: 't3b-detail', text: detailLine(flow.type, totalCents()) }),
       travelFee() && flow.type.priceCents ? h('div', { class: 't3b-detail', text: `Includes a ${money(travelFee())} travel fee` }) : null,
@@ -251,17 +297,8 @@
     h('button', { type: 'button', class: 't3b-x', 'aria-label': 'Choose a different inspection', onclick: () => go('list') }, icon('<path d="M6 6l12 12M18 6 6 18"/>')));
 
   function drawTime() {
-    const addons = flow.type.addonIds.map((id) => flow.addons.find((a) => a.id === id)).filter(Boolean);
     return [intro(), stepTitle('Date & Time', { label: 'Select Appointment', fn: () => go('list') }),
-      h('h3', { class: 't3b-label', text: 'Appointment type' }), typeCard(false),
-      addons.length ? [h('h3', { class: 't3b-label', text: 'Add to appointment' }),
-        h('div', { class: 't3b-card t3b-pad t3b-addons' }, ...addons.map((addon) => {
-          const box = h('input', { type: 'checkbox', id: `t3b-addon-${addon.id}`, checked: flow.addonIds.has(addon.id), onchange: (e) => {
-            if (e.target.checked) flow.addonIds.add(addon.id); else flow.addonIds.delete(addon.id);
-            card.replaceWith(draftCard());
-          } });
-          return h('label', { class: 't3b-addon', for: `t3b-addon-${addon.id}` }, box, h('span', {}, addon.name, h('small', { text: `+ ${money(addon.priceCents)}` })));
-        }))] : null,
+      h('h3', { class: 't3b-label', text: 'Your inspection' }), typeCard(false),
       calendar({ typeId: flow.type.id, onPick: (date, time) => { flow.date = date; flow.time = time; go('form'); } })];
   }
   // The appointment card above the add-ons keeps its total up to date as boxes are ticked.
@@ -466,6 +503,7 @@
       return;
     }
     const wanted = typeById(new URLSearchParams(window.location.search).get('type'));
-    if (wanted) choose(wanted); else draw();
+    if (wanted) flow.type = wanted;
+    draw();
   })();
 })();
