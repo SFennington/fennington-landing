@@ -27,7 +27,7 @@ function followupFrom(saved: any): T3FollowupTemplate {
   const d = T3_FOLLOWUP_DEFAULTS;
   const text = (v: unknown, fallback: string, max: number) => (typeof v === "string" && v.trim() ? v.replace(/\r\n/g, "\n").slice(0, max) : fallback);
   const url = typeof saved?.reviewUrl === "string" && /^https:\/\/[^\s]+$/.test(saved.reviewUrl.trim()) ? saved.reviewUrl.trim().slice(0, 500) : d.reviewUrl;
-  return { reviewUrl: url, subject: text(saved?.subject, d.subject, 150), body: text(saved?.body, d.body, 4000), reminderSubject: text(saved?.reminderSubject, d.reminderSubject, 150), reminderBody: text(saved?.reminderBody, d.reminderBody, 4000) };
+  return { reminderEnabled: saved?.reminderEnabled !== false, reviewUrl: url, subject: text(saved?.subject, d.subject, 150), body: text(saved?.body, d.body, 4000), reminderSubject: text(saved?.reminderSubject, d.reminderSubject, 150), reminderBody: text(saved?.reminderBody, d.reminderBody, 4000) };
 }
 
 export function defaultConfig(): T3SavedConfig {

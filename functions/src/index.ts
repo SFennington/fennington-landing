@@ -2346,8 +2346,9 @@ function registerT3AdminRoutes() {
     const emailStatus = await deliver([email], preview, "review follow-up", ref.id);
     if (emailStatus !== "sent") throw t3Fail("The email could not be sent. Please try again in a minute.", 502);
     const nowMs = Date.now();
-    const dueMs = nowMs + T3_FOLLOWUP_REMINDER_DAYS * 86_400_000;
-    await ref.set({ followupSentAt: nowMs, followupReminderDueMs: dueMs, followupReminderSentAt: null, followupStopped: false, updatedAt: serverTimestamp() }, { merge: true });
+    const reminderOn = (await loadT3Config(preview)).config.followup.reminderEnabled;
+    const dueMs = reminderOn ? nowMs + T3_FOLLOWUP_REMINDER_DAYS * 86_400_000 : null;
+    await ref.set({ followupSentAt: nowMs, followupReminderDueMs: dueMs, followupReminderSentAt: null, followupStopped: !reminderOn, updatedAt: serverTimestamp() }, { merge: true });
     res.json({ ok: true, followupSentAt: nowMs, followupReminderDueMs: dueMs });
   }));
 
@@ -2468,6 +2469,7 @@ async function runT3FollowupReminders(): Promise<{ checked: number; sent: number
   const snapshot = await db.collection(T3_BOOKINGS).where("followupReminderDueMs", "<=", nowMs).get();
   const fromEmail = await t3FromEmail();
   const followup = (await loadT3Config(false)).config.followup;
+  if (!followup.reminderEnabled) return { checked: 0, sent: 0 };
   let sent = 0;
   for (const doc of snapshot.docs) {
     if (doc.get("followupStopped") || doc.get("followupReminderSentAt") || doc.get("status") !== "confirmed") continue;

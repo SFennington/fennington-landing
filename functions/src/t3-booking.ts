@@ -399,8 +399,9 @@ export const T3_REVIEW_URL = "https://www.google.com/search?q=T3+Inspections#lrd
 export const T3_FOLLOWUP_REMINDER_DAYS = 7;
 
 /** The review emails Ted can edit in Settings. {firstName}, {address} and {reviewLink} are filled in when sent. */
-export type T3FollowupTemplate = { reviewUrl: string; subject: string; body: string; reminderSubject: string; reminderBody: string };
+export type T3FollowupTemplate = { reminderEnabled: boolean; reviewUrl: string; subject: string; body: string; reminderSubject: string; reminderBody: string };
 export const T3_FOLLOWUP_DEFAULTS: T3FollowupTemplate = {
+  reminderEnabled: true,
   reviewUrl: T3_REVIEW_URL,
   subject: "Thank you from T3 Inspections",
   body: "Hi {firstName},\n\nThank you for choosing T3 Inspections for your home inspection at {address}. It was a pleasure working with you.\n\nIf you were happy with the service, would you take a minute to leave us a Google review? Reviews from customers like you are how other families find us.\n\nLeave a review: {reviewLink}\n\nIf anything about your inspection wasn't right, please reply to this email or call me at " + T3_PHONE + " so I can make it right.\n\nThank you,\nTed Towne III\nT3 Inspections",

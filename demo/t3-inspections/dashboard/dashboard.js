@@ -384,7 +384,7 @@ function followupBlock(b) {
       send.disabled = true; msg.className = 'msg'; msg.textContent = 'Sending…';
       try { await api(`/bookings/${b.id}/followup`, { method: 'POST', body: {} }); await openDetail(b.id); } catch (e) { msg.textContent = e.message; msg.className = 'msg bad'; send.disabled = false; }
     } }, 'Send review follow-up');
-    box.append(h('b', { text: 'Review follow-up' }), h('p', { class: 'small', text: `Emails ${b.emails.join(', ')} a thank-you with a link to review you on Google right now, and a reminder 7 days later.` }), send, msg);
+    box.append(h('b', { text: 'Review follow-up' }), h('p', { class: 'small', text: `Emails ${b.emails.join(', ')} a thank-you with a link to review you on Google right now${state.boot.config.followup?.reminderEnabled === false ? '.' : ', and a reminder 7 days later.'}` }), send, msg);
     return box;
   }
   box.append(h('b', { text: 'Review follow-up' }), h('p', { class: 'small', text: `Sent ${day(b.followupSentAt)}.` }));
@@ -636,7 +636,7 @@ function renderSettings() {
   $('noticeHours').value = String(config.noticeHours);
   $('daysAhead').value = String(config.daysAhead);
   const fu = config.followup || {};
-  $('fuUrl').value = fu.reviewUrl || ''; $('fuSubject').value = fu.subject || ''; $('fuBody').value = fu.body || ''; $('fuRSubject').value = fu.reminderSubject || ''; $('fuRBody').value = fu.reminderBody || '';
+  $('fuUrl').value = fu.reviewUrl || ''; $('fuSubject').value = fu.subject || ''; $('fuBody').value = fu.body || ''; $('fuREnabled').checked = fu.reminderEnabled !== false; $('fuRSubject').value = fu.reminderSubject || ''; $('fuRBody').value = fu.reminderBody || '';
   const tf = clear($('typeFields'));
   for (const t of types) {
     tf.append(h('div', { class: 'rowp', 'data-type': String(t.id) }, h('span', { class: 'nm', text: t.name }),
@@ -672,7 +672,7 @@ $('settingsForm').addEventListener('submit', async (e) => {
     addonPrices[row.dataset.addon] = p;
   }
   try {
-    const r = await api('/settings', { method: 'PUT', body: { startTimes, noticeHours: Number($('noticeHours').value), daysAhead: Number($('daysAhead').value), typeOverrides, addonPrices, followup: { reviewUrl: $('fuUrl').value, subject: $('fuSubject').value, body: $('fuBody').value, reminderSubject: $('fuRSubject').value, reminderBody: $('fuRBody').value } } });
+    const r = await api('/settings', { method: 'PUT', body: { startTimes, noticeHours: Number($('noticeHours').value), daysAhead: Number($('daysAhead').value), typeOverrides, addonPrices, followup: { reminderEnabled: $('fuREnabled').checked, reviewUrl: $('fuUrl').value, subject: $('fuSubject').value, body: $('fuBody').value, reminderSubject: $('fuRSubject').value, reminderBody: $('fuRBody').value } } });
     state.boot = await api('/bootstrap');
     renderSettings();
     msg.textContent = 'Saved. Customers see the new prices and times right away.'; msg.className = 'msg ok';
