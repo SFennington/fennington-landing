@@ -235,13 +235,74 @@
   const priceText = (type) => (type.priceCents ? moneyShort(type.priceCents) : 'Ted confirms price');
   const categoryName = (c) => c.replace(/^\d+\.\s*/, '').replace(/\s*\/\s*/g, ' / ');
 
+  // A real dropdown made of our own markup. The phone's built-in menu can't break lines or show a
+  // time estimate, which made the long names hard to read.
+  const hoursShort = (minutes) => { const h2 = minutes / 60; return `${Number.isInteger(h2) ? h2 : Math.floor(h2) + '\u00bd'} hrs`; };
+  function sizeParts(type) {
+    const m = /^(.*?)\s*\((.*)\)\s*$/.exec(tidyName(type.name));
+    return m ? { title: m[1], sub: m[2] } : { title: tidyName(type.name), sub: '' };
+  }
+  const sizeBody = (type) => {
+    const { title, sub } = sizeParts(type);
+    return [
+      h('span', { class: 't3b-opt-main' }, h('span', { class: 't3b-opt-title', text: title }), sub ? h('span', { class: 't3b-opt-sub', text: sub }) : null),
+      h('span', { class: 't3b-opt-meta' }, h('span', { class: 't3b-opt-price', text: type.priceCents ? moneyShort(type.priceCents) : 'Price confirmed by Ted' }), h('span', { class: 't3b-opt-time', text: `about ${hoursShort(type.minutes)}` }))
+    ];
+  };
+  function sizePicker(categories, onPick) {
+    const chevron = icon('<path d="m6 9 6 6 6-6"/>');
+    const current = h('span', { class: 't3b-pick-current' });
+    const btn = h('button', { type: 'button', id: 't3b-size', class: 't3b-size', 'aria-haspopup': 'listbox', 'aria-expanded': 'false', 'aria-describedby': 't3b-size-help' }, current, chevron);
+    const list = h('ul', { class: 't3b-menu', role: 'listbox', tabindex: '-1', 'aria-label': 'Size of your home', hidden: true });
+    const wrap = h('div', { class: 't3b-picker' }, btn, list);
+    const options = [];
+    for (const category of categories) {
+      list.append(h('li', { class: 't3b-menu-group', role: 'presentation', text: categoryName(category) }));
+      for (const type of flow.types.filter((t) => t.category === category)) {
+        const li = h('li', { role: 'option', id: `t3b-opt-${type.id}`, class: 't3b-opt', 'data-id': String(type.id), 'aria-selected': 'false' }, sizeBody(type));
+        li.addEventListener('click', () => choosePick(type));
+        options.push({ li, type });
+        list.append(li);
+      }
+    }
+    let active = -1;
+    const paint = () => {
+      current.replaceChildren(...(flow.type ? sizeBody(flow.type) : [h('span', { class: 't3b-opt-title t3b-placeholder', text: 'Choose the size of your home' })]));
+      options.forEach(({ li, type }) => li.setAttribute('aria-selected', String(Boolean(flow.type && flow.type.id === type.id))));
+    };
+    const setActive = (i) => {
+      active = Math.max(0, Math.min(options.length - 1, i));
+      options.forEach(({ li }, n) => li.classList.toggle('active', n === active));
+      list.setAttribute('aria-activedescendant', options[active].li.id);
+      options[active].li.scrollIntoView({ block: 'nearest' });
+    };
+    const open = () => {
+      list.hidden = false; btn.setAttribute('aria-expanded', 'true');
+      setActive(Math.max(0, options.findIndex(({ type }) => flow.type && flow.type.id === type.id)));
+      list.focus({ preventScroll: true });
+      wrap.scrollIntoView({ block: 'start', behavior: 'smooth' }); // keep the whole menu on screen, above the phone's Book Online bar
+    };
+    const close = (refocus) => { list.hidden = true; btn.setAttribute('aria-expanded', 'false'); if (refocus) btn.focus(); };
+    function choosePick(type) { close(true); onPick(type); paint(); }
+    btn.addEventListener('click', () => (list.hidden ? open() : close(true)));
+    btn.addEventListener('keydown', (e) => { if (['ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); open(); } });
+    list.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+      else if (e.key === 'Home') { e.preventDefault(); setActive(0); }
+      else if (e.key === 'End') { e.preventDefault(); setActive(options.length - 1); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choosePick(options[active].type); }
+      else if (e.key === 'Escape') { e.preventDefault(); close(true); }
+      else if (e.key === 'Tab') close(false);
+    });
+    document.addEventListener('click', (e) => { if (!list.hidden && !wrap.contains(e.target)) close(false); });
+    paint();
+    return wrap;
+  }
+
   function drawList() {
     const categories = [...new Set(flow.types.map((t) => t.category))];
-    const select = h('select', { id: 't3b-size', class: 't3b-in t3b-in-white t3b-size', 'aria-describedby': 't3b-size-help', onchange: (e) => pick(typeById(e.target.value)) },
-      h('option', { value: '', text: 'Choose the size of your home' }),
-      ...categories.map((category) => h('optgroup', { label: categoryName(category) },
-        ...flow.types.filter((t) => t.category === category).map((type) =>
-          h('option', { value: type.id, selected: flow.type && flow.type.id === type.id, text: `${tidyName(type.name)}  ·  ${priceText(type)}` })))));
+    const select = sizePicker(categories, (type) => pick(type));
     const after = h('div', { class: 't3b-after', 'aria-live': 'polite' });
     const paintAfter = () => { after.replaceChildren(...afterParts().flat().filter(Boolean)); };
     function pick(type) {
