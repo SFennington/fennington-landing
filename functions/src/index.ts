@@ -2342,7 +2342,7 @@ function registerT3AdminRoutes() {
     if (data.status !== "confirmed") throw t3Fail("This booking is cancelled, so there is nobody to thank.", 409);
     if (data.followupSentAt) throw t3Fail("The review follow-up was already sent for this booking.", 409);
     if (!Array.isArray(data.emails) || !data.emails.length) throw t3Fail("This booking has no customer email. Add one with Edit first.", 400);
-    const email = t3FollowupEmail(t3RecordFrom(ref.id, data), await sendFrom(), "first");
+    const email = t3FollowupEmail(t3RecordFrom(ref.id, data), await sendFrom(), "first", (await loadT3Config(preview)).config.followup);
     const emailStatus = await deliver([email], preview, "review follow-up", ref.id);
     if (emailStatus !== "sent") throw t3Fail("The email could not be sent. Please try again in a minute.", 502);
     const nowMs = Date.now();
@@ -2467,10 +2467,11 @@ async function runT3FollowupReminders(): Promise<{ checked: number; sent: number
   const nowMs = Date.now();
   const snapshot = await db.collection(T3_BOOKINGS).where("followupReminderDueMs", "<=", nowMs).get();
   const fromEmail = await t3FromEmail();
+  const followup = (await loadT3Config(false)).config.followup;
   let sent = 0;
   for (const doc of snapshot.docs) {
     if (doc.get("followupStopped") || doc.get("followupReminderSentAt") || doc.get("status") !== "confirmed") continue;
-    const email = t3FollowupEmail(t3RecordFrom(doc.id, doc.data()), fromEmail, "reminder");
+    const email = t3FollowupEmail(t3RecordFrom(doc.id, doc.data()), fromEmail, "reminder", followup);
     if (!fromEmail || !email.to.length) continue;
     const result = await deliverT3Emails([email]).catch((error: any) => ({ status: "failed" as const, error: safeString(error?.message) }));
     if (result.status === "sent") {

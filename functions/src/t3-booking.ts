@@ -393,21 +393,34 @@ export function t3ReminderEmail(b: T3BookingRecord, fromEmail: string, token: st
   };
 }
 
-/** Where "leave a review" points. Swap for the direct write-a-review link from Ted's Google Business Profile when he has it. */
-export const T3_REVIEW_URL = "https://www.google.com/search?q=T3+Inspections#lrd=0x89e6d88a7c97d35d:0x9c0dd7d1dfe24b55,1,,,";
+/** Where "leave a review" points: opens the write-a-review box on T3's Google profile. Ted can change it in Settings. */
+export const T3_REVIEW_URL = "https://www.google.com/search?q=T3+Inspections#lrd=0x89e6d88a7c97d35d:0x9c0dd7d1dfe24b55,3,,,";
 /** How long after the first follow-up the reminder goes out, unless Ted stops it. */
 export const T3_FOLLOWUP_REMINDER_DAYS = 7;
 
-/** Thank-you email after an inspection, asking for a Google review. `kind: "reminder"` is the gentle nudge a week later. */
-export function t3FollowupEmail(b: T3BookingRecord, fromEmail: string, kind: "first" | "reminder", reviewUrl = T3_REVIEW_URL): Email {
-  const intro = kind === "first"
-    ? `Thank you for choosing T3 Inspections for your home inspection at ${addressLine(b)}. It was a pleasure working with you.\n\nIf you were happy with the service, would you take a minute to leave us a review? Reviews from customers like you are how other families find us.`
-    : `A quick reminder in case it slipped by: if you were happy with your home inspection at ${addressLine(b)}, we would really appreciate a short review.\n\nIf you already left one, thank you! You can ignore this note.`;
+/** The review emails Ted can edit in Settings. {firstName}, {address} and {reviewLink} are filled in when sent. */
+export type T3FollowupTemplate = { reviewUrl: string; subject: string; body: string; reminderSubject: string; reminderBody: string };
+export const T3_FOLLOWUP_DEFAULTS: T3FollowupTemplate = {
+  reviewUrl: T3_REVIEW_URL,
+  subject: "Thank you from T3 Inspections",
+  body: "Hi {firstName},\n\nThank you for choosing T3 Inspections for your home inspection at {address}. It was a pleasure working with you.\n\nIf you were happy with the service, would you take a minute to leave us a Google review? Reviews from customers like you are how other families find us.\n\nLeave a review: {reviewLink}\n\nIf anything about your inspection wasn't right, please reply to this email or call me at " + T3_PHONE + " so I can make it right.\n\nThank you,\nTed Towne III\nT3 Inspections",
+  reminderSubject: "A quick favor from T3 Inspections",
+  reminderBody: "Hi {firstName},\n\nA quick reminder in case it slipped by: if you were happy with your home inspection at {address}, I would really appreciate a short Google review.\n\nLeave a review: {reviewLink}\n\nIf you already left one, thank you! You can ignore this note.\n\nThank you,\nTed Towne III\nT3 Inspections"
+};
+
+/** Thank-you email after an inspection asking for a Google review; `kind: "reminder"` is the nudge a week later. */
+export function t3FollowupEmail(b: T3BookingRecord, fromEmail: string, kind: "first" | "reminder", template: T3FollowupTemplate = T3_FOLLOWUP_DEFAULTS): Email {
+  const fill = (text: string) => text
+    .replace(/\{firstName\}/g, b.firstName || "there")
+    .replace(/\{address\}/g, addressLine(b))
+    .replace(/\{reviewLink\}/g, template.reviewUrl || T3_REVIEW_URL);
+  const first = kind === "first";
+  const body = fill(first ? template.body : template.reminderBody);
   return {
     from: `T3 Inspections <${fromAddressOf(fromEmail)}>`,
     to: b.emails, reply_to: T3_TED_EMAIL,
-    subject: kind === "first" ? "Thank you from T3 Inspections" : "A quick favor from T3 Inspections",
-    text: `Hi ${b.firstName || "there"},\n\n${intro}\n\nLeave a review: ${reviewUrl}\n\nIf anything about your inspection wasn't right, please reply to this email or call Ted at ${T3_PHONE} so we can make it right.\n\nThank you,\nTed Towne III\n\n${customerFooter()}`
+    subject: fill(first ? template.subject : template.reminderSubject).replace(/[\r\n]+/g, " ").slice(0, 150),
+    text: `${body}\n\n${T3_PHONE}\n${T3_SITE}`
   };
 }
 

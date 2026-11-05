@@ -3,8 +3,8 @@
 // is tested directly; the routes live in index.ts under /t3-inspections/admin/.
 import { T3_ADDONS, T3_TYPES, type T3InspectionType } from "./t3-catalog";
 import {
-  DEFAULT_CATALOG, T3_BASEMENTS, T3_SETTINGS, T3_STYLES, T3_TED_EMAIL, addDays, isDateString, isTimeString, nyToMs, splitEmails,
-  type T3Catalog, type T3Hold, type T3RangeConfig, type T3Settings
+  DEFAULT_CATALOG, T3_BASEMENTS, T3_FOLLOWUP_DEFAULTS, T3_SETTINGS, T3_STYLES, T3_TED_EMAIL, addDays, isDateString, isTimeString, nyToMs, splitEmails,
+  type T3Catalog, type T3FollowupTemplate, type T3Hold, type T3RangeConfig, type T3Settings
 } from "./t3-booking";
 
 /**
@@ -20,10 +20,18 @@ export function isT3Owner(token: { email?: unknown; email_verified?: unknown } |
 
 // ---- Settings (t3Config/settings) ----
 
-export type T3SavedConfig = T3Settings & { typeOverrides: Record<string, { priceCents?: number; minutes?: number }>; addonPrices: Record<string, number> };
+export type T3SavedConfig = T3Settings & { typeOverrides: Record<string, { priceCents?: number; minutes?: number }>; addonPrices: Record<string, number>; followup: T3FollowupTemplate };
+
+/** The review email text. Anything missing or blank falls back to the built-in wording; a link must be https. */
+function followupFrom(saved: any): T3FollowupTemplate {
+  const d = T3_FOLLOWUP_DEFAULTS;
+  const text = (v: unknown, fallback: string, max: number) => (typeof v === "string" && v.trim() ? v.replace(/\r\n/g, "\n").slice(0, max) : fallback);
+  const url = typeof saved?.reviewUrl === "string" && /^https:\/\/[^\s]+$/.test(saved.reviewUrl.trim()) ? saved.reviewUrl.trim().slice(0, 500) : d.reviewUrl;
+  return { reviewUrl: url, subject: text(saved?.subject, d.subject, 150), body: text(saved?.body, d.body, 4000), reminderSubject: text(saved?.reminderSubject, d.reminderSubject, 150), reminderBody: text(saved?.reminderBody, d.reminderBody, 4000) };
+}
 
 export function defaultConfig(): T3SavedConfig {
-  return { startTimes: { ...T3_SETTINGS.startTimes }, noticeHours: T3_SETTINGS.noticeHours, daysAhead: T3_SETTINGS.daysAhead, typeOverrides: {}, addonPrices: {} };
+  return { startTimes: { ...T3_SETTINGS.startTimes }, noticeHours: T3_SETTINGS.noticeHours, daysAhead: T3_SETTINGS.daysAhead, typeOverrides: {}, addonPrices: {}, followup: followupFrom(null) };
 }
 
 const int = (value: unknown, min: number, max: number): number | undefined => {
@@ -44,6 +52,7 @@ export function configFrom(saved: any): T3SavedConfig {
     }
     result.startTimes = times;
   }
+  result.followup = followupFrom(saved.followup);
   result.noticeHours = int(saved.noticeHours, 0, 720) ?? base.noticeHours;
   result.daysAhead = int(saved.daysAhead, 1, 365) ?? base.daysAhead;
   if (saved.typeOverrides && typeof saved.typeOverrides === "object") {
@@ -81,6 +90,12 @@ export function validateConfigInput(body: any): { ok: true; value: T3SavedConfig
   for (const [id, cents] of Object.entries<any>(body.addonPrices || {})) {
     if (!T3_ADDONS.some((a) => String(a.id) === id)) return { ok: false, error: "Unknown add-on." };
     if (int(cents, 0, 10_000_000) === undefined) return { ok: false, error: "An add-on price is not a valid amount." };
+  }
+  const f = body.followup;
+  if (f !== undefined) {
+    if (!f || typeof f !== "object") return { ok: false, error: "The review email isn't valid." };
+    if (typeof f.reviewUrl === "string" && f.reviewUrl.trim() && !/^https:\/\/[^\s]+$/.test(f.reviewUrl.trim())) return { ok: false, error: "The review link must start with https://" };
+    for (const key of ["body", "reminderBody"]) if (typeof f[key] === "string" && f[key].trim() && !f[key].includes("{reviewLink}")) return { ok: false, error: "Keep {reviewLink} in the email, or customers get no link." };
   }
   return { ok: true, value: configFrom(body) };
 }

@@ -92,6 +92,13 @@
         <div id="typeFields" class="prices"></div>
         <h3>Add-on prices</h3>
         <div id="addonFields" class="prices"></div>
+        <h3>Review follow-up email</h3>
+        <p class="muted small">Sent when you tap “Send review follow-up” on a booking, and once more 7 days later. <code>{firstName}</code>, <code>{address}</code> and <code>{reviewLink}</code> are filled in for each customer.</p>
+        <label class="field">Review link (your Google profile) <input id="fuUrl" inputmode="url"></label>
+        <label class="field">Subject <input id="fuSubject" maxlength="150"></label>
+        <label class="field">Email <textarea id="fuBody" rows="12"></textarea></label>
+        <label class="field">Reminder subject <input id="fuRSubject" maxlength="150"></label>
+        <label class="field">Reminder email <textarea id="fuRBody" rows="9"></textarea></label>
         <div class="bar wrap"><button class="btn primary" type="submit">Save settings</button><span id="settingsMsg" class="msg" role="status"></span></div>
       </form>
     </section>

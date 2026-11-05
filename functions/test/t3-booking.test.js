@@ -231,3 +231,11 @@ test("the review follow-up emails go to the customer only, with the review link"
   assert.match(nudge.text, /already left one/);
   assert.equal(b.T3_FOLLOWUP_REMINDER_DAYS, 7);
 });
+
+test("the review email uses Ted's edited wording and fills in the placeholders", () => {
+  const custom = { ...b.T3_FOLLOWUP_DEFAULTS, reviewUrl: "https://g.page/r/abc/review", subject: "Thanks {firstName}", body: "Hi {firstName}, {address}: {reviewLink}" };
+  const email = b.t3FollowupEmail(record(), FROM, "first", custom);
+  assert.equal(email.subject, "Thanks " + record().firstName);
+  assert.ok(email.text.includes("https://g.page/r/abc/review"));
+  assert.ok(!email.text.includes("{"));
+});
