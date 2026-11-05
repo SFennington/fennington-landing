@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>T3 Dashboard</title>
+  <link rel="icon" href="../assets/img/favicon.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><b>T3</b> Dashboard <span id="previewTag" class="tag" hidden>Preview</span></div>
+    <div class="who"><span id="whoEmail"></span> <button id="signOut" class="link" hidden>Sign out</button></div>
+  </header>
+
+  <p id="previewNote" class="banner" hidden role="note"><b>Preview.</b> Everything here is practice: it uses its own test calendar, never your real one, and every email goes to you only.</p>
+
+  <main id="signedOut" class="center">
+    <h1>T3 Inspections dashboard</h1>
+    <p>Sign in with the Google account for T3 Inspections.</p>
+    <button id="signIn" class="btn primary">Sign in with Google</button>
+    <p id="authMsg" class="msg" role="alert"></p>
+  </main>
+
+  <main id="app" hidden>
+    <nav class="tabs" id="tabs" aria-label="Sections">
+      <button data-tab="calendar" class="on">Calendar</button>
+      <button data-tab="map">ZIP map</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+
+    <section id="tab-calendar">
+      <div class="bar">
+        <button id="prevMonth" class="btn" aria-label="Previous month">‹</button>
+        <h2 id="monthTitle"></h2>
+        <button id="nextMonth" class="btn" aria-label="Next month">›</button>
+      </div>
+      <div class="bar actions">
+        <button id="newBooking" class="btn primary">+ New booking</button>
+        <button id="newBlockout" class="btn">Block off time</button>
+      </div>
+      <div class="grid head" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+      <div id="grid" class="grid" role="grid"></div>
+      <div class="legend"><span><i class="dot b"></i> Booking</span><span><i class="dot k"></i> Blocked</span></div>
+      <h3 id="dayTitle"></h3>
+      <ul id="dayList" class="list"></ul>
+    </section>
+
+    <section id="tab-map" hidden>
+      <h2>Where you take online bookings</h2>
+      <p class="muted">Tap a ZIP to change it: <b>off</b> (customers are told to contact you), <b class="g">green</b> (books and pays online) or <b class="u">blue</b> (books online with a travel fee).</p>
+      <div class="bar wrap">
+        <label class="field inline">Travel fee for blue ZIPs <span class="money"><span>$</span><input id="feeInput" inputmode="decimal" value="0"></span></label>
+        <span id="counts" class="counts"></span>
+      </div>
+      <div id="map" aria-label="Map of Massachusetts ZIP codes"></div>
+      <div class="bar wrap">
+        <button id="saveRange" class="btn primary">Save the map</button>
+        <button id="resetRange" class="btn">Undo changes</button>
+        <span id="rangeMsg" class="msg" role="status"></span>
+      </div>
+      <p class="muted small">ZIP outlines come from the Census Bureau, which are close to, but not exactly, the post office's ZIP areas. For a ZIP that isn't on the map (a P.O. box ZIP, say), or to double-check one, use the box below.</p>
+      <h3>Check or change one ZIP</h3>
+      <div class="bar wrap">
+        <input id="zipInput" class="zip" inputmode="numeric" maxlength="5" placeholder="01001" aria-label="ZIP code">
+        <button id="zipCheck" class="btn">Check</button>
+        <button data-zipset="included" class="btn g">Make green</button>
+        <button data-zipset="extended" class="btn u">Make blue</button>
+        <button data-zipset="off" class="btn">Turn off</button>
+      </div>
+      <p id="zipResult" class="msg" role="status"></p>
+    </section>
+
+    <section id="tab-settings" hidden>
+      <h2>Settings</h2>
+      <form id="settingsForm" autocomplete="off">
+        <h3>Start times</h3>
+        <p class="muted small">For each weekday, the times customers can pick, like <code>09:00, 13:00</code>. Leave blank for a day off.</p>
+        <div id="hoursFields" class="hours"></div>
+        <h3>Booking rules</h3>
+        <div class="row2">
+          <label class="field">Notice needed (hours) <input id="noticeHours" inputmode="numeric"></label>
+          <label class="field">Days ahead the calendar opens <input id="daysAhead" inputmode="numeric"></label>
+        </div>
+        <h3>Inspection prices and lengths</h3>
+        <div id="typeFields" class="prices"></div>
+        <h3>Add-on prices</h3>
+        <div id="addonFields" class="prices"></div>
+        <div class="bar wrap"><button class="btn primary" type="submit">Save settings</button><span id="settingsMsg" class="msg" role="status"></span></div>
+      </form>
+    </section>
+  </main>
+
+  <dialog id="dlg"><form method="dialog" id="dlgBody"></form></dialog>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>

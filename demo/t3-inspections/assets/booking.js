@@ -211,7 +211,9 @@
   // ---- Booking flow ----
   const flow = { types: [], addons: [], step: 'list', type: null, addonIds: new Set(), date: '', time: '', range: null, error: '', form: { utilities: '' } };
   const typeById = (id) => flow.types.find((t) => t.id === Number(id));
-  const totalCents = () => flow.type.priceCents + [...flow.addonIds].reduce((sum, id) => sum + (flow.addons.find((a) => a.id === id)?.priceCents || 0), 0);
+  // An address in an extended ZIP adds the travel fee Ted set. The server works this out again itself.
+  const travelFee = () => (flow.range && flow.range.zone === 'extended' ? flow.range.feeCents || 0 : 0);
+  const totalCents = () => flow.type.priceCents + [...flow.addonIds].reduce((sum, id) => sum + (flow.addons.find((a) => a.id === id)?.priceCents || 0), 0) + (flow.type.priceCents ? travelFee() : 0);
   const detailLine = (type, total) => (total ? `${duration(type.minutes)} @ ${money(total)}` : duration(type.minutes));
   const go = (step) => { flow.step = step; flow.error = ''; draw(); root.scrollIntoView({ block: 'start' }); };
 
@@ -244,6 +246,7 @@
       h('div', { class: 't3b-rowname', text: flow.type.name }),
       ...[...flow.addonIds].map((id) => h('div', { class: 't3b-detail', text: `+ ${flow.addons.find((a) => a.id === id).name}` })),
       h('div', { class: 't3b-detail', text: detailLine(flow.type, totalCents()) }),
+      travelFee() && flow.type.priceCents ? h('div', { class: 't3b-detail', text: `Includes a ${money(travelFee())} travel fee` }) : null,
       withWhen ? h('div', { class: 't3b-detail', text: `${dateLabel(flow.date)}, ${new Date(`${flow.date}T12:00:00Z`).getUTCFullYear()} at ${timeLabel(flow.time)}` }) : null),
     h('button', { type: 'button', class: 't3b-x', 'aria-label': 'Choose a different inspection', onclick: () => go('list') }, icon('<path d="M6 6l12 12M18 6 6 18"/>')));
 
@@ -302,7 +305,14 @@
     if (submit) submit.hidden = Boolean(blocked);
     const note = document.getElementById('t3b-paynote');
     if (note) note.hidden = Boolean(blocked);
-    outOfRange.replaceWith((outOfRange = blocked ? rangePanel() : h('div')));
+    outOfRange.replaceWith((outOfRange = blocked ? rangePanel() : travelFee() ? extendedPanel() : h('div')));
+    const old = root.querySelector('.t3b-typecard');
+    if (old && flow.step === 'form') old.replaceWith(typeCard(true));
+  }
+  function extendedPanel() {
+    return h('div', { class: 't3b-range t3b-extended', role: 'status' },
+      h('h3', { text: 'Extended service area' }),
+      h('p', { text: `Your address is in our extended zone: +${money(travelFee())} travel fee. It is added to your total as its own line.` }));
   }
   function rangePanel() {
     const status = h('p', { class: 't3b-note', 'aria-live': 'polite' });

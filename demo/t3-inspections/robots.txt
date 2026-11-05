@@ -1,5 +1,6 @@
 # T3 Inspections website
 User-agent: *
 Allow: /
+Disallow: /dashboard/
 
 Sitemap: https://t3inspections.com/sitemap.xml

@@ -1,7 +1,7 @@
 // Online booking for Ted Towne's T3 Inspections (demo/t3-inspections), replacing Acuity.
 // Everything here is pure (no Firestore, no network) so it can be tested directly; the routes
 // and the database live in index.ts.
-import { T3_ADDONS, T3_TYPES, type T3InspectionType } from "./t3-catalog";
+import { T3_ADDONS, T3_TYPES, type T3Addon, type T3InspectionType } from "./t3-catalog";
 import T3_ZIPS from "./t3-zips.json";
 
 export const T3_TIMEZONE = "America/New_York";
@@ -17,6 +17,8 @@ export const T3_SETTINGS = {
   // How far ahead the calendar opens.
   daysAhead: 30
 };
+/** The scheduling rules Ted can change from his dashboard (t3Config/settings). */
+export type T3Settings = { startTimes: Record<number, string[]>; noticeHours: number; daysAhead: number };
 
 const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;
@@ -116,15 +118,16 @@ function overlaps(startMs: number, endMs: number, holds: T3Hold[], ignoreId?: st
 }
 
 /** Start times Ted could take on one date, for an inspection that lasts `minutes`. */
-export function slotsForDate(args: { date: string; minutes: number; holds: T3Hold[]; nowMs: number; ignoreId?: string }): Array<{ time: string; startMs: number }> {
+export function slotsForDate(args: { date: string; minutes: number; holds: T3Hold[]; nowMs: number; ignoreId?: string; settings?: T3Settings }): Array<{ time: string; startMs: number }> {
   const { date, minutes, holds, nowMs, ignoreId } = args;
+  const settings = args.settings || T3_SETTINGS;
   if (!isDateString(date)) return [];
   const today = nyDateOf(nowMs);
-  if (date > addDays(today, T3_SETTINGS.daysAhead)) return [];
+  if (date > addDays(today, settings.daysAhead)) return [];
   const slots: Array<{ time: string; startMs: number }> = [];
-  for (const time of T3_SETTINGS.startTimes[weekdayOf(date)] || []) {
+  for (const time of settings.startTimes[weekdayOf(date)] || []) {
     const startMs = nyToMs(date, time);
-    if (startMs < nowMs + T3_SETTINGS.noticeHours * HOUR_MS) continue;
+    if (startMs < nowMs + settings.noticeHours * HOUR_MS) continue;
     if (overlaps(startMs, startMs + minutes * MINUTE_MS, holds, ignoreId)) continue;
     slots.push({ time, startMs });
   }
@@ -132,38 +135,66 @@ export function slotsForDate(args: { date: string; minutes: number; holds: T3Hol
 }
 
 /** Every date in a month ("YYYY-MM") with at least one open start time. */
-export function openDaysInMonth(args: { month: string; minutes: number; holdsByDate: Record<string, T3Hold[]>; nowMs: number }): Record<string, boolean> {
-  const { month, minutes, holdsByDate, nowMs } = args;
+export function openDaysInMonth(args: { month: string; minutes: number; holdsByDate: Record<string, T3Hold[]>; nowMs: number; settings?: T3Settings }): Record<string, boolean> {
+  const { month, minutes, holdsByDate, nowMs, settings } = args;
   const result: Record<string, boolean> = {};
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return result;
   for (let date = `${month}-01`; date.startsWith(month); date = addDays(date, 1)) {
-    result[date] = slotsForDate({ date, minutes, holds: holdsByDate[date] || [], nowMs }).length > 0;
+    result[date] = slotsForDate({ date, minutes, holds: holdsByDate[date] || [], nowMs, settings }).length > 0;
   }
   return result;
 }
 
 /** True while the booking is far enough away for the customer to change or cancel it online. */
-export function canChangeOnline(startMs: number, nowMs: number): boolean {
-  return startMs - nowMs >= T3_SETTINGS.noticeHours * HOUR_MS;
+export function canChangeOnline(startMs: number, nowMs: number, settings: T3Settings = T3_SETTINGS): boolean {
+  return startMs - nowMs >= settings.noticeHours * HOUR_MS;
 }
 
 // ---- Catalog and range ----
 
-export function findType(id: unknown): T3InspectionType | undefined {
-  return T3_TYPES.find((type) => type.id === Number(id));
+/** The types and add-ons customers see: the built-in list with Ted's saved price and duration changes applied. */
+export type T3Catalog = { types: T3InspectionType[]; addons: T3Addon[] };
+export const DEFAULT_CATALOG: T3Catalog = { types: T3_TYPES, addons: T3_ADDONS };
+
+export function findType(id: unknown, catalog: T3Catalog = DEFAULT_CATALOG): T3InspectionType | undefined {
+  return catalog.types.find((type) => type.id === Number(id));
 }
 
-export function priceFor(type: T3InspectionType, addonIds: number[]): number {
-  return type.priceCents + addonIds.reduce((sum, id) => sum + (T3_ADDONS.find((addon) => addon.id === id)?.priceCents || 0), 0);
+export function priceFor(type: T3InspectionType, addonIds: number[], catalog: T3Catalog = DEFAULT_CATALOG): number {
+  return type.priceCents + addonIds.reduce((sum, id) => sum + (catalog.addons.find((addon) => addon.id === id)?.priceCents || 0), 0);
 }
 
 const ZIP_INDEX = new Map(T3_ZIPS.map((entry) => [entry.zip, entry]));
 
-/** Whether a ZIP can book online. Anything else is told to contact Ted. */
-export function zipRange(value: unknown): { inRange: boolean; town?: string } {
+/** Ted's saved choice from the map: green ZIPs book normally, blue ones book with a travel fee. */
+export type T3RangeConfig = { included: string[]; extended: string[]; extendedFeeCents: number };
+export type T3Zone = "included" | "extended" | "none";
+
+/** Which zone a ZIP is in. With no saved choice the built-in list is used and everything on it is "included". */
+export function zoneFor(value: unknown, range?: T3RangeConfig | null): { zone: T3Zone; inRange: boolean; town?: string; feeCents: number } {
   const zip = typeof value === "string" ? value.trim().slice(0, 5) : "";
-  const entry = /^\d{5}$/.test(zip) ? ZIP_INDEX.get(zip) : undefined;
-  return entry ? { inRange: true, town: entry.town } : { inRange: false };
+  if (!/^\d{5}$/.test(zip)) return { zone: "none", inRange: false, feeCents: 0 };
+  const town = ZIP_INDEX.get(zip)?.town;
+  if (!range) return town ? { zone: "included", inRange: true, town, feeCents: 0 } : { zone: "none", inRange: false, feeCents: 0 };
+  if (range.included.includes(zip)) return { zone: "included", inRange: true, town, feeCents: 0 };
+  if (range.extended.includes(zip)) return { zone: "extended", inRange: true, town, feeCents: range.extendedFeeCents };
+  return { zone: "none", inRange: false, feeCents: 0 };
+}
+
+/** The built-in suggestion: every ZIP in t3-zips.json, all included. */
+export function defaultRange(): T3RangeConfig {
+  return { included: T3_ZIPS.map((entry) => entry.zip), extended: [], extendedFeeCents: 0 };
+}
+
+/** Town names for the built-in ZIPs, to label the map and the "check a ZIP" box. */
+export function townOf(zip: string): string | undefined {
+  return ZIP_INDEX.get(zip)?.town;
+}
+
+/** Whether a ZIP can book online. Anything else is told to contact Ted. */
+export function zipRange(value: unknown, range?: T3RangeConfig | null): { inRange: boolean; town?: string } {
+  const z = zoneFor(value, range);
+  return z.inRange ? { inRange: true, town: z.town } : { inRange: false };
 }
 
 // ---- A booking request from the website ----
@@ -204,8 +235,8 @@ export function splitEmails(value: unknown): string[] {
 
 export type T3Validation = { ok: true; value: T3BookingRequest } | { ok: false; error: string };
 
-export function validateBookingRequest(body: any): T3Validation {
-  const type = findType(body?.typeId);
+export function validateBookingRequest(body: any, catalog: T3Catalog = DEFAULT_CATALOG): T3Validation {
+  const type = findType(body?.typeId, catalog);
   if (!type) return { ok: false, error: "Please choose an inspection type." };
   const addonIds = Array.from(new Set((Array.isArray(body?.addonIds) ? body.addonIds : []).map(Number)));
   if (addonIds.some((id) => !type.addonIds.includes(id as number))) return { ok: false, error: "One of the add-ons is not available for this inspection." };
@@ -254,6 +285,8 @@ export type T3BookingRecord = {
   addonNames: string[];
   minutes: number;
   priceCents: number;
+  /** Extended-zone travel fee, already included in priceCents. */
+  travelFeeCents?: number;
   startMs: number;
   firstName: string;
   lastName: string;
@@ -272,6 +305,14 @@ export type T3BookingRecord = {
   utilities: string;
   paymentStatus: string;
 };
+
+/** The price as text. A travel fee is always its own line. */
+function priceLines(b: T3BookingRecord): string {
+  const fee = b.travelFeeCents || 0;
+  const base = b.priceCents - fee;
+  if (!fee) return `Price: ${b.priceCents ? moneyLabel(b.priceCents) : "Ted will confirm the price with you"}`;
+  return `Inspection: ${base ? moneyLabel(base) : "Ted will confirm the price with you"}\nTravel fee (extended area): ${moneyLabel(fee)}\nTotal: ${base ? moneyLabel(b.priceCents) : `${moneyLabel(fee)} plus the inspection price`}`;
+}
 
 type Email = { from: string; to: string[]; reply_to: string; subject: string; text: string; attachments?: Array<{ filename: string; content: string }> };
 
@@ -303,14 +344,15 @@ function customerFooter() {
 }
 
 /** The three emails sent when a booking is made: customer, Realtor copy, and Ted's alert. */
-export function t3BookingEmails(b: T3BookingRecord, fromEmail: string, token: string, siteBase = T3_SITE): Email[] {
+export function t3BookingEmails(b: T3BookingRecord, fromEmail: string, token: string, siteBase = T3_SITE, send: { customer?: boolean; realtor?: boolean; ted?: boolean } = {}): Email[] {
+  const want = { customer: true, realtor: true, ted: true, ...send };
   const from = `T3 Inspections <${fromAddressOf(fromEmail)}>`;
   const when = whenLabel(b.startMs);
   const ics = { filename: "t3-inspection.ics", content: Buffer.from(t3Ics(b)).toString("base64") };
   const emails: Email[] = [{
     from, to: b.emails, reply_to: T3_TED_EMAIL, attachments: [ics],
     subject: `Your home inspection is scheduled for ${when}`,
-    text: `Hi ${b.firstName},\n\nYour home inspection is scheduled.\n\n${when}\nAbout ${durationLabel(b.minutes)}\n${addressLine(b)}${b.unit.toLowerCase() === "no" ? "" : `\nUnit: ${b.unit}`}\n\n${inspectionLine(b)}\n\nPrice: ${b.priceCents ? moneyLabel(b.priceCents) : "Ted will confirm the price with you"}\n${b.paymentStatus === "paid" ? "Paid online: yes" : "Paid online: not yet. Ted will take payment after the inspection."}\n\nNeed to change it? You can reschedule or cancel online up to ${T3_SETTINGS.noticeHours} hours before: ${manageUrl(b.id, token, siteBase)}\nWithin ${T3_SETTINGS.noticeHours} hours, please call Ted at ${T3_PHONE}.\n\nA reminder will arrive the day before.\n\n${customerFooter()}`
+    text: `Hi ${b.firstName},\n\nYour home inspection is scheduled.\n\n${when}\nAbout ${durationLabel(b.minutes)}\n${addressLine(b)}${b.unit.toLowerCase() === "no" ? "" : `\nUnit: ${b.unit}`}\n\n${inspectionLine(b)}\n\n${priceLines(b)}\n${b.paymentStatus === "paid" ? "Paid online: yes" : "Paid online: not yet. Ted will take payment after the inspection."}\n\nNeed to change it? You can reschedule or cancel online up to ${T3_SETTINGS.noticeHours} hours before: ${manageUrl(b.id, token, siteBase)}\nWithin ${T3_SETTINGS.noticeHours} hours, please call Ted at ${T3_PHONE}.\n\nA reminder will arrive the day before.\n\n${customerFooter()}`
   }];
   if (b.realtorEmail) {
     emails.push({
@@ -322,11 +364,13 @@ export function t3BookingEmails(b: T3BookingRecord, fromEmail: string, token: st
   const realtorLines = [b.realtorName && `Agent: ${b.realtorName}`, b.realtorEmail && `Agent email: ${b.realtorEmail}`, b.realtorPhone && `Agent phone: ${b.realtorPhone}`].filter(Boolean).join("\n");
   emails.push({
     from: `${noBreaks(fullName(b)) || "Website booking"} via T3 Inspections website <${fromAddressOf(fromEmail)}>`,
-    to: [T3_TED_EMAIL], reply_to: b.emails[0],
+    to: [T3_TED_EMAIL], reply_to: b.emails[0] || T3_TED_EMAIL,
     subject: `New booking: ${fullName(b)}, ${when}`,
-    text: `Appointment scheduled online\n\n${when}, ${durationLabel(b.minutes)}\n\nName: ${fullName(b)}\nPhone: ${b.phone}\nEmail: ${b.emails.join(", ")}\nPrice: ${b.priceCents ? moneyLabel(b.priceCents) : "CONTACT FOR PRICE (set the price with the customer)"}\nPaid online: ${b.paymentStatus === "paid" ? moneyLabel(b.priceCents) : "$0.00 (reserved without paying)"}\n\nLocation\n============\n${addressLine(b)}\n\nInspection\n============\n${inspectionLine(b)}\n\nProperty Information\n============\nAgent\n${realtorLines || "(none given)"}\n\nCondo or unit number: ${b.unit}\nStyle of the property: ${b.style}\nSquare footage: ${b.sqft}\nBasement: ${b.basement}\nUtilities turned on: ${b.utilities}\n\nBooking id: ${b.id}`
+    text: `Appointment scheduled online\n\n${when}, ${durationLabel(b.minutes)}\n\nName: ${fullName(b)}\nPhone: ${b.phone}\nEmail: ${b.emails.join(", ")}\n${b.priceCents - (b.travelFeeCents || 0) ? priceLines(b) : `Price: CONTACT FOR PRICE (set the price with the customer)${b.travelFeeCents ? `\nTravel fee (extended area): ${moneyLabel(b.travelFeeCents)}` : ""}`}\nPaid online: ${b.paymentStatus === "paid" ? moneyLabel(b.priceCents) : "$0.00 (reserved without paying)"}\n\nLocation\n============\n${addressLine(b)}\n\nInspection\n============\n${inspectionLine(b)}\n\nProperty Information\n============\nAgent\n${realtorLines || "(none given)"}\n\nCondo or unit number: ${b.unit}\nStyle of the property: ${b.style}\nSquare footage: ${b.sqft}\nBasement: ${b.basement}\nUtilities turned on: ${b.utilities}\n\nBooking id: ${b.id}`
   });
-  return emails;
+  // The first email is the customer's, then the Realtor's if there is one, and Ted's alert is last.
+  const hasRealtor = Boolean(b.realtorEmail);
+  return emails.filter((_, i) => (i === 0 ? want.customer && b.emails.length > 0 : hasRealtor && i === 1 ? want.realtor : want.ted));
 }
 
 /** Preview mode: every email goes to Ted alone, marked as a preview, saying who it would really have gone to. */
@@ -350,18 +394,19 @@ export function t3ReminderEmail(b: T3BookingRecord, fromEmail: string, token: st
 }
 
 /** Sent to customer and Ted when a booking is cancelled or moved. */
-export function t3ChangeEmails(kind: "cancelled" | "rescheduled", b: T3BookingRecord, fromEmail: string, token: string, previousStartMs?: number, siteBase = T3_SITE): Email[] {
+export function t3ChangeEmails(kind: "cancelled" | "rescheduled", b: T3BookingRecord, fromEmail: string, token: string, previousStartMs?: number, siteBase = T3_SITE, send: { customer?: boolean; ted?: boolean } = {}): Email[] {
+  const want = { customer: true, ted: true, ...send };
   const from = `T3 Inspections <${fromAddressOf(fromEmail)}>`;
   const verb = kind === "cancelled" ? "cancelled" : `moved to ${whenLabel(b.startMs)}`;
   const emails: Email[] = [{
     from, to: Array.from(new Set([...b.emails, ...(kind === "rescheduled" && b.realtorEmail ? [b.realtorEmail] : [])])), reply_to: T3_TED_EMAIL,
     subject: kind === "cancelled" ? "Your home inspection was cancelled" : `Your home inspection moved to ${whenLabel(b.startMs)}`,
-    text: `Hi ${b.firstName},\n\nYour home inspection at ${addressLine(b)} has been ${verb}.\n${kind === "cancelled" ? `\nTo book again, visit ${T3_SITE}/schedule-now/ or call Ted at ${T3_PHONE}.\n` : `\nNeed another change? ${manageUrl(b.id, token, siteBase)}\n`}\n${customerFooter()}`
+    text: `Hi ${b.firstName},\n\nYour home inspection at ${addressLine(b)} has been ${verb}.\n${kind === "cancelled" ? `\nTo book again, visit ${T3_SITE}/schedule-now/ or call Ted at ${T3_PHONE}.\n` : (token ? `\nNeed another change? ${manageUrl(b.id, token, siteBase)}\n` : `\nNeed another change? Call Ted at ${T3_PHONE}.\n`)}\n${customerFooter()}`
   }];
   emails.push({
-    from: `T3 Inspections website <${fromAddressOf(fromEmail)}>`, to: [T3_TED_EMAIL], reply_to: b.emails[0],
+    from: `T3 Inspections website <${fromAddressOf(fromEmail)}>`, to: [T3_TED_EMAIL], reply_to: b.emails[0] || T3_TED_EMAIL,
     subject: `Booking ${kind}: ${fullName(b)}`,
     text: `${fullName(b)} ${kind === "cancelled" ? "cancelled" : "rescheduled"} online.\n\n${previousStartMs ? `Was: ${whenLabel(previousStartMs)}\n` : ""}${kind === "rescheduled" ? `Now: ${whenLabel(b.startMs)}\n` : ""}${addressLine(b)}\nPhone: ${b.phone}\nEmail: ${b.emails.join(", ")}\nPaid online: ${b.paymentStatus === "paid" ? `${moneyLabel(b.priceCents)} (refund may be needed)` : "no"}\n\nBooking id: ${b.id}`
   });
-  return emails;
+  return emails.filter((_, i) => (i === 0 ? want.customer && emails[0].to.length > 0 : want.ted));
 }
