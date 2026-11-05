@@ -11,6 +11,7 @@
 .t3b-icon { display: inline-flex; vertical-align: middle; }
 .t3b-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
+.t3b-preview { margin: 0 0 16px; padding: 12px 16px; background: #fff3cd; border-left: 4px solid #e0a800; color: #323235; font-family: 'Source Sans Pro', 'Source Sans 3', 'Segoe UI', system-ui, sans-serif; font-size: 15px; line-height: 22px; }
 .t3b-intro { text-align: center; line-height: 24px; padding: 0 0 22px; max-width: 640px; margin: 0 auto; }
 .t3b-stephead { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin: 22px 0 33px; }
 .t3b-step { margin: 0; font-size: 18px; line-height: 22px; font-weight: 600; letter-spacing: normal; font-family: inherit; text-align: center; }

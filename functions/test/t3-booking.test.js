@@ -198,6 +198,21 @@ test("cancel and reschedule emails reach the customer and Ted", () => {
   assert.match(moved[1].text, /Was: Tuesday, November 10, 2026 at 9:00 AM/);
 });
 
+test("preview mode sends everything to Ted only, and says who it would really go to", () => {
+  const real = b.t3BookingEmails(record(), FROM, "tok", "https://t3-inspections-preview.example.workers.dev");
+  assert.match(real[0].text, /https:\/\/t3-inspections-preview\.example\.workers\.dev\/my-inspection\/\?b=bk123&t=tok/);
+  const preview = b.previewEmails(real);
+  assert.equal(preview.length, 3);
+  for (const email of preview) {
+    assert.deepEqual(email.to, ["T3Towne@gmail.com"]);
+    assert.match(email.subject, /^\[PREVIEW\] /);
+  }
+  assert.match(preview[0].text, /would send this to: danny@example\.com, wife@example\.com/);
+  assert.match(preview[1].text, /would send this to: diana@example\.com/);
+  // The originals are untouched, so a real booking is never altered by the preview helper.
+  assert.deepEqual(real[1].to, ["diana@example.com"]);
+});
+
 test("the reminder goes to the customer and the Realtor", () => {
   const email = b.t3ReminderEmail(record(), FROM, "tok");
   assert.deepEqual(email.to, ["danny@example.com", "wife@example.com", "diana@example.com"]);

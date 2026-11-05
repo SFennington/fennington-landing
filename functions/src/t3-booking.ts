@@ -281,8 +281,8 @@ const fullName = (b: T3BookingRecord) => `${b.firstName} ${b.lastName}`.trim();
 const addressLine = (b: T3BookingRecord) => `${b.street}, ${b.town} MA ${b.zip}`;
 const inspectionLine = (b: T3BookingRecord) => [b.typeName, ...b.addonNames.map((name) => `+ ${name}`)].join("\n");
 
-function manageUrl(id: string, token: string) {
-  return `${T3_SITE}/my-inspection/?b=${encodeURIComponent(id)}&t=${encodeURIComponent(token)}`;
+function manageUrl(id: string, token: string, base = T3_SITE) {
+  return `${base}/my-inspection/?b=${encodeURIComponent(id)}&t=${encodeURIComponent(token)}`;
 }
 
 /** A calendar file customers can add the inspection to their own calendar with. */
@@ -303,14 +303,14 @@ function customerFooter() {
 }
 
 /** The three emails sent when a booking is made: customer, Realtor copy, and Ted's alert. */
-export function t3BookingEmails(b: T3BookingRecord, fromEmail: string, token: string): Email[] {
+export function t3BookingEmails(b: T3BookingRecord, fromEmail: string, token: string, siteBase = T3_SITE): Email[] {
   const from = `T3 Inspections <${fromAddressOf(fromEmail)}>`;
   const when = whenLabel(b.startMs);
   const ics = { filename: "t3-inspection.ics", content: Buffer.from(t3Ics(b)).toString("base64") };
   const emails: Email[] = [{
     from, to: b.emails, reply_to: T3_TED_EMAIL, attachments: [ics],
     subject: `Your home inspection is scheduled for ${when}`,
-    text: `Hi ${b.firstName},\n\nYour home inspection is scheduled.\n\n${when}\nAbout ${durationLabel(b.minutes)}\n${addressLine(b)}${b.unit.toLowerCase() === "no" ? "" : `\nUnit: ${b.unit}`}\n\n${inspectionLine(b)}\n\nPrice: ${b.priceCents ? moneyLabel(b.priceCents) : "Ted will confirm the price with you"}\n${b.paymentStatus === "paid" ? "Paid online: yes" : "Paid online: not yet. Ted will take payment after the inspection."}\n\nNeed to change it? You can reschedule or cancel online up to ${T3_SETTINGS.noticeHours} hours before: ${manageUrl(b.id, token)}\nWithin ${T3_SETTINGS.noticeHours} hours, please call Ted at ${T3_PHONE}.\n\nA reminder will arrive the day before.\n\n${customerFooter()}`
+    text: `Hi ${b.firstName},\n\nYour home inspection is scheduled.\n\n${when}\nAbout ${durationLabel(b.minutes)}\n${addressLine(b)}${b.unit.toLowerCase() === "no" ? "" : `\nUnit: ${b.unit}`}\n\n${inspectionLine(b)}\n\nPrice: ${b.priceCents ? moneyLabel(b.priceCents) : "Ted will confirm the price with you"}\n${b.paymentStatus === "paid" ? "Paid online: yes" : "Paid online: not yet. Ted will take payment after the inspection."}\n\nNeed to change it? You can reschedule or cancel online up to ${T3_SETTINGS.noticeHours} hours before: ${manageUrl(b.id, token, siteBase)}\nWithin ${T3_SETTINGS.noticeHours} hours, please call Ted at ${T3_PHONE}.\n\nA reminder will arrive the day before.\n\n${customerFooter()}`
   }];
   if (b.realtorEmail) {
     emails.push({
@@ -329,6 +329,16 @@ export function t3BookingEmails(b: T3BookingRecord, fromEmail: string, token: st
   return emails;
 }
 
+/** Preview mode: every email goes to Ted alone, marked as a preview, saying who it would really have gone to. */
+export function previewEmails(emails: Email[]): Email[] {
+  return emails.map((email) => ({
+    ...email,
+    to: [T3_TED_EMAIL],
+    subject: `[PREVIEW] ${email.subject}`,
+    text: `PREVIEW ONLY. A real booking would send this to: ${email.to.join(", ")}\n\n${email.text}`
+  }));
+}
+
 /** Customer (and Realtor) heads-up the day before. */
 export function t3ReminderEmail(b: T3BookingRecord, fromEmail: string, token: string): Email {
   return {
@@ -340,13 +350,13 @@ export function t3ReminderEmail(b: T3BookingRecord, fromEmail: string, token: st
 }
 
 /** Sent to customer and Ted when a booking is cancelled or moved. */
-export function t3ChangeEmails(kind: "cancelled" | "rescheduled", b: T3BookingRecord, fromEmail: string, token: string, previousStartMs?: number): Email[] {
+export function t3ChangeEmails(kind: "cancelled" | "rescheduled", b: T3BookingRecord, fromEmail: string, token: string, previousStartMs?: number, siteBase = T3_SITE): Email[] {
   const from = `T3 Inspections <${fromAddressOf(fromEmail)}>`;
   const verb = kind === "cancelled" ? "cancelled" : `moved to ${whenLabel(b.startMs)}`;
   const emails: Email[] = [{
     from, to: Array.from(new Set([...b.emails, ...(kind === "rescheduled" && b.realtorEmail ? [b.realtorEmail] : [])])), reply_to: T3_TED_EMAIL,
     subject: kind === "cancelled" ? "Your home inspection was cancelled" : `Your home inspection moved to ${whenLabel(b.startMs)}`,
-    text: `Hi ${b.firstName},\n\nYour home inspection at ${addressLine(b)} has been ${verb}.\n${kind === "cancelled" ? `\nTo book again, visit ${T3_SITE}/schedule-now/ or call Ted at ${T3_PHONE}.\n` : `\nNeed another change? ${manageUrl(b.id, token)}\n`}\n${customerFooter()}`
+    text: `Hi ${b.firstName},\n\nYour home inspection at ${addressLine(b)} has been ${verb}.\n${kind === "cancelled" ? `\nTo book again, visit ${T3_SITE}/schedule-now/ or call Ted at ${T3_PHONE}.\n` : `\nNeed another change? ${manageUrl(b.id, token, siteBase)}\n`}\n${customerFooter()}`
   }];
   emails.push({
     from: `T3 Inspections website <${fromAddressOf(fromEmail)}>`, to: [T3_TED_EMAIL], reply_to: b.emails[0],

@@ -9,6 +9,9 @@
   // Online payment is built in a later step. Until then the only button is "Reserve".
   const PAYMENTS_ENABLED = false;
 
+  // Anywhere except t3inspections.com itself (a workers.dev preview address) the page runs in
+  // preview mode: bookings go to separate test storage and every email goes to Ted only.
+  const PREVIEW = window.location.hostname.endsWith('.workers.dev');
   const local = ['localhost', '127.0.0.1'].includes(window.location.hostname);
   const apiOverride = local ? new URLSearchParams(window.location.search).get('bookingApi') : null;
   const API_ROOT = (apiOverride || 'https://us-central1-fennington-financial.cloudfunctions.net/api').replace(/\/$/, '');
@@ -52,13 +55,18 @@
   const dateLabel = (date) => { const [y, m, d] = date.split('-').map(Number); return `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}, ${MONTHS[m - 1]} ${d}`; };
   const todayNY = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
+  if (PREVIEW) {
+    root.before(h('p', { class: 't3b-preview', role: 'note' }, h('b', { text: 'Preview.' }), ' Nothing you book here is real: it never touches Ted’s calendar, and every email goes to Ted only, marked [PREVIEW].'));
+  }
+
   const api = async (path, options) => {
-    const res = await fetch(`${API}${path}`, options);
+    const url = `${API}${path}`;
+    const res = await fetch(PREVIEW && !options ? `${url}${url.includes('?') ? '&' : '?'}preview=1` : url, options);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw Object.assign(new Error(data.error || 'Something went wrong. Please try again, or call Ted.'), { status: res.status });
     return data;
   };
-  const postJson = (path, body) => api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const postJson = (path, body) => api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(PREVIEW ? { ...body, preview: true, siteBase: window.location.origin } : body) });
 
   // ---- Calendar: month grid on the left, times for the chosen day on the right ----
   function calendar({ typeId, onPick }) {
@@ -303,6 +311,11 @@
       const email = String(f.email || '').split(',')[0].trim();
       if (!f.firstName || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status.textContent = 'Please add your name and a valid email above, then try again.'; return; }
       send.disabled = true;
+      if (PREVIEW) {
+        status.textContent = 'Preview: nothing was sent. On the live site this goes to Ted.';
+        send.hidden = true;
+        return;
+      }
       try {
         const res = await fetch(CONTACT_API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
           name: `${f.firstName || ''} ${f.lastName || ''}`.trim(), email, phone: f.phone || '', address: `${f.street || ''}, ${f.town || ''} ${f.zip || ''}`,
