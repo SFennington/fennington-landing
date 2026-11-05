@@ -143,6 +143,22 @@ async function loadMonth() {
 const bookingsOn = (date) => state.bookings.filter((b) => b.date === date).sort((a, b) => a.time.localeCompare(b.time));
 const blockoutsOn = (date) => state.blockouts.filter((b) => b.startDate <= date && date <= b.endDate);
 
+// Which of the day's sessions (start times) are blocked. null = nothing blocked, "full" = whole day, or a list of true/false per session.
+function sessionsOn(date) { return state.boot.config.startTimes[weekday(date)] || []; }
+function blockShade(date) {
+  const blocks = blockoutsOn(date);
+  if (!blocks.length) return null;
+  const times = sessionsOn(date);
+  if (!times.length || blocks.some((b) => b.allDay)) return 'full';
+  const flags = times.map((t) => blocks.some((b) => b.startTime <= t && t < b.endTime));
+  return flags.every(Boolean) ? 'full' : flags.some(Boolean) ? flags : null;
+}
+function shadeStyle(flags) {
+  const n = flags.length;
+  const stops = flags.map((blocked, i) => `${blocked ? 'var(--blocked)' : 'transparent'} ${(i * 100) / n}% ${((i + 1) * 100) / n}%`);
+  return `background-image: linear-gradient(to bottom, ${stops.join(', ')})`;
+}
+
 function renderCalendar() {
   const [y, m] = state.month.split('-').map(Number);
   $('monthTitle').textContent = `${MONTHS[m - 1]} ${y}`;
@@ -152,14 +168,15 @@ function renderCalendar() {
   const today = todayStr();
   for (let date = first; monthOf(date) === state.month; date = addDays(date, 1)) {
     const live = bookingsOn(date).filter((b) => b.status === 'confirmed').length;
+    const shade = blockShade(date);
     const blocked = blockoutsOn(date).length;
-    const label = `${dateLabel(date)}${live ? `, ${live} booking${live === 1 ? '' : 's'}` : ''}${blocked ? ', blocked' : ''}`;
+    const label = `${dateLabel(date)}${live ? `, ${live} booking${live === 1 ? '' : 's'}` : ''}${shade === 'full' ? ', blocked all day' : shade ? ', one session blocked' : blocked ? ', blocked' : ''}`;
     grid.append(h('button', {
-      class: `cell${date === today ? ' today' : ''}${date === state.selected ? ' sel' : ''}`, 'data-date': date, 'aria-label': label, 'aria-pressed': String(date === state.selected),
+      class: `cell${date === today ? ' today' : ''}${date === state.selected ? ' sel' : ''}${shade === 'full' ? ' blk-full' : Array.isArray(shade) ? ' blk-part' : ''}`, style: Array.isArray(shade) ? shadeStyle(shade) : null, 'data-date': date, 'aria-label': label, 'aria-pressed': String(date === state.selected),
       onclick: () => { state.selected = date; renderCalendar(); }
     },
       h('span', { class: 'n', text: String(Number(date.slice(8))) }),
-      h('span', { class: 'dots' }, live ? [h('i', { class: 'dot b' }), String(live)] : null, blocked ? h('i', { class: 'dot k' }) : null)));
+      h('span', { class: 'dots' }, live ? [h('i', { class: 'dot b' }), String(live)] : null, blocked && !shade ? h('i', { class: 'dot k' }) : null)));
   }
   renderDay();
 }
@@ -220,25 +237,80 @@ const select = (name, options, value) => h('select', { name }, options.map(([v, 
 function openBlockoutForm() {
   const start = textInput('startDate', state.selected, { type: 'date', required: true });
   const end = textInput('endDate', '', { type: 'date', 'aria-label': 'Last day' });
-  const allDay = h('input', { type: 'checkbox', name: 'allDay', checked: true });
-  const from = textInput('startTime', '09:00', { type: 'time' });
-  const to = textInput('endTime', '17:00', { type: 'time' });
   const label = textInput('label', '', { maxlength: '80', placeholder: 'Vacation, dentist, ...' });
   const msg = h('p', { class: 'msg bad', role: 'alert' });
-  const times = h('div', { class: 'row2', hidden: true }, field('From', from), field('Until', to));
-  allDay.addEventListener('change', () => { times.hidden = allDay.checked; });
+  const choices = h('div', { class: 'choices', role: 'group', 'aria-label': 'What to block' });
+  const from = textInput('startTime', '09:00', { type: 'time' });
+  const to = textInput('endTime', '17:00', { type: 'time' });
+  const customTimes = h('div', { class: 'row2', hidden: true }, field('From', from), field('Until', to));
+  let fullBox; let customBox; let sessionBoxes = [];
+  const kept = new Set();
+  let customOn = false;
+
+  // Every session Ted offers on the chosen days, from his saved start times (so a 5:00 PM he adds in Settings shows up here).
+  function sessionTimes() {
+    const last = end.value && end.value >= start.value ? end.value : start.value;
+    const days = new Set();
+    for (let d = start.value, i = 0; d && d <= last && i < 7; d = addDays(d, 1), i++) days.add(weekday(d));
+    return [...new Set([...days].flatMap((day) => state.boot.config.startTimes[day] || []))].sort();
+  }
+  const check = (name, text, extra) => {
+    const box = h('input', { type: 'checkbox', name });
+    return { box, row: h('label', { class: 'choice' }, box, text, extra ? h('small', { text: extra }) : null) };
+  };
+  function drawChoices() {
+    const times = sessionTimes();
+    const full = check('full', 'Full day', 'everything');
+    fullBox = full.box; fullBox.checked = !kept.size && !customOn;
+    const rows = [full.row];
+    sessionBoxes = times.map((t) => {
+      const c = check(`s-${t}`, `${timeLabel(t)} session`);
+      c.box.dataset.time = t; c.box.checked = kept.has(t);
+      c.box.addEventListener('change', () => { if (c.box.checked) { kept.add(t); fullBox.checked = false; customBox.checked = false; customOn = false; customTimes.hidden = true; } else kept.delete(t); });
+      rows.push(c.row);
+      return c.box;
+    });
+    const custom = check('custom', 'Other times…');
+    customBox = custom.box; customBox.checked = customOn; customTimes.hidden = !customOn; rows.push(custom.row);
+    fullBox.addEventListener('change', () => { if (fullBox.checked) { kept.clear(); sessionBoxes.forEach((x) => { x.checked = false; }); customBox.checked = false; customOn = false; customTimes.hidden = true; } else if (!sessionBoxes.some((x) => x.checked) && !customBox.checked) fullBox.checked = true; });
+    customBox.addEventListener('change', () => { customOn = customBox.checked; customTimes.hidden = !customBox.checked; if (customBox.checked) { kept.clear(); fullBox.checked = false; sessionBoxes.forEach((x) => { x.checked = false; }); } else if (!sessionBoxes.some((x) => x.checked)) fullBox.checked = true; });
+    choices.replaceChildren(...rows);
+    if (!times.length) choices.append(h('p', { class: 'muted small', text: 'No sessions on these days, so only a full day or custom times can be blocked.' }));
+  }
+  start.addEventListener('change', drawChoices);
+  end.addEventListener('change', drawChoices);
+  drawChoices();
+
   const save = h('button', { type: 'button', class: 'btn primary', onclick: async () => {
     msg.textContent = '';
+    const times = sessionTimes();
+    const first = { startDate: start.value, endDate: end.value || start.value, label: label.value };
+    const windows = [];
+    if (customBox.checked) windows.push({ allDay: false, startTime: from.value, endTime: to.value });
+    else if (fullBox.checked || !sessionBoxes.some((x) => x.checked)) windows.push({ allDay: true });
+    else {
+      // A session blocks from its start until the next session begins (or four hours for the last one).
+      for (const t of times.filter((x) => kept.has(x))) {
+        const next = times.find((x) => x > t);
+        const [hh, mm] = t.split(':').map(Number);
+        const endMin = Math.min(24 * 60, hh * 60 + mm + 240);
+        const fallback = endMin >= 1440 ? '24:00' : `${pad(Math.floor(endMin / 60))}:${pad(endMin % 60)}`;
+        windows.push({ allDay: false, startTime: t, endTime: next || fallback });
+      }
+    }
+    save.disabled = true;
     try {
-      const r = await api('/blockouts', { method: 'POST', body: { startDate: start.value, endDate: end.value || start.value, allDay: allDay.checked, startTime: from.value, endTime: to.value, label: label.value } });
+      const already = [];
+      for (const w of windows) already.push(...(await api('/blockouts', { method: 'POST', body: { ...first, ...w } })).alreadyBooked || []);
       await refresh(start.value);
-      if (r.alreadyBooked?.length) {
-        openDialog('Blocked off', h('p', { text: 'The time is blocked. These bookings were already in it and are still booked:' }), h('ul', {}, r.alreadyBooked.map((c) => h('li', { text: c.when }))), h('div', { class: 'sticky' }, h('button', { type: 'button', class: 'btn primary', onclick: () => dlg.close() }, 'OK')));
+      const unique = [...new Map(already.map((c) => [c.id, c])).values()];
+      if (unique.length) {
+        openDialog('Blocked off', h('p', { text: 'The time is blocked. These bookings were already in it and are still booked:' }), h('ul', {}, unique.map((c) => h('li', { text: c.when }))), h('div', { class: 'sticky' }, h('button', { type: 'button', class: 'btn primary', onclick: () => dlg.close() }, 'OK')));
       } else dlg.close();
-    } catch (e) { msg.textContent = e.message; }
+    } catch (e) { msg.textContent = e.message; save.disabled = false; }
   } }, 'Block it off');
   openDialog('Block off time', field('First day', start), field('Last day (leave empty for one day)', end),
-    h('label', { class: 'check' }, allDay, 'All day'), times, field('Label (optional)', label), msg,
+    h('b', { text: 'What to block' }), choices, customTimes, field('Label (optional)', label), msg,
     h('p', { class: 'muted small', text: 'Customers can’t book this time. Bookings already in it stay booked.' }),
     h('div', { class: 'sticky' }, save, h('button', { type: 'button', class: 'btn', onclick: () => dlg.close() }, 'Cancel')));
 }
@@ -564,5 +636,19 @@ $('settingsForm').addEventListener('submit', async (e) => {
     void r;
   } catch (err) { msg.textContent = err.message; }
 });
+
+// ---------- light / dark ----------
+function currentTheme() {
+  const set = document.documentElement.getAttribute('data-theme');
+  return set || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+}
+function paintTheme() { $('themeToggle').textContent = currentTheme() === 'dark' ? 'Light mode' : 'Dark mode'; }
+$('themeToggle').addEventListener('click', () => {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('t3dash-theme', next); } catch { /* private window: it just won't be remembered */ }
+  paintTheme();
+});
+paintTheme();
 
 boot();

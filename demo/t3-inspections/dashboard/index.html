@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>T3 Dashboard</title>
+  <script>try { var t = localStorage.getItem("t3dash-theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}</script>
   <link rel="icon" href="../assets/img/favicon.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="dashboard.css">
@@ -12,7 +13,7 @@
 <body>
   <header class="top">
     <div class="brand"><b>T3</b> Dashboard <span id="previewTag" class="tag" hidden>Preview</span></div>
-    <div class="who"><span id="whoEmail"></span> <button id="signOut" class="link" hidden>Sign out</button></div>
+    <div class="who"><button id="themeToggle" class="link" type="button" aria-label="Switch between light and dark mode"></button> <span id="whoEmail"></span> <button id="signOut" class="link" hidden>Sign out</button></div>
   </header>
 
   <p id="previewNote" class="banner" hidden role="note"><b>Preview.</b> Everything here is practice: it uses its own test calendar, never your real one, and every email goes to you only.</p>
@@ -43,7 +44,7 @@
       </div>
       <div class="grid head" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
       <div id="grid" class="grid" role="grid"></div>
-      <div class="legend"><span><i class="dot b"></i> Booking</span><span><i class="dot k"></i> Blocked</span></div>
+      <div class="legend"><span><i class="dot b"></i> Booking</span><span><i class="sw"></i> Blocked all day</span><span><i class="sw half"></i> One session blocked</span></div>
       <h3 id="dayTitle"></h3>
       <ul id="dayList" class="list"></ul>
     </section>
