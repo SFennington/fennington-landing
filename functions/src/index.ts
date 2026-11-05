@@ -1877,6 +1877,7 @@ async function t3FromEmail(): Promise<string> {
 }
 
 type T3Email = ReturnType<typeof t3BookingEmails>[number];
+const T3_SENDER = "noreply@t3inspections.com";
 
 // Under the emulator nothing is ever sent, so testing cannot email Ted or a real customer.
 async function deliverT3Emails(emailsIn: T3Email[], preview = false): Promise<{ status: "sent" | "failed" | "pending_config" | "emulator_skipped"; error?: unknown }> {
@@ -1885,12 +1886,17 @@ async function deliverT3Emails(emailsIn: T3Email[], preview = false): Promise<{ 
   const emails = preview ? previewEmails(emailsIn) : emailsIn;
   const apiKey = secretValue("RESEND_API_KEY", resendApiKey);
   if (!apiKey) return { status: "pending_config" };
+  const post = (email: T3Email) => fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+    body: JSON.stringify(email)
+  });
   const results = await Promise.allSettled(emails.map(async (email) => {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify(email)
-    });
+    // Send from noreply@t3inspections.com. Until that domain is verified in Resend it is refused,
+    // so fall back to the shared sender once instead of losing the email.
+    const own = { ...email, from: email.from.replace(/<[^<>]+>/, `<${T3_SENDER}>`) };
+    let response = await post(own);
+    if (!response.ok && (response.status === 403 || response.status === 422)) response = await post(email);
     if (!response.ok) throw new Error(`Resend ${response.status}: ${JSON.stringify(await response.json().catch(() => ({})))}`);
   }));
   const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected").map((result) => safeString(result.reason?.message));
