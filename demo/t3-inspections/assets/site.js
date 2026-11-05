@@ -1,4 +1,4 @@
-// T3 Inspections concept site by Fennington Solutions
+// T3 Inspections
 (() => {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
