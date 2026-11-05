@@ -220,6 +220,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .form-success { display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px; border-radius: var(--radius); background: var(--good-soft); color: #174d30; margin-top: 18px; }
 .form-success .i { color: var(--good); width: 24px; height: 24px; margin-top: 1px; }
 .form-success p { margin: 0; }
+.form-success, .form-error { scroll-margin-bottom: 110px; }
+.form-error { padding: 18px 20px; border-radius: var(--radius); background: #fdecea; color: #7f1d13; margin-top: 18px; }
+.form-error p { margin: 0; }
+.hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .info-list { list-style: none; display: grid; gap: 18px; margin: 18px 0 26px; }
 .info-list li { display: flex; gap: 14px; align-items: flex-start; }
 .info-list .i { color: var(--orange-hi); width: 22px; height: 22px; margin-top: 3px; }

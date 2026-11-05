@@ -68,15 +68,36 @@
     }
   }
 
-  // Contact forms. In this concept preview nothing is sent; the live site posts to a form endpoint.
+  // Contact forms email Ted. If sending fails, the page offers his phone and email instead.
+  const CONTACT_URL = 'https://us-central1-fennington-financial.cloudfunctions.net/api/t3-inspections/contact';
   document.querySelectorAll('form[data-contact]').forEach((form) => {
-    form.addEventListener('submit', (e) => {
+    const button = form.querySelector('button[type="submit"]');
+    const label = button.innerHTML;
+    const done = form.querySelector('.form-success');
+    const failed = form.querySelector('.form-error');
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!form.reportValidity()) return;
-      const done = form.querySelector('.form-success');
-      done.hidden = false;
-      form.querySelector('button[type="submit"]').disabled = true;
-      done.focus();
+      failed.hidden = true;
+      button.disabled = true;
+      button.textContent = 'Sending…';
+      try {
+        const res = await fetch(CONTACT_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...Object.fromEntries(new FormData(form)), pageUrl: window.location.href }),
+        });
+        if (!res.ok) throw new Error(`Request failed (${res.status})`);
+        form.reset();
+        button.textContent = 'Sent';
+        done.hidden = false;
+        done.focus();
+      } catch {
+        button.disabled = false;
+        button.innerHTML = label;
+        failed.hidden = false;
+        failed.focus();
+      }
     });
   });
 

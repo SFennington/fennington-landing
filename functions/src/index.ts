@@ -13,6 +13,7 @@ import path from "path";
 import Stripe from "stripe";
 import { adLandingUrl, adParams, creativeParams, imageHashFrom, metaAdName, metaGraphPost, metaPauseAd, normalizeAdAccountId, parseAdConcept, rankAds, TRACKING_CODE_PATTERN, type AdPerformanceRow } from "./meta-ads";
 import { cleanBrowserIds, clientIpFrom, sendLeadEvent, sendPurchaseEvent, type BrowserIds } from "./meta-capi";
+import { t3ContactEmail, type T3ContactMessage } from "./t3-contact";
 
 loadLocalEnvFile();
 
@@ -1752,6 +1753,60 @@ async function reportLeadToMeta(inquiry: Inquiry, ref: DocumentReference, browse
     await ref.set({ metaCapiStatus: "failed", metaCapiError: safeString(error?.message).slice(0, 500) }, { merge: true });
   }
 }
+
+async function sendT3ContactEmail(contact: T3ContactMessage): Promise<PurchaseEmailResult> {
+  const emailConfig = await db.collection("config").doc("email").get();
+  const fromEmail = safeString(emailConfig.get("transactionalFromEmail") || emailConfig.get("fromEmail") || process.env.RESEND_FROM_EMAIL);
+  const apiKey = secretValue("RESEND_API_KEY", resendApiKey);
+  if (!fromEmail || !apiKey) return { status: "pending_config" };
+
+  const resendResponse = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(t3ContactEmail(contact, fromEmail))
+  });
+  const resendBody = await resendResponse.json().catch(() => ({}));
+  if (!resendResponse.ok) return { status: "failed", error: resendBody };
+  return { status: "sent", resendEmailId: resendBody.id || null };
+}
+
+// Contact form on the T3 Inspections site. Public for the same reason as /inquiries and
+// guarded the same way. Saved apart from `inquiries` because those are Fennington's own
+// leads: they feed the ad results and Meta, and Ted's customers must not.
+apiApp.post("/t3-inspections/contact", asyncRoute(async (req, res) => {
+  const body = req.body || {};
+  // Hidden field people never see. Bots fill it; answer as if it worked so they move on.
+  if (safeString(body.extra_info)) {
+    res.json({ ok: true });
+    return;
+  }
+
+  const contact: T3ContactMessage = {
+    name: safeString(body.name).slice(0, 120),
+    email: normalizeEmail(body.email),
+    phone: safeString(body.phone).slice(0, 40),
+    address: safeString(body.address).slice(0, 300),
+    message: safeLongString(body.message, "", 5000),
+    pageUrl: safeString(body.pageUrl).slice(0, 300)
+  };
+  if (!isValidEmail(contact.email)) throw Object.assign(new Error("Please add a valid email address."), { statusCode: 400 });
+  if (!(await allowInquiryFrom(clientIpFrom(req.header("x-forwarded-for"), req.ip)))) {
+    throw Object.assign(new Error("Too many messages from this connection. Please call (413) 282-8616."), { statusCode: 429 });
+  }
+
+  const ref = db.collection("t3ContactMessages").doc();
+  await ref.create({ ...contact, emailStatus: "pending", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  const emailResult: PurchaseEmailResult = await sendT3ContactEmail(contact).catch((error: any) => ({ status: "failed", error: safeString(error?.message) }));
+  await ref.set({ emailStatus: emailResult.status, resendEmailId: emailResult.resendEmailId || null, emailError: emailResult.error || null, updatedAt: serverTimestamp() }, { merge: true });
+  if (emailResult.status !== "sent") {
+    logger.error("T3 contact email was not sent", { messageId: ref.id, status: emailResult.status, error: emailResult.error });
+    throw Object.assign(new Error("Your message could not be sent right now. Please call (413) 282-8616."), { statusCode: 502 });
+  }
+  res.json({ ok: true });
+}));
 
 apiApp.get("/admin/leads", asyncRoute(async (req, res) => {
   await requireAdmin(req);
