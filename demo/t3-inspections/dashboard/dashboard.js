@@ -363,6 +363,7 @@ async function openDetail(id) {
   body.push(h('dl', { class: 'kv' }, rows));
   // Part 3 puts the payment and FreshBooks invoice buttons here.
   body.push(h('div', { id: 'paymentSlot', class: 'callout info', text: 'Payment and invoice buttons will appear here once online payment is turned on.' }));
+  if (b.status === 'confirmed') body.push(followupBlock(b));
   const actions = h('div', { class: 'sticky' });
   if (b.status === 'confirmed') {
     actions.append(h('button', { type: 'button', class: 'btn primary', onclick: () => openForm({ booking: b }) }, 'Edit or reschedule'),
@@ -370,6 +371,32 @@ async function openDetail(id) {
   }
   actions.append(h('button', { type: 'button', class: 'btn', onclick: () => dlg.close() }, 'Close'));
   openDialog(name || 'Booking', ...body, actions);
+}
+
+// Review follow-up: thank-you email now, one reminder a week later unless Ted stops it.
+function followupBlock(b) {
+  const msg = h('p', { class: 'msg', role: 'status' });
+  const day = (ms) => dateLabel(new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date(ms)));
+  const box = h('div', { class: 'callout info' });
+  if (!b.followupSentAt) {
+    if (!b.emails?.length) return h('div', { class: 'callout', text: 'Add a customer email (Edit or reschedule) to send a review follow-up.' });
+    const send = h('button', { type: 'button', class: 'btn primary', onclick: async () => {
+      send.disabled = true; msg.className = 'msg'; msg.textContent = 'Sending…';
+      try { await api(`/bookings/${b.id}/followup`, { method: 'POST', body: {} }); await openDetail(b.id); } catch (e) { msg.textContent = e.message; msg.className = 'msg bad'; send.disabled = false; }
+    } }, 'Send review follow-up');
+    box.append(h('b', { text: 'Review follow-up' }), h('p', { class: 'small', text: `Emails ${b.emails.join(', ')} a thank-you with a link to review you on Google right now, and a reminder 7 days later.` }), send, msg);
+    return box;
+  }
+  box.append(h('b', { text: 'Review follow-up' }), h('p', { class: 'small', text: `Sent ${day(b.followupSentAt)}.` }));
+  if (b.followupReminderSentAt) box.append(h('p', { class: 'small', text: `Reminder sent ${day(b.followupReminderSentAt)}.` }));
+  else if (b.followupStopped) box.append(h('p', { class: 'small', text: 'Reminder stopped.' }));
+  else if (b.followupReminderDueMs) {
+    box.append(h('p', { class: 'small', text: `Reminder goes out ${day(b.followupReminderDueMs)} unless you stop it.` }),
+      h('button', { type: 'button', class: 'btn', onclick: async () => {
+        try { await api(`/bookings/${b.id}/followup/stop`, { method: 'POST', body: {} }); await openDetail(b.id); } catch (e) { msg.textContent = e.message; msg.className = 'msg bad'; }
+      } }, 'They reviewed — stop reminder'), msg);
+  }
+  return box;
 }
 
 function openCancel(b) {

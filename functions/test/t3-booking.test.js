@@ -218,3 +218,16 @@ test("the reminder goes to the customer and the Realtor", () => {
   assert.deepEqual(email.to, ["danny@example.com", "wife@example.com", "diana@example.com"]);
   assert.match(email.text, /call Ted/);
 });
+
+test("the review follow-up emails go to the customer only, with the review link", () => {
+  const first = b.t3FollowupEmail(record(), FROM, "first");
+  const nudge = b.t3FollowupEmail(record(), FROM, "reminder");
+  for (const email of [first, nudge]) {
+    assert.deepEqual(email.to, record().emails);
+    assert.ok(email.text.includes(b.T3_REVIEW_URL));
+    assert.equal(email.reply_to, b.T3_TED_EMAIL);
+  }
+  assert.notEqual(first.subject, nudge.subject);
+  assert.match(nudge.text, /already left one/);
+  assert.equal(b.T3_FOLLOWUP_REMINDER_DAYS, 7);
+});

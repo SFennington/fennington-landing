@@ -18,7 +18,7 @@ import { T3_ADDONS, T3_TYPES } from "./t3-catalog";
 import {
   T3_TED_EMAIL, previewEmails,
   addDays, canChangeOnline, defaultRange, findType, isDateString, isTimeString, nyDateOf, nyToMs, openDaysInMonth, priceFor, slotsForDate, t3BookingEmails, t3ChangeEmails,
-  t3ReminderEmail, timeLabel, townOf, validateBookingRequest, whenLabel, zoneFor, T3_PHONE, T3_SETTINGS,
+  t3ReminderEmail, t3FollowupEmail, T3_FOLLOWUP_REMINDER_DAYS, timeLabel, townOf, validateBookingRequest, whenLabel, zoneFor, T3_PHONE, T3_SETTINGS,
   type T3BookingRecord, type T3Hold, type T3RangeConfig
 } from "./t3-booking";
 import {
@@ -2330,6 +2330,37 @@ function registerT3AdminRoutes() {
     res.json({ ok: true, needsRefund: data.paymentStatus === "paid", emailStatus });
   }));
 
+  // Review follow-up: sends the thank-you email now and schedules one reminder a week later.
+  // Nothing detects whether they reviewed, so Ted can stop the reminder (below) once they have.
+  apiApp.post(`${base}/bookings/:id/followup`, json, asyncRoute(async (req, res) => {
+    await requireT3Owner(req);
+    const preview = t3IsPreview(req);
+    const ref = db.collection(t3Cols(preview).bookings).doc(safeString(req.params.id).slice(0, 40) || "_");
+    const snap = await ref.get();
+    if (!snap.exists) throw t3Fail("Booking not found.", 404);
+    const data = snap.data() as Record<string, any>;
+    if (data.status !== "confirmed") throw t3Fail("This booking is cancelled, so there is nobody to thank.", 409);
+    if (data.followupSentAt) throw t3Fail("The review follow-up was already sent for this booking.", 409);
+    if (!Array.isArray(data.emails) || !data.emails.length) throw t3Fail("This booking has no customer email. Add one with Edit first.", 400);
+    const email = t3FollowupEmail(t3RecordFrom(ref.id, data), await sendFrom(), "first");
+    const emailStatus = await deliver([email], preview, "review follow-up", ref.id);
+    if (emailStatus !== "sent") throw t3Fail("The email could not be sent. Please try again in a minute.", 502);
+    const nowMs = Date.now();
+    const dueMs = nowMs + T3_FOLLOWUP_REMINDER_DAYS * 86_400_000;
+    await ref.set({ followupSentAt: nowMs, followupReminderDueMs: dueMs, followupReminderSentAt: null, followupStopped: false, updatedAt: serverTimestamp() }, { merge: true });
+    res.json({ ok: true, followupSentAt: nowMs, followupReminderDueMs: dueMs });
+  }));
+
+  // Cancels the pending reminder (they left a review, or Ted changed his mind).
+  apiApp.post(`${base}/bookings/:id/followup/stop`, json, asyncRoute(async (req, res) => {
+    await requireT3Owner(req);
+    const ref = db.collection(t3Cols(t3IsPreview(req)).bookings).doc(safeString(req.params.id).slice(0, 40) || "_");
+    const snap = await ref.get();
+    if (!snap.exists) throw t3Fail("Booking not found.", 404);
+    await ref.set({ followupReminderDueMs: null, followupStopped: true, updatedAt: serverTimestamp() }, { merge: true });
+    res.json({ ok: true });
+  }));
+
   // Blockouts: a day, a time range, or several days. One hold per date goes onto the same day documents
   // the public calendar reads, so the slots disappear immediately.
   apiApp.post(`${base}/blockouts`, json, asyncRoute(async (req, res) => {
@@ -2426,6 +2457,27 @@ async function runT3Reminders(): Promise<{ checked: number; sent: number }> {
       await doc.ref.set({ reminderSentAt: nowMs }, { merge: true });
     } else {
       logger.error("T3 reminder was not sent", { bookingId: doc.id, status: result.status, error: result.error });
+    }
+  }
+  return { checked: snapshot.size, sent };
+}
+
+// The one-time review reminder, a week after Ted sent the follow-up. Skipped if he stopped it.
+async function runT3FollowupReminders(): Promise<{ checked: number; sent: number }> {
+  const nowMs = Date.now();
+  const snapshot = await db.collection(T3_BOOKINGS).where("followupReminderDueMs", "<=", nowMs).get();
+  const fromEmail = await t3FromEmail();
+  let sent = 0;
+  for (const doc of snapshot.docs) {
+    if (doc.get("followupStopped") || doc.get("followupReminderSentAt") || doc.get("status") !== "confirmed") continue;
+    const email = t3FollowupEmail(t3RecordFrom(doc.id, doc.data()), fromEmail, "reminder");
+    if (!fromEmail || !email.to.length) continue;
+    const result = await deliverT3Emails([email]).catch((error: any) => ({ status: "failed" as const, error: safeString(error?.message) }));
+    if (result.status === "sent") {
+      sent += 1;
+      await doc.ref.set({ followupReminderSentAt: nowMs, followupReminderDueMs: null }, { merge: true });
+    } else {
+      logger.error("T3 review reminder was not sent", { bookingId: doc.id, status: result.status, error: result.error });
     }
   }
   return { checked: snapshot.size, sent };
@@ -4141,6 +4193,7 @@ export const scheduledMonitorStripeFulfillment = onSchedule({ region: REGION, sc
 export const scheduledT3BookingReminders = onSchedule({ region: REGION, schedule: "every 60 minutes", timeZone: "America/New_York", timeoutSeconds: 120, memory: "256MiB", secrets: [resendApiKey] }, async () => {
   const result = await runT3Reminders();
   logger.info("T3 booking reminders", result);
+  logger.info("T3 review reminders", await runT3FollowupReminders());
 });
 
 export const scheduledSyncMetaAdInsights = onSchedule({ region: REGION, schedule: "every day 07:00", timeZone: "America/Chicago", timeoutSeconds: 300, memory: "256MiB", secrets: [metaAccessToken] }, async () => {

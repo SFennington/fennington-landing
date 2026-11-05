@@ -393,6 +393,24 @@ export function t3ReminderEmail(b: T3BookingRecord, fromEmail: string, token: st
   };
 }
 
+/** Where "leave a review" points. Swap for the direct write-a-review link from Ted's Google Business Profile when he has it. */
+export const T3_REVIEW_URL = "https://www.google.com/search?q=T3+Inspections#lrd=0x89e6d88a7c97d35d:0x9c0dd7d1dfe24b55,1,,,";
+/** How long after the first follow-up the reminder goes out, unless Ted stops it. */
+export const T3_FOLLOWUP_REMINDER_DAYS = 7;
+
+/** Thank-you email after an inspection, asking for a Google review. `kind: "reminder"` is the gentle nudge a week later. */
+export function t3FollowupEmail(b: T3BookingRecord, fromEmail: string, kind: "first" | "reminder", reviewUrl = T3_REVIEW_URL): Email {
+  const intro = kind === "first"
+    ? `Thank you for choosing T3 Inspections for your home inspection at ${addressLine(b)}. It was a pleasure working with you.\n\nIf you were happy with the service, would you take a minute to leave us a review? Reviews from customers like you are how other families find us.`
+    : `A quick reminder in case it slipped by: if you were happy with your home inspection at ${addressLine(b)}, we would really appreciate a short review.\n\nIf you already left one, thank you! You can ignore this note.`;
+  return {
+    from: `T3 Inspections <${fromAddressOf(fromEmail)}>`,
+    to: b.emails, reply_to: T3_TED_EMAIL,
+    subject: kind === "first" ? "Thank you from T3 Inspections" : "A quick favor from T3 Inspections",
+    text: `Hi ${b.firstName || "there"},\n\n${intro}\n\nLeave a review: ${reviewUrl}\n\nIf anything about your inspection wasn't right, please reply to this email or call Ted at ${T3_PHONE} so we can make it right.\n\nThank you,\nTed Towne III\n\n${customerFooter()}`
+  };
+}
+
 /** Sent to customer and Ted when a booking is cancelled or moved. */
 export function t3ChangeEmails(kind: "cancelled" | "rescheduled", b: T3BookingRecord, fromEmail: string, token: string, previousStartMs?: number, siteBase = T3_SITE, send: { customer?: boolean; ted?: boolean } = {}): Email[] {
   const want = { customer: true, ted: true, ...send };
