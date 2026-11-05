@@ -143,19 +143,30 @@ async function loadMonth() {
 const bookingsOn = (date) => state.bookings.filter((b) => b.date === date).sort((a, b) => a.time.localeCompare(b.time));
 const blockoutsOn = (date) => state.blockouts.filter((b) => b.startDate <= date && date <= b.endDate);
 
-// Which of the day's sessions (start times) are blocked. null = nothing blocked, "full" = whole day, or a list of true/false per session.
+// Each day square is split into its sessions (start times, top to bottom). A session with a booking is orange,
+// a blocked one is grey, and a free one stays plain. A booking wins over a blockout on the same session.
 function sessionsOn(date) { return state.boot.config.startTimes[weekday(date)] || []; }
-function blockShade(date) {
-  const blocks = blockoutsOn(date);
-  if (!blocks.length) return null;
+function sessionStates(date) {
   const times = sessionsOn(date);
-  if (!times.length || blocks.some((b) => b.allDay)) return 'full';
-  const flags = times.map((t) => blocks.some((b) => b.startTime <= t && t < b.endTime));
-  return flags.every(Boolean) ? 'full' : flags.some(Boolean) ? flags : null;
+  const blocks = blockoutsOn(date);
+  const booked = bookingsOn(date).filter((bk) => bk.status === 'confirmed');
+  if (!times.length) return [booked.length ? 'b' : blocks.length ? 'k' : ''];
+  const states = times.map(() => '');
+  times.forEach((t, i) => {
+    if (blocks.some((bl) => bl.allDay || (bl.startTime <= t && t < bl.endTime))) states[i] = 'k';
+  });
+  for (const bk of booked) {
+    // A booking belongs to the last session that starts at or before it (or the first, if it is earlier than all of them).
+    let i = 0;
+    times.forEach((t, n) => { if (t <= bk.time) i = n; });
+    states[i] = 'b';
+  }
+  return states;
 }
-function shadeStyle(flags) {
-  const n = flags.length;
-  const stops = flags.map((blocked, i) => `${blocked ? 'var(--blocked)' : 'transparent'} ${(i * 100) / n}% ${((i + 1) * 100) / n}%`);
+const SHADE = { b: 'var(--booked)', k: 'var(--blocked)', '': 'transparent' };
+function shadeStyle(states) {
+  const n = states.length;
+  const stops = states.map((s, i) => `${SHADE[s]} ${(i * 100) / n}% ${((i + 1) * 100) / n}%`);
   return `background-image: linear-gradient(to bottom, ${stops.join(', ')})`;
 }
 
@@ -167,16 +178,19 @@ function renderCalendar() {
   for (let i = 0; i < weekday(first); i++) grid.append(h('span', { class: 'cell out', 'aria-hidden': 'true' }));
   const today = todayStr();
   for (let date = first; monthOf(date) === state.month; date = addDays(date, 1)) {
-    const live = bookingsOn(date).filter((b) => b.status === 'confirmed').length;
-    const shade = blockShade(date);
-    const blocked = blockoutsOn(date).length;
-    const label = `${dateLabel(date)}${live ? `, ${live} booking${live === 1 ? '' : 's'}` : ''}${shade === 'full' ? ', blocked all day' : shade ? ', one session blocked' : blocked ? ', blocked' : ''}`;
+    const live = bookingsOn(date).filter((bk) => bk.status === 'confirmed').length;
+    const states = sessionStates(date);
+    const any = states.some(Boolean);
+    const same = any && states.every((s) => s === states[0]);
+    const shadeClass = !any ? '' : same ? (states[0] === 'b' ? ' bk-full' : ' blk-full') : ' mixed';
+    const blockedAll = same && states[0] === 'k';
+    const label = `${dateLabel(date)}${live ? `, ${live} booking${live === 1 ? '' : 's'}` : ''}${blockedAll ? ', blocked all day' : states.includes('k') ? ', blocked' : ''}`;
     grid.append(h('button', {
-      class: `cell${date === today ? ' today' : ''}${date === state.selected ? ' sel' : ''}${shade === 'full' ? ' blk-full' : Array.isArray(shade) ? ' blk-part' : ''}`, style: Array.isArray(shade) ? shadeStyle(shade) : null, 'data-date': date, 'aria-label': label, 'aria-pressed': String(date === state.selected),
+      class: `cell${date === today ? ' today' : ''}${date === state.selected ? ' sel' : ''}${shadeClass}`, style: shadeClass === ' mixed' ? shadeStyle(states) : null, 'data-date': date, 'aria-label': label, 'aria-pressed': String(date === state.selected),
       onclick: () => { state.selected = date; renderCalendar(); }
     },
       h('span', { class: 'n', text: String(Number(date.slice(8))) }),
-      h('span', { class: 'dots' }, live ? [h('i', { class: 'dot b' }), String(live)] : null, blocked && !shade ? h('i', { class: 'dot k' }) : null)));
+      live > 1 ? h('span', { class: 'dots', text: `${live} jobs` }) : null));
   }
   renderDay();
 }
